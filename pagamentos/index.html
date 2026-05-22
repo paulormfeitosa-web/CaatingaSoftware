@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>Tesouraria - Caatinga Software</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    body { background-color: #f4f6f8; font-family: 'Segoe UI', sans-serif; color: #333; }
+    .navbar-custom { background-color: #fce6dc !important; border-bottom: 2px solid #E06C3F; }
+    .navbar-custom .navbar-brand, .navbar-custom .nav-link { color: #1A374D !important; font-weight: 500; }
+    .navbar-custom .nav-link:hover, .navbar-custom .nav-link.active { color: #E06C3F !important; font-weight: bold; }
+    .oculto { display: none !important; }
+    .nav-link { cursor: pointer; }
+    
+    .conta-card { border-radius: 15px; border-left: 5px solid #1A374D; transition: transform 0.2s; }
+    .conta-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+    .saldo-destaque { font-size: 1.8rem; font-weight: bold; color: #0f5132; }
+    
+    .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; font-weight: bold;}
+    .bg-pago { background-color: #d1e7dd; color: #0f5132; }
+    .bg-pendente { background-color: #fff3cd; color: #664d03; }
+    
+    #telaLogin { height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1A374D 0%, #0d1f2d 100%); }
+    .login-card { background: white; padding: 2.5rem; border-radius: 15px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 100%; max-width: 400px; text-align: center; }
+
+    /* Tela de carregamento (Blindagem contra cliques duplos) */
+    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    .spinner-custom { color: #E06C3F !important; }
+
+    @media print {
+      body { background-color: white; font-size: 12px; }
+      #areaImpressao, #areaImpressao * { visibility: visible; }
+      #areaImpressao { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print, nav { display: none !important; }
+      .card { border: none !important; box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="oculto">
+  <div class="spinner-border spinner-custom" role="status"></div>
+  <div class="mt-2 fw-bold text-muted" id="loading-msg">Carregando...</div>
+</div>
+
+<datalist id="dl-tipos"></datalist><datalist id="dl-secretarias"></datalist><datalist id="dl-fornecedores"></datalist>
+
+<div class="container-fluid p-0">
+  <div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
+    <div id="liveToast" class="toast align-items-center text-white bg-success border-0 shadow" role="alert">
+      <div class="d-flex"><div class="toast-body fs-6" id="toastMsg">Sucesso!</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>
+    </div>
+  </div>
+
+  <div id="telaLogin" class="oculto">
+    <div class="login-card mx-3">
+      <h3 class="mb-2 fw-bold" style="color:#E06C3F">Caatinga Software</h3>
+      <p class="text-muted mb-4">Módulo: Tesouraria</p>
+      <div id="msgLogin" class="alert alert-danger oculto py-2 small"></div>
+      <form onsubmit="event.preventDefault(); window.logar();">
+        <div class="form-floating mb-3"><input type="text" id="loginCpf" class="form-control" placeholder="CPF" required><label>CPF do Usuário</label></div>
+        <div class="form-floating mb-4"><input type="password" id="loginSenha" class="form-control" placeholder="Senha" required><label>Senha</label></div>
+        <button type="submit" class="btn text-white w-100 py-3 fw-bold" style="background-color: #1A374D;">ENTRAR</button>
+        <a href="/" class="btn btn-outline-secondary w-100 mt-2 py-2 fw-bold">Voltar ao Painel</a>
+      </form>
+    </div>
+  </div>
+
+  <div id="sistemaPrincipal" class="oculto">
+    <nav class="navbar navbar-expand-lg navbar-custom shadow-sm px-3 sticky-top">
+      <span class="navbar-brand fw-bold"><i class="bi bi-bank"></i> Tesouraria Municipal <span id="lbl-empresa" class="badge bg-secondary ms-2" style="font-size: 0.5em;"></span></span>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menuTopo"><span class="navbar-toggler-icon"></span></button>
+      <div class="collapse navbar-collapse" id="menuTopo">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item"><a class="nav-link active" onclick="window.navegar('viewContas', this)"><i class="bi bi-wallet2"></i> Contas Bancárias</a></li>
+          <li class="nav-item"><a class="nav-link" onclick="window.navegar('viewPagamentos', this)"><i class="bi bi-receipt"></i> Pagamentos</a></li>
+          <li class="nav-item"><a class="nav-link" onclick="window.navegar('viewDashboard', this)"><i class="bi bi-graph-up"></i> Relatório Financeiro</a></li>
+        </ul>
+        <div class="d-flex flex-column flex-lg-row align-items-lg-center mt-3 mt-lg-0 gap-2">
+          <span class="me-3 small fw-bold" id="usuarioLogado"></span>
+          <button id="btnAtualizar" class="btn btn-sm btn-outline-dark" onclick="window.carregarDadosIniciais()"><i class="bi bi-arrow-clockwise"></i> Atualizar Dados</button>
+          <button class="btn btn-sm text-white" style="background-color: #E06C3F;" onclick="window.sairSistema()">Voltar ao Painel</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container-fluid mt-4 pb-5 px-3 px-md-4">
+      
+      <div id="viewContas" class="view-section">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="fw-bold m-0" style="color: #1A374D;">Saldos e Contas</h4>
+          <button class="btn text-white fw-bold shadow-sm" style="background-color: #E06C3F;" onclick="window.abrirModalConta()"><i class="bi bi-plus-circle"></i> Nova Conta</button>
+        </div>
+        <div class="row g-3" id="listaCardsContas"></div>
+      </div>
+
+      <div id="viewPagamentos" class="view-section oculto">
+        <div class="row g-3">
+          <div class="col-12 col-xl-4 mb-3">
+            <div class="card shadow-sm border-0">
+              <div class="card-header text-white fw-bold" style="background-color: #1A374D;">💸 Registrar Pagamento</div>
+              <div class="card-body">
+                <form id="formPagamento" onsubmit="event.preventDefault(); window.salvarPagamento();">
+                  <input type="hidden" id="pagId">
+                  <label class="small fw-bold">Conta Pagadora</label>
+                  <select id="pagConta" class="form-select mb-2 border-primary" required></select>
+                  
+                  <div class="row g-2">
+                      <div class="col-12 col-sm-6">
+                        <label class="small fw-bold">Data do Pagamento</label>
+                        <input type="date" id="pagData" class="form-control mb-2" required>
+                      </div>
+                      <div class="col-12 col-sm-6">
+                        <label class="small fw-bold">Tipo de Despesa</label>
+                        <input list="dl-tipos" id="pagTipo" class="form-control mb-2" required>
+                      </div>
+                  </div>
+
+                  <label class="small fw-bold">Secretaria</label>
+                  <input list="dl-secretarias" id="pagSecretaria" class="form-control mb-2 text-uppercase" required>
+                  
+                  <label class="small fw-bold">Fornecedor</label>
+                  <input list="dl-fornecedores" id="pagFornecedor" class="form-control mb-2" required>
+                  
+                  <label class="small fw-bold">Descrição</label>
+                  <input type="text" id="pagDesc" class="form-control mb-2" required>
+                  
+                  <label class="small fw-bold">Valor Total (R$)</label>
+                  <input type="text" id="pagValor" class="form-control mb-3 fs-5 fw-bold text-danger" required oninput="window.aplicarMascaraMonetaria(this)">
+                  
+                  <button type="submit" id="btnSalvarPag" class="btn text-white w-100 fw-bold shadow-sm" style="background-color: #E06C3F;">Salvar e Descontar</button>
+                  <button type="button" class="btn btn-light border w-100 mt-2" onclick="window.limparFormPagamento()">Limpar</button>
+                </form>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-12 col-xl-8">
+            <div class="card shadow-sm border-0 h-100">
+              <div class="card-header bg-white fw-bold">Últimos Pagamentos (Geral)</div>
+              <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 70vh;">
+                  <table class="table table-hover align-middle m-0 text-nowrap" style="font-size: 0.85rem;">
+                    <thead class="table-light sticky-top">
+                      <tr><th>Data</th><th>Descrição</th><th>Sec/Tipo</th><th>Fornecedor</th><th class="text-end pe-3">Valor</th><th class="text-center">Ações</th></tr>
+                    </thead>
+                    <tbody id="tbPagamentos"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="viewDashboard" class="view-section oculto">
+        <div class="card mb-4 no-print border-0 shadow-sm bg-white">
+          <div class="card-body py-3">
+            <h6 class="text-primary fw-bold mb-3" style="color: #E06C3F !important;"><i class="bi bi-funnel"></i> Filtrar Relatório</h6>
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-md-4 col-lg-2">
+                  <label class="small mb-1">Secretaria</label>
+                  <select id="filtroSec" class="form-select">
+                      <option value="">Todas as Secretarias</option>
+                      <option value="SAÚDE">Saúde</option>
+                      <option value="EDUCAÇÃO">Educação</option>
+                      <option value="ADMINISTRAÇÃO">Administração</option>
+                      <option value="INFRAESTRUTURA">Infraestrutura</option>
+                      <option value="FINANÇAS">Finanças</option>
+                  </select>
+              </div>
+              <div class="col-12 col-md-4 col-lg-2">
+                  <label class="small mb-1">Status</label>
+                  <select id="filtroStatus" class="form-select"><option value="">Todos</option><option value="Pago">Pago</option><option value="Pendente">Pendente</option></select>
+              </div>
+              <div class="col-12 col-md-4 col-lg-2">
+                  <label class="small mb-1">Mês/Ano</label><input type="month" id="filtroMes" class="form-control">
+              </div>
+              <div class="col-12 col-md-4 col-lg-2">
+                  <label class="small mb-1">Data Início</label><input type="date" id="filtroDataIni" class="form-control">
+              </div>
+              <div class="col-12 col-md-4 col-lg-2">
+                  <label class="small mb-1">Data Fim</label><input type="date" id="filtroDataFim" class="form-control">
+              </div>
+              <div class="col-12 col-md-4 col-lg-2">
+                  <div class="d-grid"><button onclick="window.carregarRelatorio()" class="btn text-white fw-bold shadow-sm" style="background-color: #1A374D;">Gerar</button></div>
+              </div>
+            </div>
+            <div class="text-muted small mt-2"><i class="bi bi-info-circle"></i> Dica: Se preencher as datas de Início e Fim, o campo de Mês será ignorado.</div>
+          </div>
+        </div>
+
+        <div id="areaImpressao">
+          <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h4 class="fw-bold text-dark m-0">Dashboard Consolidado</h4>
+            <button onclick="window.print()" class="btn text-white btn-sm no-print fw-bold shadow-sm" style="background-color: #1A374D;"><i class="bi bi-printer"></i> Imprimir</button>
+          </div>
+          
+          <div class="row mb-3 font-monospace text-center g-2">
+            <div class="col-12 col-md-6"><div class="p-3 bg-white border border-success rounded shadow-sm"><span class="d-block text-success fw-bold">Total Pago (Período filtrado)</span><h3 id="totPago" class="m-0 text-dark">R$ 0,00</h3></div></div>
+            <div class="col-12 col-md-6"><div class="p-3 bg-white border border-warning rounded shadow-sm"><span class="d-block text-warning fw-bold">Total Pendente</span><h3 id="totPendente" class="m-0 text-dark">R$ 0,00</h3></div></div>
+          </div>
+
+          <div class="row mb-4 no-print g-2" id="areaGraficos">
+            <div class="col-12 col-md-4"><div class="card shadow-sm border-0 p-3 h-100"><h6 class="text-center small fw-bold" style="color:#1A374D;">Por Secretaria</h6><canvas id="chartSecretaria"></canvas></div></div>
+            <div class="col-12 col-md-4"><div class="card shadow-sm border-0 p-3 h-100"><h6 class="text-center small fw-bold" style="color:#1A374D;">Por Tipo de Despesa</h6><canvas id="chartTipo"></canvas></div></div>
+            <div class="col-12 col-md-4"><div class="card shadow-sm border-0 p-3 h-100"><h6 class="text-center small fw-bold" style="color:#1A374D;">Top 5 Fornecedores</h6><canvas id="chartFornecedor"></canvas></div></div>
+          </div>
+
+          <div class="card shadow-sm border-0 table-responsive bg-white">
+            <table class="table table-hover align-middle m-0 text-nowrap" id="tbRelatorio" style="font-size: 0.9rem;">
+              <thead class="table-light"><tr><th>Vencimento</th><th>Conta Vinculada</th><th>Secretaria</th><th>Fornecedor / Histórico</th><th class="text-end pe-3">Valor (R$)</th><th class="text-center">Status</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalConta" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header text-white" style="background-color: #1A374D;"><h5 class="modal-title fw-bold"><i class="bi bi-bank"></i> Configurar Conta</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body bg-light">
+        <input type="hidden" id="cadContaId">
+        <label class="small fw-bold">Nome da Conta / Fundo</label><input type="text" id="cadContaNome" class="form-control mb-3" required>
+        <label class="small fw-bold">Banco</label><input type="text" id="cadContaBanco" class="form-control mb-3">
+        <label class="small fw-bold">Saldo Atual Disponível (R$)</label>
+        <input type="text" id="cadContaSaldo" class="form-control fs-4 fw-bold text-success" required oninput="window.aplicarMascaraMonetaria(this)">
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn text-white fw-bold" style="background-color: #E06C3F;" onclick="window.salvarConta()">Salvar Conta</button></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  // ATENÇÃO: onSnapshot importado aqui
+  import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+  
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOEgd1WCElKtngAcQ-ygnx0_2lpHLUAyM",
+    authDomain: "caatingasoftware.firebaseapp.com",
+    projectId: "caatingasoftware",
+    storageBucket: "caatingasoftware.firebasestorage.app",
+    messagingSenderId: "357801806903",
+    appId: "1:357801806903:web:7b03d8f9f0189bf32943b2",
+    measurementId: "G-ZVSVPMDHP0"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  let usuarioAtual = null; 
+  let listenerUsuario = null; // ⚠️ Variável do vigia
+  let tenant = ""; 
+  let dadosGlobais = { contas: [], pagamentos: [] };
+  const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  
+  let chartInstSec = null;
+  let chartInstTipo = null;
+  let chartInstForn = null;
+
+  function loading(mostrar, msg="Carregando...") { 
+      document.getElementById('loading-msg').innerText = msg;
+      if(mostrar) document.getElementById('loadingOverlay').classList.remove('oculto');
+      else document.getElementById('loadingOverlay').classList.add('oculto');
+  }
+
+  window.aplicarMascaraMonetaria = function(elemento) {
+    let valor = elemento.value.replace(/\D/g, "");
+    if (valor === "") { elemento.value = ""; return; }
+    valor = (parseInt(valor, 10) / 100).toFixed(2);
+    elemento.value = valor.replace(".", ",").replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+  };
+
+  window.showToast = function(msg) { document.getElementById('toastMsg').innerText = msg; new bootstrap.Toast(document.getElementById('liveToast')).show(); };
+  
+  window.navegar = function(viewId, elAtivo) { 
+    document.querySelectorAll('.view-section').forEach(el => el.classList.add('oculto')); 
+    document.getElementById(viewId).classList.remove('oculto'); 
+    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+    if(elAtivo) elAtivo.classList.add('active');
+    
+    if(viewId === 'viewDashboard') window.carregarRelatorio();
+  };
+
+  window.onload = function() {
+    // ⚠️ ATENÇÃO: Função transformada em async para checar o banco antes de abrir
+    onAuthStateChanged(auth, async (userAuth) => {
+      const cracha = localStorage.getItem("caatinga_user");
+      if (userAuth && cracha) {
+        usuarioAtual = JSON.parse(cracha);
+        
+        // 🚨 TRAVA INICIAL
+        if (usuarioAtual.cpf !== "01305663306") {
+            try {
+                const docVerifica = await getDoc(doc(db, "usuarios", usuarioAtual.cpf));
+                if(!docVerifica.exists() || docVerifica.data().ativo === false) {
+                    window.sairSistema(true); // Expulsa silenciosamente
+                    return;
+                }
+            } catch(e) { console.log("Aviso: Falha de rede na verificação inicial."); }
+        }
+
+        iniciarSistema();
+      } else {
+        document.getElementById('telaLogin').classList.remove('oculto');
+        document.getElementById('sistemaPrincipal').classList.add('oculto');
+      }
+    });
+  };
+
+  window.sairSistema = function(silencioso = false) { 
+    localStorage.removeItem("caatinga_user"); 
+    if(listenerUsuario) { listenerUsuario(); listenerUsuario = null; } // Desliga o vigia
+
+    signOut(auth).then(() => {
+        if(!silencioso) window.location.href = "/"; 
+        else {
+           document.getElementById('sistemaPrincipal').classList.add('oculto');
+           document.getElementById('telaLogin').classList.remove('oculto');
+           const err = document.getElementById('msgLogin');
+           err.innerText = "Acesso revogado pelo Administrador.";
+           err.classList.remove('oculto');
+        }
+    });
+  };
+
+  window.logar = async function() {
+    const cpf = document.getElementById('loginCpf').value.replace(/\D/g, '');
+    const senha = document.getElementById('loginSenha').value;
+    const err = document.getElementById('msgLogin');
+    err.classList.add('oculto');
+
+    loading(true, "Autenticando...");
+
+    try {
+      const emailFicticio = cpf + "@feitosa.app";
+
+      if (cpf === "01305663306" && senha === "pr10mf86") {
+         try {
+             await signInWithEmailAndPassword(auth, emailFicticio, senha);
+         } catch(e) {
+             await createUserWithEmailAndPassword(auth, emailFicticio, senha);
+         }
+         usuarioAtual = { cpf: cpf, nome: "Master", nivel_acesso: "SUPER_ADM", empresa_id: "pref_aiuaba", secretarias: ["TODAS"] };
+         localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual));
+         loading(false);
+         iniciarSistema();
+         return;
+      }
+
+      await signInWithEmailAndPassword(auth, emailFicticio, senha);
+
+      const uSnap = await getDoc(doc(db, "usuarios", cpf));
+      if (uSnap.exists()) {
+        const dadosUsuario = uSnap.data();
+        if (dadosUsuario.ativo === false) throw new Error("Usuário bloqueado.");
+        
+        usuarioAtual = dadosUsuario; 
+        usuarioAtual.cpf = cpf;
+        localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual)); 
+        loading(false);
+        iniciarSistema();
+      } else { 
+        throw new Error("Cadastro não encontrado."); 
+      }
+    } catch(e) { 
+      loading(false); 
+      err.innerText = "Acesso negado. Verifique o CPF e a Senha.";
+      err.classList.remove('oculto');
+    }
+  };
+
+  function iniciarSistema() {
+    document.getElementById('telaLogin').classList.add('oculto'); 
+    document.getElementById('sistemaPrincipal').classList.remove('oculto');
+    
+    tenant = String(usuarioAtual.empresa_id || "caatinga").toLowerCase();
+    if(tenant === "undefined") tenant = "pref_aiuaba";
+    
+    document.getElementById('lbl-empresa').innerText = tenant.toUpperCase();
+    document.getElementById('usuarioLogado').innerText = `👤 ${usuarioAtual.nome}`;
+    document.getElementById('pagData').valueAsDate = new Date();
+    
+    const hoje = new Date();
+    document.getElementById('filtroMes').value = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('filtroDataIni').value = "";
+    document.getElementById('filtroDataFim').value = "";
+    
+    // 🚨 TRAVA DE TEMPO REAL: Vigia o banco enquanto o app estiver aberto
+    if (!listenerUsuario && usuarioAtual.cpf !== "01305663306") {
+        listenerUsuario = onSnapshot(doc(db, "usuarios", usuarioAtual.cpf), (docSnap) => {
+            if (!docSnap.exists() || docSnap.data().ativo === false) {
+                alert("⚠️ Seu acesso foi suspenso pelo Administrador.");
+                window.sairSistema(true); // Bloqueou no banco? Chuta pra fora.
+            }
+        });
+    }
+
+    window.carregarDadosIniciais();
+  }
+
+  window.carregarDadosIniciais = async function() {
+    document.getElementById('btnAtualizar').disabled = true;
+    loading(true, "Sincronizando Tesouraria...");
+    dadosGlobais.contas = [];
+    dadosGlobais.pagamentos = [];
+
+    try {
+      const contasSnap = await getDocs(collection(db, `${tenant}_contas_bancarias`));
+      contasSnap.forEach((doc) => { dadosGlobais.contas.push({ id: doc.id, ...doc.data() }); });
+
+      const pagamentosSnap = await getDocs(collection(db, `${tenant}_pagamentos`));
+      pagamentosSnap.forEach((doc) => { dadosGlobais.pagamentos.push({ id: doc.id, ...doc.data() }); });
+
+      let forn = [...new Set(dadosGlobais.pagamentos.map(p => p.fornecedor).filter(Boolean))].sort();
+      let sec = [...new Set(dadosGlobais.pagamentos.map(p => p.secretaria).filter(Boolean))].sort();
+      let tipos = [...new Set(dadosGlobais.pagamentos.map(p => p.tipo).filter(Boolean))].sort();
+
+      preencherDatalists(tipos, sec, forn);
+      preencherSelectContas();
+      renderizarContas();
+      renderizarPagamentos();
+      
+      if(!document.getElementById('viewDashboard').classList.contains('oculto')) {
+        window.carregarRelatorio();
+      }
+      
+    } catch (error) {
+      console.error(error); alert("Erro ao carregar dados do banco.");
+    }
+    loading(false);
+    document.getElementById('btnAtualizar').disabled = false;
+  };
+
+  function preencherDatalists(tipos, sec, forn) {
+    const pop = (id, arr) => { const el = document.getElementById(id); el.innerHTML = ''; arr.forEach(i => el.innerHTML += `<option value="${i}">`); };
+    pop('dl-tipos', tipos); pop('dl-secretarias', sec); pop('dl-fornecedores', forn);
+  }
+
+  function preencherSelectContas() {
+    const sel = document.getElementById('pagConta'); sel.innerHTML = '<option value="">-- Selecione a Conta --</option>';
+    dadosGlobais.contas.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.nome} (Saldo: ${BRL.format(c.saldo)})</option>`);
+  }
+
+  window.abrirModalConta = function(id = '', nome = '', banco = '', saldo = '') {
+    document.getElementById('cadContaId').value = id; 
+    document.getElementById('cadContaNome').value = nome;
+    document.getElementById('cadContaBanco').value = banco; 
+    let elSaldo = document.getElementById('cadContaSaldo');
+    if (saldo !== '') { let valorEdit = (parseFloat(saldo) || 0).toFixed(2); elSaldo.value = valorEdit.replace(".", ""); window.aplicarMascaraMonetaria(elSaldo); } else { elSaldo.value = ''; }
+    new bootstrap.Modal(document.getElementById('modalConta')).show();
+  };
+
+  window.salvarConta = async function() {
+    const idCampo = document.getElementById('cadContaId').value;
+    const nome = document.getElementById('cadContaNome').value;
+    const banco = document.getElementById('cadContaBanco').value;
+    const saldoTxt = document.getElementById('cadContaSaldo').value;
+    
+    if(!nome || !saldoTxt) return alert("Preencha Nome e Saldo");
+
+    let saldoLimpo = parseFloat(saldoTxt.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+    
+    const idFinal = idCampo !== "" ? idCampo : 'CB-' + Date.now();
+    const objConta = { nome: nome, banco: banco, saldo: saldoLimpo, dataUltimaEntrada: new Date().toISOString() };
+
+    loading(true, "Gravando Conta...");
+    try {
+      await setDoc(doc(db, `${tenant}_contas_bancarias`, idFinal), objConta, { merge: true });
+      bootstrap.Modal.getInstance(document.getElementById('modalConta')).hide();
+      showToast("Conta Salva com Sucesso!");
+      await window.carregarDadosIniciais(); 
+    } catch (error) { loading(false); alert("Erro ao salvar conta: " + error.message); }
+  };
+
+  window.confirmarExclusaoConta = async function(id, nome) {
+    if(!confirm("Deseja realmente excluir a conta '" + nome + "'?")) return;
+    
+    const idLimpo = String(id).trim(); 
+    if(!idLimpo || idLimpo === 'undefined') {
+      return alert("Erro crítico: O ID desta conta está vazio ou corrompido no banco de dados.");
+    }
+    
+    try {
+      loading(true, "Excluindo no servidor...");
+      
+      await deleteDoc(doc(db, `${tenant}_contas_bancarias`, idLimpo));
+      await window.carregarDadosIniciais(); 
+      
+      showToast("Conta excluída definitivamente!");
+    } catch(e) {
+      loading(false);
+      console.error(e);
+      alert("Falha ao excluir a conta no servidor. Verifique sua conexão. Detalhe: " + e.message); 
+    }
+  };
+
+  function renderizarContas() {
+    const div = document.getElementById('listaCardsContas'); div.innerHTML = '';
+    let saldoTotal = 0;
+    if(!dadosGlobais.contas || dadosGlobais.contas.length === 0) return div.innerHTML = '<div class="col-12 text-center text-muted">Nenhuma conta cadastrada.</div>';
+
+    dadosGlobais.contas.forEach(c => {
+      saldoTotal += parseFloat(c.saldo || 0);
+      div.innerHTML += `
+        <div class="col-12 col-md-6 col-lg-4">
+          <div class="card conta-card bg-white p-3 h-100 shadow-sm border-0">
+            <div class="d-flex justify-content-between align-items-start">
+              <div><span class="fw-bold text-dark d-block">${c.nome}</span><span class="badge bg-secondary border">${c.banco || '-'}</span></div>
+              <button class="btn btn-sm text-danger p-0 ms-2" title="Excluir Conta" onclick="window.confirmarExclusaoConta('${c.id}', '${c.nome.replace(/'/g, "\\'")}')"><i class="bi bi-trash fs-5"></i></button>
+            </div>
+            <div class="mt-3 mb-2 saldo-destaque ${c.saldo < 0 ? 'text-danger' : ''}">${BRL.format(c.saldo || 0)}</div>
+            <div class="d-flex gap-2 mt-auto border-top pt-2">
+               <button class="btn btn-sm text-white w-100 fw-bold" style="background-color: #1A374D;" onclick="window.abrirModalConta('${c.id}', '${c.nome.replace(/'/g, "\\'")}', '${c.banco}', ${c.saldo})"><i class="bi bi-pencil"></i> Editar Conta</button>
+            </div>
+          </div>
+        </div>`;
+    });
+    div.innerHTML = `<div class="col-12 mb-2"><div class="card text-white p-3 shadow-sm border-0 d-flex flex-column flex-sm-row justify-content-between align-items-center" style="background-color: #1A374D;"><span class="mb-2 mb-sm-0"><i class="bi bi-safe"></i> SALDO TOTAL CONSOLIDADO</span><h3 class="m-0 fw-bold" style="color: #E06C3F;">${BRL.format(saldoTotal)}</h3></div></div>` + div.innerHTML;
+  }
+
+  window.salvarPagamento = async function() {
+    document.getElementById('btnSalvarPag').disabled = true;
+    const idCampo = document.getElementById('pagId').value;
+    const idConta = document.getElementById('pagConta').value;
+    const dtValor = document.getElementById('pagData').value;
+    const valorTxt = document.getElementById('pagValor').value;
+
+    if(!idConta) { alert("Selecione uma conta!"); document.getElementById('btnSalvarPag').disabled = false; return; }
+
+    let valorLimpo = parseFloat(valorTxt.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+    const idFinal = idCampo !== "" ? idCampo : 'PGT_' + Date.now();
+
+    const objPagamento = {
+      idConta: idConta,
+      data_registro: dtValor ? new Date(dtValor + "T12:00:00").toISOString() : new Date().toISOString(),
+      descricao: document.getElementById('pagDesc').value,
+      tipo: document.getElementById('pagTipo').value,
+      secretaria: document.getElementById('pagSecretaria').value.toUpperCase(),
+      fornecedor: document.getElementById('pagFornecedor').value,
+      valor: valorLimpo,
+      status: "Pago"
+    };
+
+    loading(true, "Registrando Pagamento e Abatendo Saldo...");
+    try {
+      const contaRef = doc(db, `${tenant}_contas_bancarias`, idConta);
+      const contaSnap = await getDoc(contaRef);
+      
+      if(contaSnap.exists()) {
+         let saldoConta = contaSnap.data().saldo || 0;
+         if(idCampo !== "") {
+           const pagAntigoSnap = await getDoc(doc(db, `${tenant}_pagamentos`, idCampo));
+           if(pagAntigoSnap.exists()) saldoConta += (pagAntigoSnap.data().valor || 0);
+         }
+         saldoConta -= valorLimpo;
+         await setDoc(contaRef, { ...contaSnap.data(), saldo: saldoConta });
+      }
+
+      await setDoc(doc(db, `${tenant}_pagamentos`, idFinal), objPagamento);
+      showToast("Pagamento salvo e saldo descontado!");
+      window.limparFormPagamento();
+      await window.carregarDadosIniciais(); 
+
+    } catch(e) { loading(false); console.error(e); alert("Erro ao salvar: " + e.message); }
+    document.getElementById('btnSalvarPag').disabled = false;
+  };
+
+  window.excluirPag = async function(id, idConta, valor) {
+    if(!confirm(`Excluir pagamento? O valor de ${BRL.format(valor)} será DEVOLVIDO para a conta original.`)) return;
+    
+    const idLimpo = String(id).trim();
+    const idContaLimpo = String(idConta).trim();
+    if(!idLimpo || idLimpo === 'undefined') return alert("Erro: ID do pagamento inválido.");
+
+    try {
+      loading(true, "Estornando valor e excluindo registro...");
+
+      if(idContaLimpo && idContaLimpo !== 'undefined') {
+        const contaRef = doc(db, `${tenant}_contas_bancarias`, idContaLimpo);
+        const contaSnap = await getDoc(contaRef);
+        if(contaSnap.exists()) {
+           let novoSaldo = (contaSnap.data().saldo || 0) + parseFloat(valor);
+           await setDoc(contaRef, { ...contaSnap.data(), saldo: novoSaldo });
+        }
+      }
+      
+      await deleteDoc(doc(db, `${tenant}_pagamentos`, idLimpo));
+      await window.carregarDadosIniciais();
+      showToast("Excluído e estornado com sucesso!");
+      
+    } catch(e) { 
+      loading(false); 
+      alert("Erro ao excluir: " + e.message); 
+    }
+  };
+
+  function renderizarPagamentos() {
+    const tb = document.getElementById('tbPagamentos'); tb.innerHTML = '';
+    
+    let permissoesSec = usuarioAtual.secretarias || ["TODAS"];
+    let pagsPermitidos = dadosGlobais.pagamentos.filter(p => permissoesSec.includes("TODAS") || permissoesSec.includes(p.secretaria));
+    
+    const pagsOrdenados = [...pagsPermitidos].sort((a,b) => new Date(b.data_registro || 0) - new Date(a.data_registro || 0)).slice(0, 50);
+    
+    pagsOrdenados.forEach(p => {
+      let dt = p.data_registro ? new Date(p.data_registro.split('T')[0] + "T12:00:00").toLocaleDateString('pt-BR') : '-';
+      let nomeConta = 'Conta Deletada'; 
+      if (dadosGlobais.contas && p.idConta) { let c = dadosGlobais.contas.find(x => x.id === p.idConta); if (c) nomeConta = c.nome; }
+
+      tb.innerHTML += `<tr>
+        <td><span class="fw-bold d-block">${dt}</span><span class="badge bg-secondary" style="font-size:0.65rem">${nomeConta}</span></td>
+        <td>${p.descricao || '-'}</td><td><div class="small fw-bold">${p.secretaria || '-'}</div><div class="small text-muted">${p.tipo || '-'}</div></td>
+        <td class="small">${p.fornecedor || '-'}</td><td class="fw-bold text-danger text-end pe-3">${BRL.format(p.valor || 0)}</td>
+        <td class="text-center">
+          <button class="btn btn-sm btn-outline-danger py-0 px-1 ms-1" onclick="window.excluirPag('${p.id}', '${p.idConta}', ${p.valor})"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>`;
+    });
+  }
+
+  window.carregarRelatorio = function() {
+    const sec = document.getElementById('filtroSec').value;
+    const st = document.getElementById('filtroStatus').value;
+    
+    const mesAno = document.getElementById('filtroMes').value; 
+    const dataIni = document.getElementById('filtroDataIni').value;
+    const dataFim = document.getElementById('filtroDataFim').value;
+    
+    const tbody = document.querySelector('#tbRelatorio tbody');
+    let lista = []; let tPago = 0; let tPend = 0;
+    
+    let gastosSec = {}; let gastosTipo = {}; let gastosForn = {};
+
+    dadosGlobais.pagamentos.forEach(p => {
+      let dtFormatada = p.data_registro ? p.data_registro.split('T')[0] : '';
+      
+      let okSec = sec === "" || p.secretaria === sec;
+      let okSt = st === "" || p.status === st;
+      
+      let okData = true;
+      
+      if (dataIni && dataFim) {
+        if (dtFormatada < dataIni || dtFormatada > dataFim) okData = false;
+      } 
+      else if (mesAno !== "") {
+        if (!dtFormatada.startsWith(mesAno)) okData = false;
+      }
+      
+      let permissoesSec = usuarioAtual.secretarias || ["TODAS"];
+      let temAcessoSec = permissoesSec.includes("TODAS") || permissoesSec.includes(p.secretaria);
+
+      if(okSec && okSt && okData && temAcessoSec) {
+        lista.push(p);
+        let val = parseFloat(p.valor) || 0;
+        
+        if(p.status === 'Pago') tPago += val; else tPend += val;
+        
+        let nomeSec = p.secretaria || 'Sem Setor';
+        let nomeTipo = p.tipo || 'Sem Tipo';
+        let nomeForn = p.fornecedor || 'Sem Fornecedor';
+        
+        gastosSec[nomeSec] = (gastosSec[nomeSec] || 0) + val;
+        gastosTipo[nomeTipo] = (gastosTipo[nomeTipo] || 0) + val;
+        gastosForn[nomeForn] = (gastosForn[nomeForn] || 0) + val;
+      }
+    });
+
+    document.getElementById('totPago').innerText = BRL.format(tPago);
+    document.getElementById('totPendente').innerText = BRL.format(tPend);
+
+    tbody.innerHTML = '';
+    if(lista.length === 0) { 
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Nenhum lançamento encontrado para estes filtros.</td></tr>'; 
+    } else {
+      lista.sort((a,b) => new Date(b.data_registro || 0) - new Date(a.data_registro || 0));
+
+      lista.forEach(p => {
+        let badge = p.status === 'Pago' ? 'bg-pago' : 'bg-pendente';
+        let dt = p.data_registro ? new Date(p.data_registro.split('T')[0] + "T12:00:00").toLocaleDateString('pt-BR') : '-';
+        let nomeConta = 'Conta Deletada'; 
+        if (dadosGlobais.contas && p.idConta) { let c = dadosGlobais.contas.find(x => x.id === p.idConta); if (c) nomeConta = c.nome; }
+
+        tbody.innerHTML += `<tr>
+          <td><span class="fw-bold text-dark">${dt}</span></td>
+          <td><span class="badge bg-secondary">${nomeConta}</span></td>
+          <td><div class="small fw-bold">${p.secretaria || '-'}</div><div class="small text-muted">${p.tipo || '-'}</div></td>
+          <td><strong class="d-block">${p.fornecedor}</strong><small class="text-muted">${p.descricao}</small></td>
+          <td class="text-end fw-bold text-primary pe-3">${BRL.format(p.valor)}</td>
+          <td class="text-center"><span class="status-badge ${badge}">${p.status || 'Pago'}</span></td>
+        </tr>`;
+      });
+    }
+    
+    atualizarGraficos(gastosSec, gastosTipo, gastosForn);
+  };
+
+  function atualizarGraficos(gSec, gTipo, gForn) {
+    const cores = ['#1A374D', '#E06C3F', '#0f5132', '#ffc107', '#17a2b8', '#6c757d', '#6610f2'];
+
+    if(chartInstSec) chartInstSec.destroy();
+    chartInstSec = new Chart(document.getElementById('chartSecretaria'), {
+      type: 'doughnut',
+      data: { labels: Object.keys(gSec), datasets: [{ data: Object.values(gSec), backgroundColor: cores }] },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+    });
+
+    if(chartInstTipo) chartInstTipo.destroy();
+    chartInstTipo = new Chart(document.getElementById('chartTipo'), {
+      type: 'doughnut',
+      data: { labels: Object.keys(gTipo), datasets: [{ data: Object.values(gTipo), backgroundColor: cores.slice().reverse() }] },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+    });
+
+    let fornKeys = Object.keys(gForn).sort((a,b) => gForn[b] - gForn[a]).slice(0, 5);
+    let fornVals = fornKeys.map(k => gForn[k]);
+    
+    if(chartInstForn) chartInstForn.destroy();
+    chartInstForn = new Chart(document.getElementById('chartFornecedor'), {
+      type: 'bar',
+      data: { labels: fornKeys, datasets: [{ label: 'Valor Recebido (R$)', data: fornVals, backgroundColor: '#1A374D' }] },
+      options: { responsive: true, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+    });
+  }
+
+  window.limparFormPagamento = function() { document.getElementById('formPagamento').reset(); document.getElementById('pagId').value = ''; document.getElementById('pagData').valueAsDate = new Date(); }
+</script>
+</body>
+</html>

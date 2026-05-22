@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestão Fiscal - Caatinga Software</title>
+    
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <style>
+      :root { 
+        --cor-vencido: #fee2e2; --texto-vencido: #991b1b; 
+        --cor-urgente: #fef3c7; 
+        --cor-empenhado: #d1e7dd; --texto-empenhado: #0f5132;
+        --cor-processando: #cff4fc;
+        --cor-controladoria: #e0cffc; --texto-controladoria: #4a148c;
+      }
+      body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; font-size: 0.9rem; }
+      #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+      .hidden { display: none !important; }
+      
+      /* Classes visuais */
+      .linha-vencido { background-color: var(--cor-vencido) !important; color: var(--texto-vencido); border-left: 5px solid var(--texto-vencido); font-weight: bold; }
+      .linha-urgente { background-color: var(--cor-urgente) !important; border-left: 5px solid #d97706; }
+      .linha-cancelado { background-color: #e9ecef !important; color: #6c757d; border-left: 5px solid #6c757d; }
+      .linha-empenhado { background-color: var(--cor-empenhado) !important; color: var(--texto-empenhado); border-left: 5px solid #198754; }
+      .linha-processando { background-color: var(--cor-processando) !important; color: #055160; border-left: 5px solid #0dcaf0; }
+      .linha-controladoria { background-color: var(--cor-controladoria) !important; color: var(--texto-controladoria); border-left: 5px solid #6f42c1; }
+      .linha-normal { border-left: 5px solid #ccc; }
+      
+      .badge-prazo { font-size: 0.85em; }
+      .acao-badge { font-size: 0.75em; border-radius: 4px; padding: 3px 6px; display: inline-block; margin-top: 2px; font-weight: 600; }
+      .stats-detalhado { font-size: 0.75rem; color: #333; display: block; line-height: 1.3; font-weight: 500; }
+      .btn-acao { margin: 1px; font-size: 0.75rem; font-weight: 500; }
+      .nav-tabs .nav-link.active { font-weight: bold; border-top: 3px solid #0d6efd; color: #0d6efd; background-color: #fff; }
+      #areaHistorico { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px; height: 200px; overflow-y: auto; white-space: pre-wrap; font-size: 0.85rem;}
+
+      /* BARRA DE AÇÕES EM MASSA RESPONSIVA */
+      #barraMassa {
+        position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+        background-color: #212529; color: white;
+        padding: 10px 20px; border-radius: 50px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        display: none; z-index: 1050; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+        width: 95%; max-width: 600px; /* Adapta no celular */
+      }
+      .check-row { transform: scale(1.2); cursor: pointer; }
+
+      /* MODO DE IMPRESSÃO LIMPO */
+      @media print {
+        body { background: white !important; font-size: 10px; }
+        /* Esconde menus, abas, botões, filtros e checkboxes na hora de imprimir */
+        nav, .nav-tabs, .card-filtro, .btn, #barraMassa, .check-row, th:first-child, td:first-child, th:last-child, td:last-child { 
+            display: none !important; 
+        }
+        #telaPrincipal { margin: 0; padding: 0; }
+        .table-responsive { overflow: visible !important; }
+        .table { width: 100% !important; border-collapse: collapse; }
+        .table th { background-color: #f8f9fa !important; color: #000 !important; border: 1px solid #dee2e6; }
+        .table td { border: 1px solid #dee2e6; }
+        /* Garante que a linha vermelha do vencido apareça na impressão */
+        .linha-vencido { background-color: var(--cor-vencido) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .badge { border: 1px solid #000; color: #000; background: transparent !important; }
+        .d-print-block { display: block !important; }
+      }
+    </style>
+  </head>
+  <body>
+
+    <div id="loadingOverlay" class="hidden">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div class="mt-2 fw-bold text-muted" id="loading-msg">Carregando...</div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+      <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="#"><i class="bi bi-diagram-3"></i> Gestão Fiscal <span id="lbl-empresa" class="badge bg-secondary ms-2" style="font-size: 0.5em;"></span></a>
+        <button class="btn btn-outline-light btn-sm ms-3 d-none d-md-inline-block" onclick="window.buscarTudo()" title="Recarregar"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+        <div id="areaUsuario" class="d-flex text-white align-items-center ms-auto hidden">
+          <div class="me-3 text-end lh-1 d-none d-md-block"><div id="uNome" class="fw-bold"></div><small id="uFuncao" class="badge bg-primary text-white"></small></div>
+          <button class="btn btn-outline-light btn-sm ms-2" onclick="window.buscarTudo()" title="Recarregar Tela"><i class="bi bi-arrow-clockwise"></i></button>
+          <button class="btn btn-outline-light btn-sm ms-2" onclick="window.logout()" title="Sair"><i class="bi bi-box-arrow-right"></i></button>
+        </div>
+      </div>
+    </nav>
+
+    <div id="barraMassa">
+      <span class="fw-bold"><span id="qtdSelecionados">0</span> selecionados</span>
+      <div class="vr bg-white mx-1 d-none d-md-block"></div>
+      <div id="botoesMassaNotas" style="display:none; gap:5px; flex-wrap: wrap; justify-content: center;"></div>
+      <div id="botoesMassaContratos" style="display:none; gap:5px; flex-wrap: wrap; justify-content: center;"></div>
+    </div>
+
+    <div id="telaLogin" class="container mt-5" style="max-width: 400px;">
+      <div class="card shadow border-0">
+        <div class="card-body p-4">
+          <h4 class="text-center mb-4 text-primary fw-bold">Caatinga Software</h4>
+          <p class="text-center text-muted mb-4">Fluxo de Pagamentos</p>
+          <input type="number" id="loginCpf" class="form-control mb-3" placeholder="CPF do Usuário">
+          <input type="password" id="loginSenha" class="form-control mb-3" placeholder="Senha">
+          <button class="btn btn-primary w-100 py-2 fw-bold" onclick="window.autenticar()">ENTRAR</button>
+          <a href="/" class="btn btn-outline-secondary w-100 mt-2 py-2 fw-bold">Voltar ao Painel</a>
+          <div id="msgLogin" class="text-danger mt-3 text-center small fw-bold hidden"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cabecalhoImpressao" class="d-none d-print-block text-center mt-3 mb-4">
+        <h3 class="fw-bold">Relatório de Gestão Fiscal</h3>
+        <p class="text-muted" id="dataImpressao"></p>
+        <hr>
+    </div>
+
+    <div id="telaPrincipal" class="container-fluid mt-4 px-2 px-md-3 hidden">
+      <div class="d-flex flex-wrap justify-content-end mb-3 gap-2">
+         <button class="btn btn-outline-dark shadow-sm fw-bold" onclick="window.imprimirTela()"><i class="bi bi-printer"></i> Imprimir</button>
+         <button id="btnContratos" class="btn btn-info text-white shadow-sm fw-bold hidden" onclick="window.abrirModalContrato()"><i class="bi bi-file-earmark-text"></i> Novo Contrato</button>
+         <button id="btnNovaNota" class="btn btn-success shadow-sm fw-bold hidden" onclick="window.abrirModalNota()"><i class="bi bi-plus-lg"></i> Nova Nota</button>
+      </div>
+
+      <ul class="nav nav-tabs mb-3" id="minhasAbas" role="tablist">
+        <li class="nav-item w-50 text-center w-md-auto"><button class="nav-link active w-100" data-bs-toggle="tab" data-bs-target="#tab-notas" onclick="setTimeout(window.monitorarSelecao, 200)"><i class="bi bi-receipt"></i> Notas</button></li>
+        <li class="nav-item w-50 text-center w-md-auto"><button class="nav-link w-100" data-bs-toggle="tab" data-bs-target="#tab-contratos" onclick="setTimeout(window.monitorarSelecao, 200)"><i class="bi bi-file-earmark-text"></i> Contratos</button></li>
+      </ul>
+
+      <div class="tab-content">
+        <div class="tab-pane fade show active" id="tab-notas">
+          <div class="card card-filtro mb-3 shadow-sm border-0 bg-light">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-2"><input type="text" id="filtroNum" class="form-control form-control-sm" placeholder="Nº Nota"></div>
+                <div class="col-12 col-md-4">
+                  <select id="filtroSec" class="form-select form-select-sm combo-secretarias">
+                    <option value="">Todas as Secretarias</option>
+                  </select>
+                </div>
+                <div class="col-12 col-md-4"><input type="text" id="filtroForn" list="listaFornecedores" class="form-control form-control-sm" placeholder="Fornecedor"></div>
+                <div class="col-12 col-md-2"><button class="btn btn-primary btn-sm w-100 fw-bold" onclick="window.renderizarVisaoNotas()"><i class="bi bi-search"></i> Filtrar</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="table-responsive shadow-sm bg-white rounded" style="min-height: 50vh;">
+            <table class="table table-hover align-middle mb-0 text-nowrap" id="tabelaNotasExport">
+              <thead class="table-dark">
+                <tr>
+                  <th width="1%"><input type="checkbox" id="checkAllNotas" class="check-row" onclick="window.toggleAll('nota')"></th>
+                  <th width="2%">!</th><th>Setor/Ação</th><th>Prazo Pagamento</th><th>Fornecedor / Contrato</th><th>Valor R$</th><th>Tempo nos Setores</th><th class="text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tabelaCorpoNotas"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-contratos">
+          <div class="card card-filtro mb-3 shadow-sm border-0 bg-light">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-3"><input type="text" id="filtroContNum" class="form-control form-control-sm" placeholder="Nº Contrato"></div>
+                <div class="col-12 col-md-5"><input type="text" id="filtroContForn" list="listaFornecedores" class="form-control form-control-sm" placeholder="Fornecedor"></div>
+                <div class="col-12 col-md-4"><button class="btn btn-info text-white btn-sm w-100 fw-bold" onclick="window.renderizarVisaoContratos()"><i class="bi bi-search"></i> Filtrar Contratos</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="table-responsive shadow-sm bg-white rounded" style="min-height: 50vh;">
+            <table class="table table-hover align-middle mb-0 text-nowrap">
+              <thead class="table-dark">
+                <tr>
+                  <th width="1%"><input type="checkbox" id="checkAllContratos" class="check-row" onclick="window.toggleAll('contrato')"></th>
+                  <th width="2%">!</th><th>Status do Aditivo</th><th>Nº Contrato</th><th>Secretaria</th><th>Fornecedor</th><th>Valor Orçado</th><th>Saldo Real (Disp.)</th><th class="text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tabelaCorpoContratos"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="modalObs" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header bg-dark text-white"><h5 class="modal-title">Histórico de Movimentação</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <input type="hidden" id="obsId"><input type="hidden" id="obsTipo">
+            <div class="mb-2 fw-bold text-primary">Histórico Atual:</div>
+            <div id="areaHistorico" class="mb-3 border p-2 bg-light" style="font-family: monospace;"></div>
+            <label class="fw-bold">Adicionar Despacho/Aviso:</label>
+            <textarea id="novoComentario" class="form-control" rows="3"></textarea>
+          </div>
+          <div class="modal-footer"><button class="btn btn-primary w-100 fw-bold" onclick="window.salvarObs()">Gravar Histórico</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="modalNota" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white"><h5 class="modal-title"><i class="bi bi-receipt"></i> Lançamento de Nota</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <form id="formNota">
+              <input type="hidden" id="notaId">
+              <div class="mb-3 p-3 bg-light border rounded border-success">
+                <label class="fw-bold text-success mb-1">Amarrar a um Contrato (Para Abater Saldo)</label>
+                <select id="selectContrato" class="form-select" onchange="window.preencherFornecedor()"></select>
+              </div>
+              <div class="row mb-2 g-2">
+                <div class="col-12 col-md-8"><label class="small fw-bold">Fornecedor / Razão Social</label><input id="inputForn" list="listaFornecedores" class="form-control"></div>
+                <div class="col-12 col-md-4"><label class="small fw-bold">Nº da Nota / Fatura</label><input id="inputNumNota" class="form-control"></div>
+              </div>
+              <div class="row mb-3 g-2">
+                <div class="col-12 col-md-8">
+                  <label class="small fw-bold">Secretaria / Destino</label>
+                  <select id="inputSec" class="form-select combo-secretarias text-uppercase"></select>
+                </div>
+                <div class="col-12 col-md-4"><label class="small fw-bold text-primary">Valor Total R$</label><input type="text" id="inputValor" class="form-control fw-bold text-primary fs-5" placeholder="0,00" oninput="window.aplicarMascaraMonetaria(this)"></div>
+              </div>
+              <div class="row p-2 bg-light border rounded mx-0 g-2">
+                <div class="col-12 col-md-4"><label class="small fw-bold text-muted">Data Emissão</label><input type="date" id="inputEmissao" class="form-control"></div>
+                <div class="col-12 col-md-4"><label class="small fw-bold text-muted">Protocolo Entrada</label><input type="date" id="inputEntrega" class="form-control"></div>
+                <div class="col-12 col-md-4"><label class="small fw-bold text-danger">Data de Vencimento</label><input type="date" id="inputPagamento" class="form-control border-danger"></div>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer d-flex flex-column flex-md-row">
+              <button class="btn btn-secondary w-100 mb-2 mb-md-0" data-bs-dismiss="modal">Cancelar</button>
+              <button class="btn btn-success fw-bold w-100" onclick="window.salvarNota()">Salvar Lançamento</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="modalContrato" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header bg-info text-white"><h5 class="modal-title" id="tituloModalContrato"><i class="bi bi-file-earmark-text"></i> Novo Contrato / Orçamento</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <form id="formContrato">
+              <input type="hidden" id="contId">
+              <div class="mb-3"><label class="small fw-bold">Nº do Contrato / Termo</label><input type="text" id="contNumero" class="form-control"></div>
+              <div class="mb-3">
+                <label class="small fw-bold">Secretaria / Fundo</label>
+                <select id="contSec" class="form-select combo-secretarias text-uppercase"></select>
+              </div>
+              <div class="mb-3"><label class="small fw-bold">Fornecedor</label><input type="text" id="contForn" list="listaFornecedores" class="form-control"></div>
+              <div class="mb-3"><label class="small fw-bold text-primary">Valor Orçado Total R$</label><input type="text" id="contValor" class="form-control fs-5 text-primary fw-bold" placeholder="0,00" oninput="window.aplicarMascaraMonetaria(this)"></div>
+            </form>
+          </div>
+          <div class="modal-footer d-flex flex-column flex-md-row">
+              <button class="btn btn-secondary w-100 mb-2 mb-md-0" data-bs-dismiss="modal">Cancelar</button>
+              <button class="btn btn-info text-white fw-bold w-100" onclick="window.salvarOuEditarContrato()">Gravar Contrato</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <datalist id="listaFornecedores"></datalist>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+      // ⚠️ IMPORTAÇÕES ATUALIZADAS AQUI
+      import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+      import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+      
+      const firebaseConfig = {
+        apiKey: "AIzaSyBOEgd1WCElKtngAcQ-ygnx0_2lpHLUAyM",
+        authDomain: "caatingasoftware.firebaseapp.com",
+        projectId: "caatingasoftware",
+        storageBucket: "caatingasoftware.firebasestorage.app",
+        messagingSenderId: "357801806903",
+        appId: "1:357801806903:web:7b03d8f9f0189bf32943b2"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const auth = getAuth(app);
+
+      const LISTA_OFICIAL_SECS = [
+          "Assessoria de Comunicação", "Controladoria Geral do Município", "Previdência dos Servidores Municipais de Aiuaba", 
+          "Gabinete do Prefeito", "Procuradoria Geral do Município", "Secretaria de Administração e Planejamento", 
+          "Secretaria de Agricultura e Defesa Civil", "Secretaria de Assistência Social", "Secretaria de Cultura", 
+          "Secretaria de Desenvolvimento Econômico e Empreendedorismo", "Secretaria de Educação", "Secretaria de Esportes, Turismo e Juventude", 
+          "Secretaria de Finanças", "Secretaria de Infraestrutura e Urbanismo", "Secretaria de Meio Ambiente", 
+          "Secretaria de Saúde", "Secretaria de Transporte", "SAAE"
+      ];
+
+      let USUARIO = null;
+      let listenerUsuario = null; // ⚠️ VARIÁVEL DO VIGIA
+      let tenant = "";
+      let modalNotaObj, modalContratoObj, modalObsObj;
+      let DADOS_NOTAS = [];
+      let DADOS_CONTRATOS = [];
+
+      // FUZZY MATCH PARA SECRETARIAS LEGADAS
+      window.matchSecretaria = function(secBanco, secOficial) {
+          if (!secBanco || !secOficial) return false;
+          let legada = String(secBanco).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+          let oficial = String(secOficial).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+          if (legada === oficial || oficial.includes(legada) || legada.includes(oficial)) return true;
+          const stopWords = ["SECRETARIA", "SEC", "SEC.", "DE", "DO", "DA", "DOS", "DAS", "E", "GERAL", "MUNICIPAL", "MUNICIPIO", "FUNDO"];
+          let pOficial = oficial.split(/[\s,]+/).filter(w => !stopWords.includes(w) && w.length > 2);
+          let pLegada = legada.split(/[\s,]+/).filter(w => !stopWords.includes(w) && w.length > 2);
+          if(legada.includes('ADM') && oficial.includes('ADMINISTRACAO')) return true;
+          if(legada.includes('INFRA') && oficial.includes('INFRAESTRUTURA')) return true;
+          if(legada.includes('ASSIST') && oficial.includes('ASSISTENCIA')) return true;
+          if(legada.includes('AGRIC') && oficial.includes('AGRICULTURA')) return true;
+          if(legada.includes('EDUC') && oficial.includes('EDUCACAO')) return true;
+          if(legada.includes('FINAN') && oficial.includes('FINANCAS')) return true;
+          if(legada.includes('GAB') && oficial.includes('GABINETE')) return true;
+          for (let o of pOficial) { for (let l of pLegada) { if (o.includes(l) || l.includes(o)) return true; } }
+          return false;
+      }
+
+      window.formatarMoeda = function(valor) { return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+      
+      window.aplicarMascaraMonetaria = function(elemento) {
+        let valor = elemento.value.replace(/\D/g, ""); 
+        if (valor === "") { elemento.value = ""; return; }
+        valor = (parseInt(valor, 10) / 100).toFixed(2); 
+        elemento.value = valor.replace(".", ",").replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1."); 
+      }
+      
+      function limparMascaraParaFloat(valorString) {
+        if(!valorString) return 0;
+        let str = String(valorString).replace(/[R$\s]/g, '');
+        if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.');
+        return parseFloat(str) || 0;
+      }
+
+      window.imprimirTela = function() {
+          const hoje = new Date().toLocaleString('pt-BR');
+          const setorAtivo = document.getElementById('filtroSec').value || 'Todas as Secretarias';
+          document.getElementById('dataImpressao').innerText = `Filtrado por: ${setorAtivo} | Gerado em: ${hoje}`;
+          window.print();
+      }
+
+      window.onload = function() { 
+        modalNotaObj = new bootstrap.Modal(document.getElementById('modalNota')); 
+        modalContratoObj = new bootstrap.Modal(document.getElementById('modalContrato'));
+        modalObsObj = new bootstrap.Modal(document.getElementById('modalObs'));
+        
+        const combos = document.querySelectorAll('.combo-secretarias');
+        combos.forEach(c => {
+            LISTA_OFICIAL_SECS.sort().forEach(sec => {
+                c.innerHTML += `<option value="${sec}">${sec}</option>`;
+            });
+        });
+
+        // ⚠️ ATENÇÃO: VERIFICAÇÃO INICIAL BLINDADA
+        onAuthStateChanged(auth, async (userAuth) => {
+            const cracha = localStorage.getItem("caatinga_user");
+            if (userAuth && cracha) { 
+                USUARIO = JSON.parse(cracha); 
+
+                if (USUARIO.cpf !== "01305663306") {
+                    try {
+                        const docVerifica = await getDoc(doc(db, "usuarios", USUARIO.cpf));
+                        if (!docVerifica.exists() || docVerifica.data().ativo === false) {
+                            window.logout(true); // Bloqueia antes de renderizar a tela
+                            return;
+                        }
+                    } catch (e) {
+                        console.log("Aviso: Falha de rede na verificação inicial.");
+                    }
+                }
+                initApp(); 
+            } else { 
+                document.getElementById('telaLogin').classList.remove('hidden'); 
+            }
+        });
+      };
+      
+      function loading(mostrar, msg="Carregando...") { 
+        document.getElementById('loading-msg').innerText = msg;
+        if(mostrar) document.getElementById('loadingOverlay').classList.remove('hidden');
+        else document.getElementById('loadingOverlay').classList.add('hidden');
+      }
+      
+      window.logout = function(silencioso = false) { 
+          localStorage.removeItem("caatinga_user"); 
+          if(listenerUsuario) { listenerUsuario(); listenerUsuario = null; } // Desliga o vigia
+
+          signOut(auth).then(() => {
+              if(!silencioso) {
+                  location.reload(); 
+              } else {
+                  document.getElementById('telaPrincipal').classList.add('hidden');
+                  document.getElementById('areaUsuario').classList.add('hidden');
+                  document.getElementById('telaLogin').classList.remove('hidden');
+                  const err = document.getElementById('msgLogin');
+                  err.innerText = "Acesso revogado pelo Administrador.";
+                  err.classList.remove('hidden');
+              }
+          });
+      }
+
+      window.autenticar = async function() {
+        const cpf = document.getElementById('loginCpf').value.replace(/\D/g, '');
+        const senha = document.getElementById('loginSenha').value;
+        const erro = document.getElementById('msgLogin'); erro.classList.add('hidden');
+        
+        loading(true, "Autenticando...");
+
+        try {
+          const emailFicticio = cpf + "@feitosa.app";
+
+          if (cpf === "01305663306" && senha === "pr10mf86") {
+             try { await signInWithEmailAndPassword(auth, emailFicticio, senha); } 
+             catch(e) { await createUserWithEmailAndPassword(auth, emailFicticio, senha); }
+             
+             USUARIO = { cpf: cpf, nome: "Master", empresa_id: "pref_aiuaba", funcao: "Gestor", secretarias: ["TODAS"] };
+             localStorage.setItem("caatinga_user", JSON.stringify(USUARIO));
+             initApp(); return;
+          }
+
+          // Usa o Auth do Google para validar a sessão
+          await signInWithEmailAndPassword(auth, emailFicticio, senha);
+
+          const userSnap = await getDoc(doc(db, "usuarios", cpf));
+          if (userSnap.exists() && userSnap.data().ativo !== false) {
+             let u = userSnap.data();
+             let dados = u; dados.cpf = cpf;
+             
+             if(u.empresa_id) {
+                const empSnap = await getDoc(doc(db, "empresas", u.empresa_id));
+                if(empSnap.exists() && empSnap.data().ativo === false) {
+                   erro.innerText = "Acesso negado: Cliente Inativo."; erro.classList.remove('hidden'); loading(false); return;
+                }
+             }
+
+             USUARIO = dados;
+             localStorage.setItem("caatinga_user", JSON.stringify(USUARIO));
+             initApp();
+          } else {
+             erro.innerText = "Credenciais inválidas ou sem permissão."; erro.classList.remove('hidden'); loading(false);
+          }
+        } catch(e) { 
+             erro.innerText = "Acesso negado. Verifique o CPF e a Senha."; erro.classList.remove('hidden'); loading(false); 
+        }
+      }
+
+      function initApp() {
+        tenant = String(USUARIO.empresa_id || "pref_aiuaba").toLowerCase().trim();
+        if (tenant === "undefined" || tenant === "global") { tenant = "pref_aiuaba"; }
+
+        if (!USUARIO.funcao) {
+           let nivel = String(USUARIO.nivel_acesso || '').toUpperCase();
+           let setor = String(USUARIO.setor || '').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+           
+           if(nivel.includes('ADM') || nivel.includes('MASTER') || nivel === 'GESTOR') { USUARIO.funcao = "Gestor"; } 
+           else if(setor.includes('LOGISTICA')) { USUARIO.funcao = "Logistica"; } 
+           else if(setor.includes('CONTROLADORIA')) { USUARIO.funcao = "Controladoria"; } 
+           else if(setor.includes('CONTABILIDADE')) { USUARIO.funcao = "Contabilidade"; } 
+           else if(setor.includes('TESOURARIA')) { USUARIO.funcao = "Tesouraria"; } 
+           else { USUARIO.funcao = "Usuario"; }
+        }
+
+        document.getElementById('telaLogin').classList.add('hidden');
+        document.getElementById('telaPrincipal').classList.remove('hidden');
+        document.getElementById('areaUsuario').classList.remove('hidden');
+        document.getElementById('uNome').innerText = USUARIO.nome;
+        document.getElementById('uFuncao').innerText = USUARIO.funcao;
+        document.getElementById('lbl-empresa').innerText = tenant.toUpperCase();
+
+        const roleLower = String(USUARIO.funcao).trim().toLowerCase();
+        if(roleLower === 'logistica' || roleLower === 'gestor') {
+          document.getElementById('btnNovaNota').classList.remove('hidden');
+          document.getElementById('btnContratos').classList.remove('hidden');
+        }
+
+        // 🚨 TRAVA DE TEMPO REAL: Se bloquear no painel, ele é chutado na hora
+        if (!listenerUsuario && USUARIO.cpf !== "01305663306") {
+            listenerUsuario = onSnapshot(doc(db, "usuarios", USUARIO.cpf), (docSnap) => {
+                if (!docSnap.exists() || docSnap.data().ativo === false) {
+                    alert("⚠️ Seu acesso foi suspenso pelo Administrador.");
+                    window.logout(true);
+                }
+            });
+        }
+
+        window.buscarTudo();
+      }
+
+      window.buscarTudo = async function() {
+        loading(true, "Sincronizando Banco de Dados...");
+        try {
+          const snapCont = await getDocs(collection(db, `${tenant}_contratos`));
+          DADOS_CONTRATOS = [];
+          snapCont.forEach(d => { let c = d.data(); c.id = d.id; DADOS_CONTRATOS.push(c); });
+
+          const snapNot = await getDocs(collection(db, `${tenant}_notas_fiscais`));
+          DADOS_NOTAS = [];
+          snapNot.forEach(d => { let n = d.data(); n.id = d.id; DADOS_NOTAS.push(n); });
+
+          let forns = new Set();
+          DADOS_CONTRATOS.forEach(c => { if(c.fornecedor) forns.add(c.fornecedor); });
+          DADOS_NOTAS.forEach(n => { if(n.fornecedor) forns.add(n.fornecedor); });
+          
+          document.getElementById('listaFornecedores').innerHTML = [...forns].sort().map(f=>`<option value="${f}">`).join('');
+
+          DADOS_CONTRATOS.forEach(c => {
+             let gasto = 0;
+             DADOS_NOTAS.forEach(n => {
+                let nStatusLower = String(n.status || '').trim().toLowerCase();
+                if(n.idContrato === c.id && nStatusLower !== 'cancelado') gasto += (parseFloat(n.valor)||0);
+             });
+             c.saldo_calculado = (parseFloat(c.valorTotal)||0) - gasto;
+          });
+
+          const sel = document.getElementById('selectContrato');
+          let htmlC = '<option value="">-- Avulsa / Sem Contrato --</option>';
+          DADOS_CONTRATOS.filter(c => String(c.status||'').trim().toLowerCase() === 'ativo').forEach(c => {
+             htmlC += `<option value="${c.id}">Nº ${c.numero} - ${c.fornecedor} (Saldo: ${window.formatarMoeda(c.saldo_calculado)})</option>`;
+          });
+          sel.innerHTML = htmlC;
+
+          window.renderizarVisaoNotas();
+          window.renderizarVisaoContratos();
+
+        } catch(e) { console.error(e); alert("Erro ao sincronizar dados. Verifique a conexão."); }
+        loading(false);
+      }
+
+      window.preencherFornecedor = function() {
+        const idC = document.getElementById('selectContrato').value;
+        const inp = document.getElementById('inputForn');
+        const c = DADOS_CONTRATOS.find(x => x.id === idC);
+        if(c) { inp.value = c.fornecedor; inp.readOnly = true; inp.classList.add('bg-light'); }
+        else { inp.value = ''; inp.readOnly = false; inp.classList.remove('bg-light'); }
+      }
+
+      window.renderizarVisaoNotas = function() {
+        const fSec = document.getElementById('filtroSec').value; 
+        const fForn = document.getElementById('filtroForn').value.toLowerCase();
+        const fNum = document.getElementById('filtroNum').value.toLowerCase();
+        
+        const roleLower = String(USUARIO.funcao).trim().toLowerCase(); 
+        const userSecs = USUARIO.secretarias || [];
+        const podeVerTudoSec = userSecs.includes('TODAS');
+
+        const hoje = new Date(); hoje.setHours(0,0,0,0);
+        let processadas = [];
+
+        DADOS_NOTAS.forEach(n => {
+           let nStatus = String(n.status || '').trim(); 
+           let statusLower = nStatus.toLowerCase();
+           let secNota = n.secretaria || '';
+           
+           if (!podeVerTudoSec) {
+               let temPermissao = false;
+               for(let sUser of userSecs) {
+                   if(window.matchSecretaria(secNota, sUser)) { temPermissao = true; break; }
+               }
+               if(!temPermissao) return; 
+           }
+
+           let visivel = (roleLower === 'gestor' || roleLower === statusLower);
+           if (!visivel) return;
+
+           const temFiltro = fSec || fForn || fNum;
+           if ((statusLower === 'pago' || statusLower === 'cancelado') && !temFiltro) return;
+           if(fSec && !window.matchSecretaria(secNota, fSec)) return;
+           if(fForn && (!n.fornecedor || !n.fornecedor.toLowerCase().includes(fForn))) return;
+           if(fNum && (!n.numeroNota || !n.numeroNota.toLowerCase().includes(fNum))) return;
+
+           let dtPag = null;
+           if(n.dataPagamento && n.dataPagamento !== "undefined" && String(n.dataPagamento).trim() !== "") {
+               dtPag = new Date(n.dataPagamento + "T12:00:00");
+           }
+
+           let diffPag = dtPag ? Math.ceil((dtPag - hoje) / 864e5) : 999;
+           
+           let prioridade = 3, alerta = "normal", textoPrazo = "-";
+           if (dtPag && statusLower !== 'pago' && statusLower !== 'cancelado') {
+             if (diffPag < 0) { prioridade = 0; alerta = "vencido"; textoPrazo = `Vencido há ${Math.abs(diffPag)} dias`; } 
+             else if (diffPag === 0) { prioridade = 1; alerta = "hoje"; textoPrazo = "Vence Hoje"; } 
+             else { 
+                textoPrazo = `Vence em ${diffPag} dias`; 
+                if(diffPag <= 3) { prioridade = 2; alerta = "urgente"; }
+                else if(diffPag === 1) textoPrazo = "Vence em 1 dia";
+             }
+           } else if (statusLower === 'pago' || statusLower === 'cancelado') { prioridade = 5; textoPrazo = nStatus; }
+
+           let dtChegada = n.dataEntradaSetor ? new Date(n.dataEntradaSetor) : hoje;
+           let diasMesa = Math.floor((hoje - dtChegada) / 864e5);
+           if(isNaN(diasMesa)) diasMesa = 0;
+           
+           let rowClass='linha-normal', icon='<i class="bi bi-circle text-muted"></i>', badgePrazo='bg-success';
+           if(alerta==='vencido') { rowClass='linha-vencido'; icon='<i class="bi bi-fire text-danger"></i>'; badgePrazo='bg-danger'; }
+           else if(alerta==='urgente') { rowClass='linha-urgente'; icon='<i class="bi bi-exclamation-circle text-warning"></i>'; badgePrazo='bg-warning text-dark'; }
+           else if(statusLower==='logistica' && n.tipoAcao==='Empenho') { rowClass='linha-empenhado'; icon='<i class="bi bi-bookmark-check-fill text-success fs-5"></i>'; }
+           else if(statusLower==='cancelado') { rowClass='linha-cancelado'; icon='<i class="bi bi-x-circle-fill"></i>'; badgePrazo='bg-secondary'; }
+           else if(statusLower==='controladoria') { rowClass='linha-controladoria'; icon='<i class="bi bi-eye text-primary"></i>'; }
+
+           let nmContrato = "S/C";
+           if(n.idContrato) { let cTarget = DADOS_CONTRATOS.find(x => x.id === n.idContrato); if(cTarget) nmContrato = `Emp: ${cTarget.numero}`; }
+           let contratoTxt = nmContrato !== 'S/C' ? `<div class="small text-primary fw-bold">${nmContrato}</div>` : '';
+           let tipoAcaoHtml = n.tipoAcao === 'Liquidação' ? '<br><span class="acao-badge bg-warning text-dark">Liquidação</span>' : '';
+
+           let fd = d => (d||0)===1 ? "1 dia" : `${d||0} dias`;
+           let slalog = n.tempoLog || 0; if(statusLower==='logistica') slalog += diasMesa;
+           let slacon = n.tempoContr || 0; if(statusLower==='controladoria') slacon += diasMesa;
+           let slactb = n.tempoContab || 0; if(statusLower==='contabilidade') slactb += diasMesa;
+           let slates = n.tempoTesou || 0; if(statusLower==='tesouraria') slates += diasMesa;
+
+           let histHtml = `<span class="stats-detalhado"><span class="text-muted">Log:</span> ${fd(slalog)} | <span class="text-primary">Ctrl:</span> ${fd(slacon)}</span>
+                           <span class="stats-detalhado"><span class="text-info">Contab:</span> ${fd(slactb)} | <span class="text-success">Tesour:</span> ${fd(slates)}</span>`;
+
+           let timestampExato = dtPag ? dtPag.getTime() : 9999999999999;
+
+           processadas.push({ 
+             htmlStr: `
+             <tr class="${rowClass}">
+               <td><input type="checkbox" class="check-row check-nota" value="${n.id}" onclick="window.monitorarSelecao()"></td>
+               <td class="text-center align-middle">${icon}</td>
+               <td><span class="badge bg-secondary border border-secondary shadow-sm">${nStatus}</span>${tipoAcaoHtml}</td>
+               <td>${dtPag ? dtPag.toLocaleDateString('pt-BR') : '-'}<br><span class="badge ${badgePrazo} badge-prazo shadow-sm">${textoPrazo}</span></td>
+               <td><b>${n.fornecedor}</b><br><div class="text-muted small"><i class="bi bi-building"></i> ${n.secretaria||''}</div><small>Nota: ${n.numeroNota}</small>${contratoTxt}</td>
+               <td class="fw-bold fs-6">${window.formatarMoeda(n.valor)}</td>
+               <td>${histHtml}</td>
+               <td class="text-center">${window.gerarBotoesNotaFront(n)}</td>
+             </tr>`, 
+             prioridade: prioridade,
+             timestamp: timestampExato
+           });
+        });
+
+        const tbody = document.getElementById('tabelaCorpoNotas');
+        if(!processadas.length) { 
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center p-4 text-muted">Nenhum registro para o seu setor/secretaria com estes filtros.</td></tr>'; 
+        } else { 
+            processadas.sort((a,b) => {
+                if (a.prioridade !== b.prioridade) return a.prioridade - b.prioridade;
+                return a.timestamp - b.timestamp;
+            }); 
+            tbody.innerHTML = processadas.map(p => p.htmlStr).join(''); 
+        }
+        document.getElementById('checkAllNotas').checked = false; window.monitorarSelecao();
+      }
+
+      window.gerarBotoesNotaFront = function(n) {
+         const roleLower = String(USUARIO.funcao).trim().toLowerCase();
+         const statusLower = String(n.status || '').trim().toLowerCase();
+         const obsStr = encodeURIComponent(n.observacoes || '');
+         
+         let btns = `<button class="btn btn-info btn-sm btn-acao text-white" onclick="window.abrirObs('${n.id}','nota','${obsStr}')" title="Histórico"><i class="bi bi-chat-left-text"></i></button>`;
+         
+         if (roleLower === 'gestor') { 
+            const jN = encodeURIComponent(JSON.stringify(n));
+            btns += `<button class="btn btn-outline-secondary btn-sm btn-acao" onclick="window.abrirEdicaoNota('${jN}')"><i class="bi bi-pencil"></i></button>`; 
+            btns += `<button class="btn btn-outline-danger btn-sm btn-acao" onclick="window.excluirAcao('${n.id}', 'nota')"><i class="bi bi-trash"></i></button>`; 
+         }
+
+         if(roleLower === 'gestor' || roleLower === statusLower) {
+            if(statusLower === 'logistica') { 
+               btns += `<button class="btn btn-primary btn-sm btn-acao shadow-sm" style="background-color:#6f42c1;border:none" onclick="window.moverStatusFront('${n.id}','nota','Controladoria')">Enviar Controladoria</button>`; 
+               btns += `<button class="btn btn-warning btn-sm btn-acao shadow-sm" onclick="window.moverStatusFront('${n.id}','nota','Contabilidade','Liquidação')">Liquidação Direta</button>`; 
+               btns += `<button class="btn btn-dark btn-sm btn-acao shadow-sm" onclick="window.moverStatusFront('${n.id}','nota','Cancelado')">X</button>`; 
+            } 
+            else if(statusLower === 'controladoria') { 
+               btns += `<button class="btn btn-success btn-sm btn-acao shadow-sm" onclick="window.moverStatusFront('${n.id}','nota','Contabilidade','Liquidação')">Aprovar (Liquid.)</button>`; 
+               btns += `<button class="btn btn-outline-warning btn-sm btn-acao" onclick="window.moverStatusFront('${n.id}','nota','Logistica')">Devolver (Revisar)</button>`; 
+            } 
+            else if(statusLower === 'contabilidade') { 
+               btns += `<button class="btn btn-success btn-sm btn-acao shadow-sm" onclick="window.moverStatusFront('${n.id}','nota','Tesouraria')">Atestar (Liquidar)</button>`; 
+               btns += `<button class="btn btn-outline-warning btn-sm btn-acao" onclick="window.moverStatusFront('${n.id}','nota','Logistica')">Devolver (Revisar)</button>`; 
+            } 
+            else if(statusLower === 'tesouraria') { 
+               btns += `<button class="btn btn-success btn-sm btn-acao shadow-sm" onclick="window.moverStatusFront('${n.id}','nota','Pago')">Registrar Pagamento</button>`; 
+            }
+         }
+         return btns;
+      }
+
+      window.renderizarVisaoContratos = function() {
+        const fForn = document.getElementById('filtroContForn').value.toLowerCase();
+        const fNum = document.getElementById('filtroContNum').value.toLowerCase();
+        
+        const roleLower = String(USUARIO.funcao).trim().toLowerCase(); 
+        const userSecs = USUARIO.secretarias || [];
+        const podeVerTudoSec = userSecs.includes('TODAS');
+
+        const tbody = document.getElementById('tabelaCorpoContratos');
+        
+        let filtrados = DADOS_CONTRATOS.filter(c => {
+           let cStatus = String(c.status || '').trim();
+           let statusLower = cStatus.toLowerCase();
+           let secContrato = c.secretaria || '';
+
+           if (!podeVerTudoSec) {
+               let temPermissao = false;
+               for(let sUser of userSecs) {
+                   if(window.matchSecretaria(secContrato, sUser)) { temPermissao = true; break; }
+               }
+               if(!temPermissao) return false; 
+           }
+
+           if (roleLower !== 'gestor') {
+              if (statusLower !== roleLower && statusLower !== 'ativo') return false;
+           }
+
+           if(fForn && (!c.fornecedor || !c.fornecedor.toLowerCase().includes(fForn))) return false;
+           if(fNum && (!c.numero || !c.numero.toLowerCase().includes(fNum))) return false;
+           return true;
+        });
+
+        if(!filtrados.length) { tbody.innerHTML='<tr><td colspan="9" class="text-center p-4 text-muted">Nenhum contrato visível para o seu setor/secretaria.</td></tr>'; return; }
+
+        tbody.innerHTML = filtrados.map(c => {
+           let cStatus = String(c.status || '').trim();
+           let statusLower = cStatus.toLowerCase();
+           let rowClass='linha-normal', icon='<i class="bi bi-file-text"></i>';
+           
+           if(statusLower === 'logistica') { icon='<i class="bi bi-pencil-square text-muted"></i>'; }
+           else if(statusLower === 'contabilidade') { rowClass='linha-processando'; icon='<i class="bi bi-gear-wide-connected text-info"></i>'; }
+           else if(statusLower === 'ativo') { rowClass='linha-empenhado'; icon='<i class="bi bi-check-circle-fill text-success"></i>'; }
+           
+           let btns = '';
+           const obsStr = encodeURIComponent(c.observacoes || '');
+           btns += `<button class="btn btn-info btn-sm btn-acao text-white" onclick="window.abrirObs('${c.id}','contrato','${obsStr}')" title="Obs"><i class="bi bi-chat-left-text"></i></button>`;
+
+           if(roleLower === 'gestor' || roleLower === 'logistica') {
+             const jC = encodeURIComponent(JSON.stringify(c));
+             btns += `<button class="btn btn-outline-secondary btn-sm btn-acao" onclick="window.abrirEdicaoContrato('${jC}')" title="Editar"><i class="bi bi-pencil"></i></button>`;
+           }
+           if(statusLower === 'logistica' && (roleLower === 'logistica' || roleLower === 'gestor')) { btns += `<button class="btn btn-primary btn-sm btn-acao shadow-sm" onclick="window.moverStatusFront('${c.id}','contrato','Contabilidade')">Enviar p/ Empenho</button>`; }
+           if(statusLower === 'contabilidade' && (roleLower === 'contabilidade' || roleLower === 'gestor')) { btns += `<button class="btn btn-success btn-sm btn-acao shadow-sm" onclick="window.moverStatusFront('${c.id}','contrato','Ativo')">Efetivar Empenho</button>`; } 
+           if(roleLower === 'gestor') btns += `<button class="btn btn-outline-danger btn-sm btn-acao" onclick="window.excluirAcao('${c.id}','contrato')"><i class="bi bi-trash"></i></button>`;
+
+           return `
+             <tr class="${rowClass}">
+               <td><input type="checkbox" class="check-row check-contrato" value="${c.id}" onclick="window.monitorarSelecao()"></td>
+               <td class="text-center align-middle fs-5">${icon}</td>
+               <td><span class="badge bg-light text-dark border shadow-sm">${cStatus}</span></td>
+               <td class="fw-bold">${c.numero}</td>
+               <td>${c.secretaria}</td>
+               <td>${c.fornecedor}</td>
+               <td>${window.formatarMoeda(c.valorTotal)}</td>
+               <td class="text-primary fw-bold fs-6">${window.formatarMoeda(c.saldo_calculado)}</td>
+               <td class="text-center">${btns}</td>
+             </tr>`;
+        }).join('');
+        document.getElementById('checkAllContratos').checked = false; window.monitorarSelecao();
+      }
+
+      window.moverStatusFront = async function(idDoc, tipoDoc, novoStatus, tipoAcaoNota = null) {
+         if(novoStatus === 'Cancelado' && !confirm('Tem certeza que deseja cancelar?')) return;
+         if(novoStatus !== 'Cancelado' && !confirm(`Avançar processo para: ${novoStatus}?`)) return;
+         
+         loading(true, "Processando...");
+         const colecao = tipoDoc === 'nota' ? `${tenant}_notas_fiscais` : `${tenant}_contratos`;
+         const docRef = doc(db, colecao, idDoc);
+
+         try {
+            const snap = await getDoc(docRef);
+            if(snap.exists()) {
+               let data = snap.data();
+               let updates = { status: novoStatus };
+               
+               if(tipoDoc === 'nota') {
+                  if(tipoAcaoNota) updates.tipoAcao = tipoAcaoNota;
+                  
+                  const hoje = new Date();
+                  const entradaAntiga = data.dataEntradaSetor ? new Date(data.dataEntradaSetor) : hoje;
+                  const diasFicou = Math.floor((hoje - entradaAntiga) / 864e5);
+                  
+                  let oldStatus = String(data.status || '').trim().toLowerCase();
+                  if(oldStatus === 'logistica') updates.tempoLog = (data.tempoLog || 0) + diasFicou;
+                  if(oldStatus === 'controladoria') updates.tempoContr = (data.tempoContr || 0) + diasFicou;
+                  if(oldStatus === 'contabilidade') updates.tempoContab = (data.tempoContab || 0) + diasFicou;
+                  if(oldStatus === 'tesouraria') updates.tempoTesou = (data.tempoTesou || 0) + diasFicou;
+                  
+                  updates.dataEntradaSetor = hoje.toISOString();
+               }
+
+               await setDoc(docRef, updates, {merge: true});
+            }
+            await window.buscarTudo();
+         } catch(e) { alert("Erro ao mover: " + e.message); loading(false); }
+      }
+
+      window.abrirModalNota = function() { 
+        document.getElementById('formNota').reset(); document.getElementById('notaId').value = ''; 
+        window.preencherFornecedor(); modalNotaObj.show(); 
+      }
+      
+      window.abrirEdicaoNota = function(strJson) {
+         let n = JSON.parse(decodeURIComponent(strJson));
+         document.getElementById('notaId').value = n.id;
+         document.getElementById('selectContrato').value = n.idContrato || '';
+         document.getElementById('inputForn').value = n.fornecedor;
+         document.getElementById('inputNumNota').value = n.numeroNota;
+         document.getElementById('inputSec').value = n.secretaria;
+         
+         let elValor = document.getElementById('inputValor');
+         elValor.value = (parseFloat(n.valor)||0).toFixed(2).replace(".", "");
+         window.aplicarMascaraMonetaria(elValor);
+
+         document.getElementById('inputEmissao').value = n.dataEmissao || '';
+         document.getElementById('inputEntrega').value = n.dataEntrega || '';
+         document.getElementById('inputPagamento').value = n.dataPagamento || '';
+         window.preencherFornecedor(); modalNotaObj.show();
+      }
+
+      window.salvarNota = async function() {
+         const idContrato = document.getElementById('selectContrato').value;
+         const v = limparMascaraParaFloat(document.getElementById('inputValor').value);
+         const idEdicao = document.getElementById('notaId').value;
+         
+         if(idContrato) {
+            let ctr = DADOS_CONTRATOS.find(c => c.id === idContrato);
+            if(ctr) {
+               let saldoDisponivel = ctr.saldo_calculado;
+               if(idEdicao) {
+                  let notaVelha = DADOS_NOTAS.find(n => n.id === idEdicao);
+                  if(notaVelha) saldoDisponivel += (parseFloat(notaVelha.valor)||0); 
+               }
+               if(v > saldoDisponivel + 0.05) { alert(`Operação Bloqueada!\nSaldo Insuficiente no Contrato. Disp: R$ ${saldoDisponivel.toFixed(2)}`); return; }
+            }
+         }
+
+         loading(true, "Salvando Nota...");
+         let docId = idEdicao ? idEdicao : "NT-" + Date.now();
+         let dados = {
+            idContrato: idContrato,
+            fornecedor: document.getElementById('inputForn').value,
+            numeroNota: document.getElementById('inputNumNota').value,
+            secretaria: document.getElementById('inputSec').value, 
+            valor: v,
+            dataEmissao: document.getElementById('inputEmissao').value,
+            dataEntrega: document.getElementById('inputEntrega').value,
+            dataPagamento: document.getElementById('inputPagamento').value
+         };
+
+         if(!idEdicao) {
+            dados.status = 'Logistica';
+            dados.dataEntradaSetor = new Date().toISOString();
+            dados.tipoAcao = idContrato ? 'Liquidação' : 'Empenho';
+            dados.tempoLog = 0; dados.tempoContr = 0; dados.tempoContab = 0; dados.tempoTesou = 0;
+            dados.criadoPor = USUARIO.nome;
+         }
+
+         try {
+            await setDoc(doc(db, `${tenant}_notas_fiscais`, docId), dados, {merge: true});
+            modalNotaObj.hide();
+            await window.buscarTudo();
+         } catch(e) { alert("Erro ao salvar."); loading(false); }
+      }
+
+      window.abrirModalContrato = function() { document.getElementById('formContrato').reset(); document.getElementById('contId').value = ''; document.getElementById('tituloModalContrato').innerText = 'Novo Contrato'; modalContratoObj.show(); }
+      
+      window.abrirEdicaoContrato = function(strJson) {
+         let c = JSON.parse(decodeURIComponent(strJson));
+         document.getElementById('contId').value = c.id;
+         document.getElementById('contNumero').value = c.numero;
+         document.getElementById('contSec').value = c.secretaria;
+         document.getElementById('contForn').value = c.fornecedor;
+         
+         let elValor = document.getElementById('contValor');
+         elValor.value = (parseFloat(c.valorTotal)||0).toFixed(2).replace(".", "");
+         window.aplicarMascaraMonetaria(elValor);
+         
+         document.getElementById('tituloModalContrato').innerText = 'Editar Contrato'; modalContratoObj.show();
+      }
+
+      window.salvarOuEditarContrato = async function() {
+         const sec = document.getElementById('contSec').value;
+         const num = document.getElementById('contNumero').value;
+         if(!sec || !num) return alert("Preencha Secretaria e Número.");
+         
+         loading(true, "Gravando...");
+         const v = limparMascaraParaFloat(document.getElementById('contValor').value);
+         const idEdicao = document.getElementById('contId').value;
+         let docId = idEdicao ? idEdicao : "CT-" + Date.now();
+
+         let dados = {
+            numero: num, secretaria: sec, fornecedor: document.getElementById('contForn').value, valorTotal: v
+         };
+
+         if(!idEdicao) { dados.status = 'Logistica'; dados.dataReg = new Date().toISOString(); }
+
+         try {
+            await setDoc(doc(db, `${tenant}_contratos`, docId), dados, {merge: true});
+            modalContratoObj.hide();
+            await window.buscarTudo();
+         } catch(e) { alert("Erro ao salvar contrato."); loading(false); }
+      }
+
+      window.excluirAcao = async function(id, tipo) {
+         if(!confirm(`Apagar definitivamente este registro do banco de dados?`)) return;
+         loading(true, "Deletando...");
+         const colecao = tipo === 'nota' ? `${tenant}_notas_fiscais` : `${tenant}_contratos`;
+         await deleteDoc(doc(db, colecao, id));
+         await window.buscarTudo();
+      }
+
+      window.abrirObs = function(id, tipo, obsEncode) {
+         document.getElementById('obsId').value = id;
+         document.getElementById('obsTipo').value = tipo;
+         document.getElementById('areaHistorico').innerText = decodeURIComponent(obsEncode) || 'Sem histórico até o momento.';
+         document.getElementById('novoComentario').value = '';
+         modalObsObj.show();
+      }
+
+      window.salvarObs = async function() {
+         const id = document.getElementById('obsId').value;
+         const tipo = document.getElementById('obsTipo').value;
+         const txt = document.getElementById('novoComentario').value.trim();
+         if(!txt) return modalObsObj.hide();
+
+         loading(true);
+         const colecao = tipo === 'nota' ? `${tenant}_notas_fiscais` : `${tenant}_contratos`;
+         const docRef = doc(db, colecao, id);
+
+         try {
+            const snap = await getDoc(docRef);
+            let obsAtual = snap.data().observacoes || "";
+            let dataHora = new Date().toLocaleString('pt-BR');
+            let novaMsg = `[${dataHora} - ${USUARIO.nome}]: ${txt}`;
+            let obsNova = obsAtual ? obsAtual + "\n" + novaMsg : novaMsg;
+            
+            await setDoc(docRef, {observacoes: obsNova}, {merge:true});
+            modalObsObj.hide();
+            await window.buscarTudo();
+         } catch(e) { alert("Erro."); loading(false); }
+      }
+
+      window.toggleAll = function(tipo) {
+        const master = document.getElementById(tipo === 'nota' ? 'checkAllNotas' : 'checkAllContratos');
+        const checks = document.querySelectorAll(tipo === 'nota' ? '.check-nota' : '.check-contrato');
+        checks.forEach(c => c.checked = master.checked);
+        window.monitorarSelecao();
+      }
+
+      window.monitorarSelecao = function() {
+        const abaNotasAtiva = document.getElementById('tab-notas').classList.contains('active');
+        const classe = abaNotasAtiva ? '.check-nota' : '.check-contrato';
+        const selecionados = Array.from(document.querySelectorAll(classe + ':checked')).map(c => c.value);
+        
+        const barra = document.getElementById('barraMassa');
+        if (selecionados.length > 0) {
+          barra.style.display = 'flex';
+          document.getElementById('qtdSelecionados').innerText = selecionados.length;
+          
+          if (abaNotasAtiva) {
+             document.getElementById('botoesMassaNotas').style.display = 'flex'; document.getElementById('botoesMassaContratos').style.display = 'none';
+             gerarBotoesMassaNotas();
+          } else {
+             document.getElementById('botoesMassaNotas').style.display = 'none'; document.getElementById('botoesMassaContratos').style.display = 'flex';
+             gerarBotoesMassaContratos();
+          }
+        } else {
+          barra.style.display = 'none';
+        }
+      }
+
+      function gerarBotoesMassaNotas() {
+        const div = document.getElementById('botoesMassaNotas');
+        const roleLower = String(USUARIO.funcao).trim().toLowerCase();
+        let html = '';
+        if(roleLower==='gestor' || roleLower==='logistica') {
+          html += `<button class="btn btn-sm btn-warning fw-bold text-dark w-100 w-md-auto" onclick="window.executarMassa('nota','Contabilidade','Liquidação')">Enviar p/ Liquidação</button>`;
+          html += `<button class="btn btn-sm btn-primary fw-bold w-100 w-md-auto" style="background-color:#6f42c1; border:none" onclick="window.executarMassa('nota','Controladoria')">Enviar p/ Controladoria</button>`;
+        }
+        if(roleLower==='gestor' || roleLower==='controladoria') { html += `<button class="btn btn-sm btn-success fw-bold w-100 w-md-auto" onclick="window.executarMassa('nota','Contabilidade','Liquidação')">Aprovar p/ Liquidação</button>`; }
+        if(roleLower==='gestor' || roleLower==='contabilidade') { html += `<button class="btn btn-sm btn-success fw-bold w-100 w-md-auto" onclick="window.executarMassa('nota','Tesouraria')">Atestar Lote (Liquidar)</button>`; }
+        if(roleLower==='gestor' || roleLower==='tesouraria') { html += `<button class="btn btn-sm btn-success fw-bold w-100 w-md-auto" onclick="window.executarMassa('nota','Pago')">Pagar Lote Selecionado</button>`; }
+        div.innerHTML = html;
+      }
+
+      function gerarBotoesMassaContratos() {
+        const div = document.getElementById('botoesMassaContratos');
+        const roleLower = String(USUARIO.funcao).trim().toLowerCase();
+        let html = '';
+        if(roleLower==='gestor' || roleLower==='logistica') { html += `<button class="btn btn-sm btn-primary fw-bold w-100 w-md-auto" onclick="window.executarMassa('contrato','Contabilidade')">Enviar Lote p/ Empenho</button>`; }
+        if(roleLower==='gestor' || roleLower==='contabilidade') { html += `<button class="btn btn-sm btn-success fw-bold w-100 w-md-auto" onclick="window.executarMassa('contrato','Ativo')">Efetivar Lote (Ativar)</button>`; }
+        div.innerHTML = html;
+      }
+
+      window.executarMassa = async function(tipo, acao, subacao = null) {
+        if(!confirm(`Confirmar ação em LOTE para mover para: ${acao}?`)) return;
+        loading(true, "Processando Lote...");
+        
+        const classe = tipo === 'nota' ? '.check-nota' : '.check-contrato';
+        const ids = Array.from(document.querySelectorAll(classe + ':checked')).map(c => c.value);
+        
+        try {
+           for(let id of ids) {
+              await window.moverStatusFront(id, tipo, acao, subacao);
+           }
+        } catch(e) { console.error(e); }
+        
+        loading(false);
+      }
+    </script>
+  </body>
+</html>

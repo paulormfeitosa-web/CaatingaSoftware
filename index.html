@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Portal - Feitosa Software</title>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    :root { --primaria: #1A374D; --secundaria: #E06C3F; --fundo: #F4F6F8; --sidebar-width: 250px; }
+    body { font-family: 'Montserrat', sans-serif; background-color: var(--fundo); color: #333; overflow-x: hidden; }
+    .hidden { display: none !important; }
+
+    #login-screen { height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--primaria) 0%, #0d1f2d 100%); }
+    .login-box { background: white; padding: 2.5rem; border-radius: 15px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 100%; max-width: 400px; text-align: center; }
+
+    #dashboard-layout { display: flex; min-height: 100vh; }
+    .sidebar { width: var(--sidebar-width); background: var(--primaria); color: white; display: flex; flex-direction: column; z-index: 1000; }
+    .sidebar-header { padding: 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .sidebar-nav { flex-grow: 1; padding: 15px 0; }
+    .nav-item-side { padding: 12px 20px; color: rgba(255,255,255,0.7); text-decoration: none; display: block; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .nav-item-side:hover, .nav-item-side.active { background: rgba(255,255,255,0.1); color: white; border-left: 4px solid var(--secundaria); }
+    .nav-item-side i { width: 25px; }
+
+    .main-content { flex-grow: 1; padding: 30px; width: calc(100% - var(--sidebar-width)); height: 100vh; overflow-y: auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+    .user-info { text-align: right; }
+
+    .grid-sistemas { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+    .card-app { background: white; border-radius: 15px; padding: 25px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.05); transition: 0.3s; border: 1px solid #eee; text-decoration: none; color: inherit; display: block; }
+    .card-app:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.1); border-color: var(--primaria); }
+    .app-icon { font-size: 3rem; color: var(--primaria); margin-bottom: 15px; }
+    .app-title { font-weight: 800; font-size: 1.2rem; margin-bottom: 5px; color: var(--primaria); }
+    .app-category { font-size: 0.75rem; font-weight: 700; color: var(--secundaria); text-transform: uppercase; letter-spacing: 1px; }
+
+    @media (max-width: 768px) {
+      #dashboard-layout { flex-direction: column; }
+      .sidebar { width: 100%; height: auto; flex-direction: row; flex-wrap: wrap; padding: 10px; }
+      .sidebar-header { display: none; }
+      .sidebar-nav { display: flex; width: 100%; justify-content: space-around; padding: 0; }
+      .nav-item-side { border-left: none; padding: 10px; font-size: 0.8rem; text-align: center; }
+      .nav-item-side.active { border-left: none; border-bottom: 3px solid var(--secundaria); }
+      .nav-item-side i { display: block; margin: 0 auto 5px auto; }
+      .main-content { width: 100%; padding: 15px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="login-screen">
+    <div class="login-box">
+      <h3 class="fw-bold mb-1" style="color: var(--primaria);">Feitosa Software</h3>
+      <p class="text-muted small mb-4">Acesso Unificado aos Sistemas</p>
+      <div id="login-error" class="alert alert-danger hidden py-2 small"></div>
+      <form onsubmit="event.preventDefault(); fazerLogin();">
+        <div class="form-floating mb-3"><input type="text" id="log-cpf" class="form-control" placeholder="CPF" required><label>CPF do Usuário</label></div>
+        <div class="form-floating mb-4"><input type="password" id="log-pass" class="form-control" placeholder="Senha" required><label>Senha</label></div>
+        <button type="submit" id="btn-login" class="btn w-100 py-3 fw-bold shadow text-white" style="background-color: var(--primaria); border:none;">ACESSAR PORTAL</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="dashboard-layout" class="hidden">
+    <div class="sidebar">
+      <div class="sidebar-header"><h5 class="fw-bold text-white m-0">Feitosa Software</h5><small class="opacity-50">Sistemas Públicos</small></div>
+      <div class="sidebar-nav">
+        <a class="nav-item-side active" onclick="window.mudarAba('apps')"><i class="fas fa-th-large"></i> Início</a>
+        <a class="nav-item-side super-only hidden" onclick="window.mudarAba('empresas')"><i class="fas fa-building"></i> Clientes (Tenants)</a>
+        <a class="nav-item-side super-only hidden" onclick="window.mudarAba('usuarios')"><i class="fas fa-users-cog"></i> Usuários</a>
+        <a class="nav-item-side super-only hidden" onclick="window.mudarAba('sistemas')"><i class="fas fa-cogs"></i> Catálogo de Apps</a>
+        <a class="nav-item-side text-danger mt-auto" onclick="window.sairSistema()"><i class="fas fa-sign-out-alt"></i> Sair</a>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="topbar">
+        <h4 class="fw-bold m-0 text-dark" id="titulo-aba">Meus Sistemas</h4>
+        <div class="user-info"><div class="fw-bold" id="lbl-nome">Usuário</div><span class="badge bg-secondary" id="lbl-tenant">Cliente</span></div>
+      </div>
+      
+      <div id="loading" class="text-center py-5 hidden"><i class="fas fa-circle-notch fa-spin fa-2x text-primary"></i></div>
+
+      <div id="view-apps" class="view-section"><div class="grid-sistemas" id="grid-meus-apps"></div></div>
+
+      <div id="view-empresas" class="view-section hidden">
+        <button class="btn btn-primary mb-3 shadow-sm" onclick="window.abrirModalEmpresa()"><i class="fas fa-plus"></i> Novo Cliente (Tenant)</button>
+        <div class="card border-0 shadow-sm table-responsive">
+          <table class="table table-hover m-0 align-middle">
+            <thead class="table-dark"><tr><th>Nome do Cliente</th><th>Identificador (Tenant)</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody id="tbEmpresas"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="view-usuarios" class="view-section hidden">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <button class="btn text-white shadow-sm" style="background-color: var(--secundaria);" onclick="window.abrirModalUsuario()"><i class="fas fa-user-plus"></i> Novo Usuário</button>
+          <div class="input-group" style="max-width: 300px;">
+            <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" id="filtro-usuarios" class="form-control border-start-0" placeholder="Buscar na equipe..." onkeyup="window.filtrarTabelaUsuarios()">
+          </div>
+        </div>
+        
+        <div class="card border-0 shadow-sm table-responsive">
+          <table class="table table-hover m-0 align-middle" id="table-usuarios">
+            <thead class="table-light"><tr><th>Nome / CPF</th><th>Empresa</th><th>Nível</th><th>Acessos</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody id="tbUsuarios"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="view-sistemas" class="view-section hidden">
+        <button class="btn btn-success mb-3 shadow-sm" onclick="window.abrirModalSistema()"><i class="fas fa-plus"></i> Novo App no Catálogo</button>
+        <div class="card border-0 shadow-sm table-responsive">
+          <table class="table table-hover m-0 align-middle" id="table-sistemas-admin">
+            <thead class="table-dark"><tr><th>Icon</th><th>Sistema / Categoria</th><th>Link (URL)</th><th>Ações</th></tr></thead>
+            <tbody id="tbSistemas"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalEmpresa" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-primary text-white"><h5 class="modal-title">Cadastro de Cliente</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <form id="formEmpresa">
+            <input type="hidden" id="e-acao">
+            <div class="mb-3">
+              <label class="fw-bold small text-muted">Identificador (Tenant) *Não pode ter espaços</label>
+              <input type="text" class="form-control" id="e-id" placeholder="ex: pref_aiuaba" required>
+            </div>
+            <div class="mb-3">
+              <label class="fw-bold small text-muted">Nome de Exibição</label>
+              <input type="text" class="form-control" id="e-nome" placeholder="Prefeitura Municipal de Aiuaba" required>
+            </div>
+            <div class="mb-3">
+              <label class="fw-bold small text-muted">Status do Cliente</label>
+              <select class="form-select" id="e-ativo">
+                <option value="true">Ativo (Permitir Logins)</option>
+                <option value="false">Bloqueado (Inadimplente / Cancelado)</option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary" onclick="window.salvarEmpresa()">Gravar Cliente</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalUsuario" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header text-white" style="background-color: var(--primaria);"><h5 class="modal-title">Gestão de Usuário</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body bg-light">
+          <form id="formUsuario">
+            <div class="row g-3">
+              <div class="col-md-4"><label class="small fw-bold">CPF</label><input type="text" class="form-control" id="u-cpf" required></div>
+              <div class="col-md-8"><label class="small fw-bold">Nome Completo</label><input type="text" class="form-control" id="u-nome" required></div>
+              <div class="col-md-6"><label class="small fw-bold">Senha (Vazio para manter)</label><input type="text" class="form-control" id="u-senha"></div>
+              <div class="col-md-6" id="div-tenant-adm">
+                 <label class="small fw-bold">Vincular Cliente (Tenant)</label>
+                 <select class="form-select" id="u-empresa"></select>
+              </div>
+              <div class="col-md-4"><label class="small fw-bold">Nível no App</label>
+                <select class="form-select" id="u-nivel"><option value="SUPER_ADM">Super Admin Feitosa</option><option value="ADM">Administrador Local</option><option value="Gestor">Gestor Geral</option><option value="Operador">Operador Base</option></select>
+              </div>
+              <div class="col-md-4"><label class="small fw-bold">Função / Setor</label><input type="text" class="form-control" id="u-setor" placeholder="Logística, RH..."></div>
+              <div class="col-md-4"><label class="small fw-bold">Acesso ao Portal</label><select class="form-select" id="u-ativo"><option value="true">Liberado</option><option value="false">Bloqueado</option></select></div>
+              
+              <div class="col-md-6 mt-4">
+                <label class="fw-bold text-primary mb-2">Apps Autorizados (Módulos)</label>
+                <div class="form-check"><input class="form-check-input chk-sys" type="checkbox" value="TODOS"><label class="fw-bold text-danger">Acesso Total (Todos)</label></div>
+                <div id="check-list-sistemas" class="mt-2" style="max-height: 200px; overflow-y:auto"></div> 
+              </div>
+              
+              <div class="col-md-6 mt-4 border-start">
+                <label class="fw-bold text-primary mb-2">Secretarias (Filtro de Dados)</label>
+                <div style="max-height: 200px; overflow-y: auto; padding-right: 10px;">
+                  <div class="form-check mb-2 border-bottom pb-2"><input class="form-check-input chk-sec" type="checkbox" value="TODAS"><label class="fw-bold text-success">Ver Todas as Secretarias</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="SAÚDE"><label>Saúde</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="EDUCAÇÃO"><label>Educação</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="ASSISTENCIA SOCIAL"><label>Assistência Social</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="TRANSPORTE"><label>Transporte</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="INFRAESTRUTURA"><label>Infraestrutura / Obras</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="SAAE"><label>SAAE</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="AGRICULTURA"><label>Agricultura</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="ESPORTE"><label>Esporte e Juventude</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="ADMINISTRAÇÃO"><label>Administração</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="FINANÇAS"><label>Finanças</label></div>
+                  <div class="form-check"><input class="form-check-input chk-sec" type="checkbox" value="GABINETE"><label>Gabinete</label></div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary px-4 fw-bold" onclick="window.salvarUsuario()">Gravar Usuário</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalSistema" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-dark text-white"><h5 class="modal-title">Configurar App</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <input type="hidden" id="s-acao">
+          <div class="mb-3"><label class="small fw-bold">ID / URL (Ex: obras, frotas)</label><input type="text" class="form-control bg-light" id="s-link" required></div>
+          <div class="mb-3"><label class="small fw-bold">Nome de Exibição no Card</label><input type="text" class="form-control" id="s-nome" required></div>
+          <div class="mb-3"><label class="small fw-bold">Ícone FontAwesome (Ex: fa-truck)</label><input type="text" class="form-control" id="s-icone" placeholder="fa-car"></div>
+          <div class="mb-3"><label class="small fw-bold">Categoria (Ex: Gestão, Frota)</label><input type="text" class="form-control" id="s-categoria"></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-success fw-bold" onclick="window.salvarSistema()">Salvar App</button></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    // ⚠️ ATENÇÃO: onSnapshot importado aqui
+    import { getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOEgd1WCElKtngAcQ-ygnx0_2lpHLUAyM",
+      authDomain: "caatingasoftware.firebaseapp.com",
+      projectId: "caatingasoftware",
+      storageBucket: "caatingasoftware.firebasestorage.app",
+      messagingSenderId: "357801806903",
+      appId: "1:357801806903:web:7b03d8f9f0189bf32943b2",
+      measurementId: "G-ZVSVPMDHP0"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const appAdmin = initializeApp(firebaseConfig, "AppAdmin"); 
+    
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const authAdmin = getAuth(appAdmin);
+
+    let currentUser = null;
+    let listenerUsuario = null; // ⚠️ Variável do vigia
+    let cacheSistemas = [];
+    let cacheUsuarios = [];
+    let cacheEmpresas = [];
+
+    window.onload = function() {
+      // ⚠️ ATENÇÃO: Transformado em async para bater no banco antes de abrir a tela
+      onAuthStateChanged(auth, async (userAuth) => {
+        const cracha = localStorage.getItem("caatinga_user");
+        
+        if (userAuth && cracha) { 
+            currentUser = JSON.parse(cracha);
+            
+            // 🚨 TRAVA INICIAL: Checa no banco se não é o Master e se está ativo
+            if(currentUser.cpf !== "01305663306") { 
+                try {
+                    const docVerifica = await getDoc(doc(db, "usuarios", currentUser.cpf));
+                    if(!docVerifica.exists() || docVerifica.data().ativo === false) {
+                        window.sairSistema(true); // Expulsa silenciosamente
+                        return;
+                    }
+                } catch(e) { console.log("Aviso: Falha de rede ao verificar usuário inicial."); }
+            }
+            
+            liberarAcesso(currentUser); 
+        } else {
+            document.getElementById('dashboard-layout').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+        }
+      });
+    };
+
+    window.sairSistema = function(silencioso = false) { 
+      localStorage.removeItem("caatinga_user"); 
+      if(listenerUsuario) { listenerUsuario(); listenerUsuario = null; } // Desliga o vigia
+      
+      signOut(auth).then(() => {
+        if(!silencioso) location.reload(); 
+        else {
+           document.getElementById('dashboard-layout').classList.add('hidden');
+           document.getElementById('login-screen').classList.remove('hidden');
+           document.getElementById('login-error').innerText = "Acesso revogado pelo Administrador.";
+           document.getElementById('login-error').classList.remove('hidden');
+        }
+      }).catch((error) => {
+        location.reload();
+      });
+    };
+
+    // ==========================================
+    // SEGURANÇA DE NAVEGAÇÃO E ABAS
+    // ==========================================
+    window.mudarAba = function(aba) {
+      if(aba !== 'apps' && (!currentUser || currentUser.nivel_acesso !== 'SUPER_ADM')) {
+          return; 
+      }
+
+      document.querySelectorAll('.view-section').forEach(e => e.classList.add('hidden'));
+      document.querySelectorAll('.nav-item-side').forEach(e => e.classList.remove('active'));
+      document.getElementById('view-' + aba).classList.remove('hidden'); 
+      
+      if(event && event.target) {
+          event.target.closest('.nav-item-side').classList.add('active');
+      }
+      
+      const titulos = { 'apps': 'Meus Sistemas', 'empresas': 'Gestão de Clientes', 'usuarios': 'Gestão da Equipe', 'sistemas': 'Catálogo de Apps' };
+      document.getElementById('titulo-aba').innerText = titulos[aba] || 'Portal';
+      
+      if(aba === 'empresas') carregarTabelaEmpresas();
+      if(aba === 'usuarios') { carregarTabelaUsuarios(); document.getElementById('filtro-usuarios').value = ""; }
+      if(aba === 'sistemas') carregarSistemasGlobais();
+    };
+
+    window.filtrarTabelaUsuarios = function() {
+      const termo = document.getElementById('filtro-usuarios').value.toLowerCase();
+      document.querySelectorAll('#table-usuarios tbody tr').forEach(linha => {
+        linha.style.display = linha.innerText.toLowerCase().includes(termo) ? '' : 'none';
+      });
+    };
+
+    // ==========================================
+    // LOGIN
+    // ==========================================
+    window.fazerLogin = async function() {
+      const c = document.getElementById('log-cpf').value.replace(/\D/g, '');
+      const p = document.getElementById('log-pass').value;
+      const btn = document.getElementById('btn-login'); 
+      const err = document.getElementById('login-error'); 
+      
+      btn.innerText = "Autenticando...";
+      err.classList.add('hidden');
+
+      try {
+        const emailFicticio = c + "@feitosa.app";
+
+        if (c === "01305663306" && p === "pr10mf86") { 
+          try { 
+             await signInWithEmailAndPassword(auth, emailFicticio, p); 
+          } catch(e) { 
+             try { await createUserWithEmailAndPassword(auth, emailFicticio, p); } catch(err2) {}
+          }
+          
+          liberarAcesso({ 
+              cpf: c, 
+              nome: "Paulo Feitosa (Master)", 
+              nivel_acesso: "SUPER_ADM", 
+              empresa_id: "caatinga", 
+              sistemas_autorizados: ["TODOS"], 
+              secretarias: ["TODAS"] 
+          });
+          return; 
+        }
+
+        await signInWithEmailAndPassword(auth, emailFicticio, p);
+
+        const userRef = doc(db, "usuarios", c);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const dadosUsuario = userSnap.data();
+
+          if (dadosUsuario.ativo === false) throw new Error("Usuário bloqueado.");
+
+          const empresaId = dadosUsuario.empresa_id;
+          if (empresaId) {
+             const empSnap = await getDoc(doc(db, "empresas", empresaId));
+             if (empSnap.exists() && empSnap.data().ativo === false) {
+                throw new Error("Cliente Inativo.");
+             }
+          }
+
+          let dados = dadosUsuario; dados.cpf = c;
+          liberarAcesso(dados);
+
+        } else {
+          throw new Error("Cadastro não encontrado.");
+        }
+
+      } catch (error) { 
+        err.innerText = "Acesso negado. Verifique CPF e Senha."; 
+        err.classList.remove('hidden'); 
+      } finally {
+        btn.innerText = "ACESSAR PORTAL";
+      }
+    };
+
+    // ==========================================
+    // CONTROLE DE INTERFACE (CORRIGIDO)
+    // ==========================================
+    function liberarAcesso(user) {
+      currentUser = user;
+      localStorage.setItem("caatinga_user", JSON.stringify(user)); 
+      
+      document.querySelectorAll('.super-only').forEach(e => e.classList.add('hidden'));
+      
+      document.getElementById('login-screen').classList.add('hidden'); 
+      document.getElementById('dashboard-layout').classList.remove('hidden');
+      document.getElementById('lbl-nome').innerText = currentUser.nome; 
+      
+      let txtBadge = currentUser.empresa_id;
+      if (!txtBadge || txtBadge === "caatinga") txtBadge = "Feitosa";
+      document.getElementById('lbl-tenant').innerText = txtBadge.toUpperCase();
+      
+      if(currentUser.nivel_acesso === "SUPER_ADM") { 
+          document.querySelectorAll('.super-only').forEach(e => e.classList.remove('hidden')); 
+          window.mudarAba('apps'); // CORREÇÃO: Força a abertura e desenho da aba para o Master
+      } else {
+          window.mudarAba('apps');
+      }
+
+      // 🚨 TRAVA DE TEMPO REAL
+      if (!listenerUsuario && currentUser.cpf !== "01305663306") {
+          listenerUsuario = onSnapshot(doc(db, "usuarios", currentUser.cpf), (docSnap) => {
+              if (!docSnap.exists() || docSnap.data().ativo === false) {
+                  window.sairSistema(true); 
+              }
+          });
+      }
+
+      carregarSistemasGlobais();
+    }
+
+    // ==========================================
+    // CRUD SISTEMAS (CORRIGIDO E BLINDADO)
+    // ==========================================
+    async function carregarSistemasGlobais() {
+      document.getElementById('loading').classList.remove('hidden');
+      const grid = document.getElementById('grid-meus-apps'); 
+      const tbAdmin = document.getElementById('tbSistemas'); 
+      const divCheck = document.getElementById('check-list-sistemas');
+      
+      if (grid) grid.innerHTML = ''; 
+      if (tbAdmin) tbAdmin.innerHTML = ''; 
+      if (divCheck) divCheck.innerHTML = ''; 
+      cacheSistemas = [];
+
+      try {
+          const sisSnap = await getDocs(collection(db, "sistemas"));
+          sisSnap.forEach(doc => cacheSistemas.push({ id: doc.id, ...doc.data() }));
+
+          cacheSistemas.forEach(s => {
+            if (divCheck) {
+               divCheck.innerHTML += `<div class="form-check"><input class="form-check-input chk-sys" type="checkbox" value="${s.id}"><label>${s.nome}</label></div>`;
+            }
+            
+            if(currentUser.nivel_acesso === "SUPER_ADM" && tbAdmin) {
+              let jS = encodeURIComponent(JSON.stringify(s));
+              tbAdmin.innerHTML += `<tr>
+                <td><i class="fas ${s.icone} text-primary fa-2x"></i></td><td><strong>${s.nome}</strong><br><small class="text-muted">${s.categoria}</small></td>
+                <td><span class="badge bg-light text-dark">/${s.id}</span></td>
+                <td>
+                  <button class="btn btn-sm btn-light text-primary" onclick="window.editarSistema('${jS}')"><i class="fas fa-edit"></i></button>
+                  <button class="btn btn-sm btn-light text-danger ms-1" onclick='window.deletarSistema("${s.id}")'><i class="fas fa-trash"></i></button>
+                </td>
+              </tr>`;
+            }
+
+            // CORREÇÃO: Blindagem de Array. Evita erro caso o Firestore devolva string pura ou null
+            let autorizados = currentUser.sistemas_autorizados || [];
+            if (typeof autorizados === 'string') autorizados = [autorizados]; // Converte para array se for string
+            if (!Array.isArray(autorizados)) autorizados = []; 
+
+            // CORREÇÃO: Lógica à prova de falhas com checagem de tipo
+            const temAcesso = autorizados.includes("TODOS") || 
+                              autorizados.some(a => a && typeof a === 'string' && a.toLowerCase() === s.id.toLowerCase());
+            
+            if (temAcesso && grid) {
+              const linkAcesso = `/${s.id}/index.html`; 
+              grid.innerHTML += `<a href="${linkAcesso}" class="card-app"><i class="fas ${s.icone || 'fa-box'} app-icon"></i><div class="app-category">${s.categoria || 'App'}</div><div class="app-title">${s.nome}</div></a>`;
+            }
+          });
+      } catch (e) {
+          console.error("Erro ao carregar sistemas:", e);
+          // CORREÇÃO: Se houver erro de permissão no Firebase, agora você VERÁ o erro escrito na tela!
+          if(grid) grid.innerHTML = `<div class="alert alert-danger w-100 text-center fw-bold shadow-sm">Bloqueio do Firebase: ${e.message}</div>`;
+      }
+      document.getElementById('loading').classList.add('hidden');
+    }
+
+    window.abrirModalSistema = function() { 
+      document.getElementById('s-acao').value='novo'; 
+      document.getElementById('s-link').value=''; document.getElementById('s-link').readOnly = false;
+      document.getElementById('s-nome').value=''; document.getElementById('s-icone').value=''; document.getElementById('s-categoria').value=''; 
+      new bootstrap.Modal(document.getElementById('modalSistema')).show(); 
+    };
+
+    window.editarSistema = function(sysJsonStr) {
+       let s = JSON.parse(decodeURIComponent(sysJsonStr));
+       document.getElementById('s-acao').value='editar';
+       document.getElementById('s-link').value = s.id; document.getElementById('s-link').readOnly = true; 
+       document.getElementById('s-nome').value = s.nome;
+       document.getElementById('s-icone').value = s.icone || '';
+       document.getElementById('s-categoria').value = s.categoria || '';
+       new bootstrap.Modal(document.getElementById('modalSistema')).show();
+    }
+    
+    window.salvarSistema = async function() { 
+      const idUrl = document.getElementById('s-link').value.toLowerCase().trim();
+      if(!idUrl) return alert("ID/URL obrigatório");
+      const dados = { nome: document.getElementById('s-nome').value, icone: document.getElementById('s-icone').value, categoria: document.getElementById('s-categoria').value }; 
+      await setDoc(doc(db, "sistemas", idUrl), dados, {merge:true});
+      bootstrap.Modal.getInstance(document.getElementById('modalSistema')).hide();
+      carregarSistemasGlobais(); 
+    };
+    
+    window.deletarSistema = async function(id) { 
+        if(confirm("Excluir o app permanentemente do catálogo?")) { 
+            await deleteDoc(doc(db, "sistemas", id)); carregarSistemasGlobais(); 
+        } 
+    };
+
+    // ==========================================
+    // CRUD EMPRESAS
+    // ==========================================
+    async function carregarTabelaEmpresas() {
+      document.getElementById('loading').classList.remove('hidden');
+      const tb = document.getElementById('tbEmpresas'); tb.innerHTML = ''; cacheEmpresas = [];
+      const empSnap = await getDocs(collection(db, "empresas"));
+      
+      empSnap.forEach(doc => {
+        let e = { id: doc.id, ...doc.data() }; cacheEmpresas.push(e);
+        let statusBadge = e.ativo !== false ? '<span class="badge bg-success">Ativa</span>' : '<span class="badge bg-danger">Bloqueada</span>';
+        let jE = encodeURIComponent(JSON.stringify(e));
+        
+        tb.innerHTML += `<tr>
+          <td><strong>${e.nome}</strong></td>
+          <td><span class="badge bg-light text-dark border">${e.id}</span></td>
+          <td>${statusBadge}</td>
+          <td>
+            <button class="btn btn-sm btn-light text-primary" onclick="window.editarEmpresa('${jE}')"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-sm btn-light text-danger" onclick="window.deletarEmpresa('${e.id}')"><i class="fas fa-trash"></i></button>
+          </td>
+        </tr>`;
+      });
+
+      const selEmpresa = document.getElementById('u-empresa');
+      selEmpresa.innerHTML = '<option value="">-- Selecione a Empresa --</option>';
+      cacheEmpresas.forEach(e => { selEmpresa.innerHTML += `<option value="${e.id}">${e.nome}</option>`; });
+
+      document.getElementById('loading').classList.add('hidden');
+    }
+
+    window.abrirModalEmpresa = function() {
+       document.getElementById('formEmpresa').reset();
+       document.getElementById('e-acao').value = 'novo';
+       document.getElementById('e-id').readOnly = false;
+       new bootstrap.Modal(document.getElementById('modalEmpresa')).show();
+    }
+
+    window.editarEmpresa = function(empJsonStr) {
+       let e = JSON.parse(decodeURIComponent(empJsonStr));
+       document.getElementById('e-acao').value = 'editar';
+       document.getElementById('e-id').value = e.id; document.getElementById('e-id').readOnly = true;
+       document.getElementById('e-nome').value = e.nome;
+       document.getElementById('e-ativo').value = e.ativo !== false ? "true" : "false";
+       new bootstrap.Modal(document.getElementById('modalEmpresa')).show();
+    }
+
+    window.salvarEmpresa = async function() {
+       const id = document.getElementById('e-id').value.toLowerCase().trim().replace(/\s/g, ''); 
+       if(!id) return alert("Tenant (Identificador) é obrigatório");
+       const dados = { nome: document.getElementById('e-nome').value, ativo: document.getElementById('e-ativo').value === "true" };
+       await setDoc(doc(db, "empresas", id), dados, {merge:true});
+       bootstrap.Modal.getInstance(document.getElementById('modalEmpresa')).hide();
+       carregarTabelaEmpresas();
+    }
+
+    window.deletarEmpresa = async function(id) {
+       if(confirm("ATENÇÃO: Apagar a empresa?")) {
+          await deleteDoc(doc(db, "empresas", id)); carregarTabelaEmpresas();
+       }
+    }
+
+    // ==========================================
+    // CRUD USUÁRIOS
+    // ==========================================
+    async function carregarTabelaUsuarios() {
+      if(cacheEmpresas.length === 0) await carregarTabelaEmpresas();
+
+      document.getElementById('loading').classList.remove('hidden');
+      const tb = document.getElementById('tbUsuarios'); tb.innerHTML = ''; cacheUsuarios = [];
+      const userSnap = await getDocs(collection(db, "usuarios"));
+      
+      userSnap.forEach(doc => {
+        let u = { cpf: doc.id, ...doc.data() }; cacheUsuarios.push(u);
+        let badgeColor = u.nivel_acesso === 'SUPER_ADM' ? 'bg-danger' : (u.nivel_acesso === 'ADM' ? 'bg-primary' : 'bg-secondary');
+        let statusLabel = u.ativo !== false ? '<span class="text-success fw-bold"><i class="fas fa-check-circle"></i> Liberado</span>' : '<span class="text-danger fw-bold"><i class="fas fa-ban"></i> Bloqueado</span>';
+        
+        let nmEmpresa = u.empresa_id;
+        let emp = cacheEmpresas.find(e => e.id === u.empresa_id);
+        if(emp) nmEmpresa = emp.nome;
+
+        tb.innerHTML += `<tr>
+          <td><strong>${u.nome}</strong><br><small class="text-muted">${u.cpf}</small></td>
+          <td><span class="badge border border-secondary text-dark shadow-sm">${nmEmpresa || 'Sem vínculo'}</span></td>
+          <td><span class="badge ${badgeColor}">${u.nivel_acesso}</span><br><small>${u.setor || ''}</small></td>
+          <td><small class="text-primary fw-bold">${(u.sistemas_autorizados||[]).length} Apps | ${(u.secretarias||[]).length} Setores</small></td>
+          <td>${statusLabel}</td>
+          <td><button class="btn btn-sm btn-light text-primary border" onclick='window.editarUsuario("${u.cpf}")'><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-light text-danger border" onclick='window.deletarUsuario("${u.cpf}")'><i class="fas fa-trash"></i></button></td>
+        </tr>`;
+      });
+      document.getElementById('loading').classList.add('hidden');
+    }
+
+    window.abrirModalUsuario = function() {
+      document.getElementById('formUsuario').reset();
+      document.getElementById('u-cpf').readOnly = false;
+      document.getElementById('u-empresa').value = '';
+      document.querySelectorAll('.chk-sys, .chk-sec').forEach(cb => cb.checked = false);
+      new bootstrap.Modal(document.getElementById('modalUsuario')).show();
+    };
+
+    window.editarUsuario = function(cpfBusca) {
+      let u = cacheUsuarios.find(x => x.cpf === cpfBusca); if(!u) return;
+      document.getElementById('u-cpf').value = u.cpf; document.getElementById('u-cpf').readOnly = true;
+      document.getElementById('u-nome').value = u.nome; document.getElementById('u-senha').value = u.senha || '';
+      document.getElementById('u-empresa').value = u.empresa_id || ''; document.getElementById('u-nivel').value = u.nivel_acesso;
+      document.getElementById('u-setor').value = u.setor || ''; document.getElementById('u-ativo').value = u.ativo !== false ? "true" : "false";
+      
+      document.querySelectorAll('.chk-sys').forEach(cb => cb.checked = (u.sistemas_autorizados||[]).includes(cb.value));
+      document.querySelectorAll('.chk-sec').forEach(cb => cb.checked = (u.secretarias||[]).includes(cb.value));
+      new bootstrap.Modal(document.getElementById('modalUsuario')).show();
+    };
+
+    window.salvarUsuario = async function() {
+      const cpf = document.getElementById('u-cpf').value.replace(/\D/g, '');
+      if(cpf.length < 11) return alert("CPF Inválido");
+      
+      const senhaDigitada = document.getElementById('u-senha').value;
+      const ehNovoUsuario = !document.getElementById('u-cpf').readOnly;
+
+      const dados = {
+        nome: document.getElementById('u-nome').value,
+        empresa_id: document.getElementById('u-empresa').value,
+        nivel_acesso: document.getElementById('u-nivel').value,
+        setor: document.getElementById('u-setor').value,
+        ativo: document.getElementById('u-ativo').value === "true",
+        sistemas_autorizados: Array.from(document.querySelectorAll('.chk-sys:checked')).map(c=>c.value),
+        secretarias: Array.from(document.querySelectorAll('.chk-sec:checked')).map(c=>c.value)
+      };
+      
+      if(senhaDigitada) { dados.senha = senhaDigitada; }
+      
+      try {
+        if (senhaDigitada) {
+            try {
+                // Usa o appAdmin para não deslogar do painel
+                await createUserWithEmailAndPassword(authAdmin, cpf + "@feitosa.app", senhaDigitada);
+            } catch (errAuth) {
+                console.log("Aviso de Auth:", errAuth.message);
+            }
+        }
+
+        await setDoc(doc(db, "usuarios", cpf), dados, {merge:true});
+        bootstrap.Modal.getInstance(document.getElementById('modalUsuario')).hide();
+        carregarTabelaUsuarios();
+
+      } catch (error) {
+        alert("Erro ao gravar usuário: " + error.message);
+      }
+    };
+
+    window.deletarUsuario = async function(cpf) { 
+        if(confirm("Revogar acesso e excluir usuário permanentemente?")) { 
+            await deleteDoc(doc(db, "usuarios", cpf)); 
+            carregarTabelaUsuarios(); 
+        } 
+    };
+  </script>
+</body>
+</html>

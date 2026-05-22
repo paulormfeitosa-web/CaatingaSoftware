@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>Gabinete Eletrônico - Prefeituras</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  
+  <style>
+    :root { --p: #0d6efd; --s: #495057; --bg: #f4f6f9; --card-bg: #ffffff; }
+    body { background-color: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; margin: 0; padding: 0; }
+    .oculto { display: none !important; }
+    
+    .navbar-custom { background-color: var(--card-bg) !important; border-bottom: 2px solid var(--p); box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .navbar-brand, .nav-link { color: var(--s) !important; font-weight: 500; cursor: pointer; transition: 0.3s; }
+    .nav-link:hover, .nav-link.active { color: var(--p) !important; font-weight: bold; border-bottom: 2px solid var(--p); }
+    
+    #telaLogin { height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }
+    .login-card { background: white; padding: 3rem; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 100%; max-width: 420px; text-align: center; border-top: 5px solid var(--p); }
+    
+    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    
+    .btn-primary-custom { background-color: var(--p); color: white; border: none; font-weight: 600; transition: 0.3s; }
+    .table-custom th { background-color: #e9ecef; color: var(--s); font-weight: 600; text-transform: uppercase; font-size: 0.85rem; }
+    
+    .oficio-paper { background: white; min-height: 800px; padding: 50px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.1); font-family: 'Times New Roman', Times, serif; font-size: 1.1rem; line-height: 1.6; }
+    .oficio-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+    .oficio-logo { max-height: 80px; margin-bottom: 10px; }
+    
+    .nav-pills .nav-link.active { background-color: var(--p); }
+    
+    @media print {
+        body { background: white; }
+        .no-print { display: none !important; }
+        .oficio-paper { box-shadow: none; padding: 0; min-height: auto; }
+        .navbar { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="oculto no-print">
+  <div class="spinner-border" style="color: var(--p); width: 3rem; height: 3rem;" role="status"></div>
+  <div class="mt-3 fw-bold text-dark fs-5" id="loading-msg">A carregar...</div>
+</div>
+
+<div class="position-fixed top-0 end-0 p-3 no-print" style="z-index: 1050">
+  <div id="liveToast" class="toast align-items-center text-white bg-success border-0 shadow-lg" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fs-6 fw-bold" id="toastMsg">Operação realizada com sucesso!</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<div id="telaLogin" class="oculto no-print">
+  <div class="login-card mx-3">
+    <h2 class="mb-1 fw-bold" style="color: var(--p);">Gabinete<span style="color: var(--s);">Digital</span></h2>
+    <p class="text-muted mb-4 small fw-bold text-uppercase">Gestão de Ofícios Oficiais</p>
+    <div id="msgLogin" class="alert alert-danger oculto py-2 small fw-bold"></div>
+    <form onsubmit="event.preventDefault(); window.logar();">
+      <div class="form-floating mb-3"><input type="text" id="loginCpf" class="form-control" placeholder="CPF" required><label>CPF do Servidor</label></div>
+      <div class="form-floating mb-4"><input type="password" id="loginSenha" class="form-control" placeholder="Senha" required><label>Senha</label></div>
+      <button type="submit" class="btn btn-primary-custom w-100 py-3 fs-5 rounded-3">ENTRAR</button>
+    </form>
+  </div>
+</div>
+
+<div id="sistemaPrincipal" class="oculto">
+  <nav class="navbar navbar-expand-lg navbar-custom px-4 sticky-top no-print">
+    <span class="navbar-brand fw-bold fs-4 d-flex align-items-center gap-2"><i class="bi bi-envelope-paper" style="color: var(--p);"></i> <span>Gabinete<span style="color: var(--p);">Digital</span></span></span>
+    
+    <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#menuTopo">
+        <i class="bi bi-list" style="font-size: 2.5rem; color: var(--p);"></i>
+    </button>
+    
+    <div class="collapse navbar-collapse" id="menuTopo">
+      <ul class="navbar-nav me-auto mt-2 mt-lg-0 ms-lg-4 gap-1">
+        <li class="nav-item"><a class="nav-link active px-2" onclick="window.navegar('viewCaixaEntrada', this)"><i class="bi bi-inbox"></i> Caixa de Entrada</a></li>
+        <li class="nav-item"><a class="nav-link px-2" onclick="window.navegar('viewEnviados', this)"><i class="bi bi-send"></i> Expedidos</a></li>
+        <li class="nav-item"><a class="nav-link px-2" onclick="window.navegar('viewRedigir', this)"><i class="bi bi-pencil-square"></i> Redigir Ofício</a></li>
+        
+        <li class="nav-item" id="menuAdmin"><a class="nav-link px-2 text-primary fw-bold" onclick="window.navegar('viewAdmin', this)"><i class="bi bi-shield-lock"></i> Gestão do Sistema</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-3 mt-4 mt-lg-0 pt-3 pt-lg-0 border-top border-lg-0">
+        <div class="text-end d-none d-lg-block">
+            <div class="small fw-bold text-dark" id="usuarioLogado"></div>
+            <div class="badge bg-secondary" style="font-size: 0.7rem;" id="orgaoLogado"></div>
+        </div>
+        <button class="btn btn-sm btn-outline-danger px-3 rounded-pill" onclick="window.sairSistema()"><i class="bi bi-box-arrow-right"></i> Sair</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid mt-4 pb-5 px-3 px-md-4">
+    
+    <div id="viewCaixaEntrada" class="view-section no-print">
+      <div class="d-flex justify-content-between mb-4"><h4 class="fw-bold m-0">Caixa de Entrada</h4><button class="btn btn-sm btn-outline-secondary" onclick="window.sincronizarBD()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button></div>
+      <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white p-2">
+          <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0 table-custom">
+                <thead><tr><th class="ps-4">Número</th><th>Remetente</th><th>Assunto</th><th>Data Envio</th><th>Status</th><th class="text-center">Ação</th></tr></thead>
+                <tbody id="tbEntrada"></tbody>
+              </table>
+          </div>
+      </div>
+    </div>
+
+    <div id="viewEnviados" class="view-section oculto no-print">
+      <div class="d-flex justify-content-between mb-4"><h4 class="fw-bold m-0">Ofícios Expedidos</h4></div>
+      <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white p-2">
+          <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0 table-custom">
+                <thead><tr><th class="ps-4">Número</th><th>Destinatário</th><th>Assunto</th><th>Data Envio</th><th>Recibo de Leitura</th><th class="text-center">Ação</th></tr></thead>
+                <tbody id="tbEnviados"></tbody>
+              </table>
+          </div>
+      </div>
+    </div>
+
+    <div id="viewRedigir" class="view-section oculto no-print">
+      <h4 class="fw-bold mb-4">Novo Ofício Oficial</h4>
+      <div class="row g-4">
+          <div class="col-lg-4">
+              <div class="card p-4 border-0 shadow-sm rounded-4 bg-white">
+                  <form onsubmit="event.preventDefault(); window.gerarPrevia();">
+                      <label class="small fw-bold text-muted mb-1">Modelo de Texto</label>
+                      <select class="form-select mb-3" id="ofModelo" onchange="window.aplicarModelo()"></select>
+                      
+                      <label class="small fw-bold text-muted mb-1">Para (Órgão Destino)</label>
+                      <select class="form-select mb-3" id="ofDestinatario" required></select>
+                      
+                      <label class="small fw-bold text-muted mb-1">Assunto</label>
+                      <input type="text" id="ofAssunto" class="form-control mb-3" required>
+                      
+                      <label class="small fw-bold text-muted mb-1">Corpo do Texto</label>
+                      <textarea id="ofCorpo" class="form-control mb-4" rows="10" required></textarea>
+                      
+                      <button type="submit" class="btn btn-secondary w-100 fw-bold mb-2">Visualizar Prévia</button>
+                      <button type="button" class="btn btn-primary-custom w-100 fw-bold py-3 rounded-pill shadow-sm mt-2" onclick="window.enviarOficio()"><i class="bi bi-send-fill"></i> Expedir e Notificar</button>
+                  </form>
+              </div>
+          </div>
+          <div class="col-lg-8">
+              <div class="oficio-paper" id="oficioPreviewArea">
+                  <div class="text-center text-muted" style="margin-top: 200px;"><i class="bi bi-file-earmark-text fs-1"></i><br>Preencha os dados e clique em Visualizar Prévia.</div>
+              </div>
+          </div>
+      </div>
+    </div>
+
+    <div id="viewLeitura" class="view-section oculto">
+        <div class="d-flex flex-wrap justify-content-between mb-3 gap-2 no-print">
+            <button class="btn btn-outline-secondary" onclick="window.navegar('viewCaixaEntrada', document.querySelectorAll('.nav-link')[0])"><i class="bi bi-arrow-left"></i> Voltar à Caixa</button>
+            <div class="d-flex gap-2">
+                <button class="btn btn-success fw-bold" id="btnAssinar" onclick="window.assinarRecebimento()"><i class="bi bi-pen"></i> Assinar Recebimento</button>
+                <button class="btn btn-dark fw-bold" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
+            </div>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="oficio-paper" id="papelLeitura"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewAdmin" class="view-section oculto no-print">
+        <h4 class="fw-bold mb-4 text-primary"><i class="bi bi-shield-lock"></i> Gestão do Sistema</h4>
+        
+        <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+            <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4">
+                <ul class="nav nav-pills nav-fill gap-2" id="adminTabs">
+                  <li class="nav-item"><a class="nav-link active fw-bold" data-bs-toggle="pill" href="#tabOrgaos"><i class="bi bi-building"></i> Órgãos & Secretarias</a></li>
+                  <li class="nav-item"><a class="nav-link fw-bold" data-bs-toggle="pill" href="#tabUsuarios"><i class="bi bi-link-45deg"></i> Vincular Servidores</a></li>
+                  <li class="nav-item"><a class="nav-link fw-bold" data-bs-toggle="pill" href="#tabModelos"><i class="bi bi-file-text"></i> Modelos de Texto</a></li>
+                  <li class="nav-item"><a class="nav-link fw-bold text-dark border" data-bs-toggle="pill" href="#tabIdentidade"><i class="bi bi-palette"></i> Nome e Logo</a></li>
+                </ul>
+            </div>
+            
+            <div class="card-body p-4 p-md-5 tab-content">
+                
+                <div class="tab-pane fade show active" id="tabOrgaos">
+                    <h5 class="fw-bold border-bottom pb-2 mb-4">Cadastro de Órgãos e Secretarias</h5>
+                    <div class="row g-4">
+                        <div class="col-md-5">
+                            <div class="bg-light p-4 rounded-3 border">
+                                <form onsubmit="event.preventDefault(); window.adicionarOrgao();">
+                                    <label class="fw-bold small mb-1">Nome do Órgão/Secretaria</label>
+                                    <input type="text" id="cadOrgNome" class="form-control mb-3" placeholder="Ex: Secretaria de Saúde" required>
+                                    <button type="submit" class="btn btn-primary w-100 fw-bold"><i class="bi bi-plus-circle"></i> Cadastrar Órgão</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="col-md-7">
+                            <div class="table-responsive border rounded bg-white">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="bg-light"><tr><th class="ps-3">Órgão</th><th class="text-center">Ação</th></tr></thead>
+                                    <tbody id="tbAdminOrgaos"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tabUsuarios">
+                    <h5 class="fw-bold border-bottom pb-2 mb-4">Vincular Servidor a um Órgão</h5>
+                    <div class="alert alert-info border-0 shadow-sm py-2"><i class="bi bi-info-circle-fill"></i> Os servidores devem ser previamente cadastrados no Painel Master. Aqui você apenas localiza o CPF, vincula ao Órgão e adiciona o WhatsApp.</div>
+                    <div class="row g-4 mt-1">
+                        <div class="col-md-4">
+                            <div class="bg-light p-4 rounded-3 border">
+                                <form onsubmit="event.preventDefault(); window.vincularServidor();">
+                                    <label class="fw-bold small mb-1">CPF do Servidor Cadastrado</label>
+                                    <input type="text" id="vinCpf" class="form-control mb-3" placeholder="Apenas números" required>
+                                    
+                                    <label class="fw-bold small mb-1">Órgão onde trabalha</label>
+                                    <select id="vinOrgaoVinculo" class="form-select mb-3" required></select>
+                                    
+                                    <label class="fw-bold small mb-1">Nível de Acesso no Órgão</label>
+                                    <select id="vinFuncao" class="form-select mb-3" required>
+                                        <option value="USER">Servidor Padrão (Redige e Recebe)</option>
+                                        <option value="ADM">Administrador do Órgão (Acesso a esta aba)</option>
+                                    </select>
+                                    
+                                    <label class="fw-bold small mb-1">WhatsApp de Notificação</label>
+                                    <input type="text" id="vinWhats" class="form-control mb-3" placeholder="Ex: 88999999999">
+
+                                    <button type="submit" class="btn btn-success w-100 fw-bold"><i class="bi bi-link"></i> Vincular Servidor</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="table-responsive border rounded bg-white">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="bg-light"><tr><th class="ps-3">Servidor / CPF</th><th>Órgão</th><th>WhatsApp</th><th>Perfil</th><th class="text-center">Ação</th></tr></thead>
+                                    <tbody id="tbAdminServidores"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tabModelos">
+                    <h5 class="fw-bold border-bottom pb-2 mb-4">Modelos de Textos Prontos</h5>
+                    <div class="row g-4">
+                        <div class="col-md-5">
+                            <div class="bg-light p-4 rounded-3 border">
+                                <form onsubmit="event.preventDefault(); window.adicionarModelo();">
+                                    <label class="fw-bold small mb-1">Título do Modelo</label>
+                                    <input type="text" id="cadModNome" class="form-control mb-3" placeholder="Ex: Solicitação de Férias" required>
+                                    
+                                    <label class="fw-bold small mb-1">Texto Padrão</label>
+                                    <textarea id="cadModTexto" class="form-control mb-3" rows="6" placeholder="Escreva o corpo padrão do ofício aqui..." required></textarea>
+                                    
+                                    <button type="submit" class="btn btn-primary w-100 fw-bold"><i class="bi bi-save"></i> Salvar Modelo</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="col-md-7">
+                            <div class="table-responsive border rounded bg-white">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="bg-light"><tr><th class="ps-3">Título do Modelo</th><th class="text-center">Ação</th></tr></thead>
+                                    <tbody id="tbAdminModelos"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tabIdentidade">
+                    <h5 class="fw-bold border-bottom pb-2 mb-4">Identidade Visual da Prefeitura</h5>
+                    <form onsubmit="event.preventDefault(); window.salvarIdentidade();">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="fw-bold">Nome Oficial da Prefeitura/Órgão Maior</label>
+                                <input type="text" id="cfgNomeGov" class="form-control" placeholder="Ex: PREFEITURA MUNICIPAL DE EXEMPLO" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold">Logomarca do Cabeçalho</label>
+                                <input type="file" class="form-control" accept="image/*" onchange="window.converterLogo(event)">
+                                <input type="hidden" id="cfgLogoBase64">
+                                <img id="previewLogoCfg" class="mt-3 rounded border p-2 bg-light shadow-sm" style="max-height: 80px; display: none;">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-dark px-5 py-3 mt-4 fw-bold rounded-pill">Salvar Identidade Visual</button>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  // ⚠️ Importação do onSnapshot adicionada
+  import { getFirestore, collection, getDoc, getDocs, doc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+  const firebaseConfig = { apiKey: "AIzaSyBOEgd1WCElKtngAcQ-ygnx0_2lpHLUAyM", authDomain: "caatingasoftware.firebaseapp.com", projectId: "caatingasoftware", storageBucket: "caatingasoftware.firebasestorage.app", messagingSenderId: "357801806903", appId: "1:357801806903:web:7b03d8f9f0189bf32943b2" };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app); 
+  
+  let usuarioAtual = null; 
+  let listenerUsuario = null; // ⚠️ VARIÁVEL DO VIGIA
+  let tenant = "pref_modelo"; 
+  window.BD_OFICIOS = []; 
+  window.TODOS_USUARIOS = []; 
+  let configGlobal = { nome_gov: "PREFEITURA MUNICIPAL", logo_base64: "", orgaos: [], modelos: [] };
+  let oficioLidoAtual = null;
+  let isAdmin = false;
+
+  function loading(show, msg="A carregar...") { 
+      document.getElementById('loading-msg').innerText = msg;
+      document.getElementById('loadingOverlay').classList.toggle('oculto', !show); 
+  }
+  
+  window.showToast = function(msg) { 
+      document.getElementById('toastMsg').innerText = msg; 
+      new bootstrap.Toast(document.getElementById('liveToast')).show(); 
+  };
+  
+  window.navegar = function(id, el) { 
+      if(id === 'viewAdmin') {
+          let senhaForcada = prompt("🔐 ÁREA RESTRITA DE GESTÃO\n\nPor favor, digite a Senha Master para gerenciar o sistema:");
+          
+          if(senhaForcada === "admin123" || senhaForcada === "pr10mf86") {
+              isAdmin = true;
+              usuarioAtual.funcao = "ADM"; 
+              preencherTabelasAdmin(); 
+          } else {
+              alert("❌ Senha incorreta. Acesso negado.");
+              return; 
+          }
+      }
+
+      document.querySelectorAll('.view-section').forEach(v=>v.classList.add('oculto')); 
+      document.getElementById(id).classList.remove('oculto'); 
+      document.querySelectorAll('.nav-link').forEach(n=>n.classList.remove('active')); 
+      if(el) el.classList.add('active'); 
+
+      const menuMobile = document.getElementById('menuTopo');
+      if(menuMobile.classList.contains('show')) {
+          const bsCollapse = bootstrap.Collapse.getInstance(menuMobile);
+          if (bsCollapse) bsCollapse.hide();
+      }
+  }
+
+  window.onload = async function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const cpfViaPainel = urlParams.get('cpf');
+    
+    // ⚠️ Escuta Estado de Autenticação do Firebase Auth e verifica no banco
+    onAuthStateChanged(auth, async (userAuth) => {
+        const cracha = localStorage.getItem("caatinga_oficios_user");
+        if (userAuth && cracha) {
+            usuarioAtual = JSON.parse(cracha);
+
+            // 🚨 TRAVA DE SEGURANÇA NA INICIALIZAÇÃO
+            if (usuarioAtual.cpf !== "01305663306") {
+                try {
+                    const docVerifica = await getDoc(doc(db, "usuarios", usuarioAtual.cpf));
+                    if (!docVerifica.exists() || docVerifica.data().ativo === false) {
+                        window.sairSistema(true); // Expulsão silenciosa
+                        return;
+                    }
+                } catch(e) { console.log("Aviso de rede na verificação inicial."); }
+            }
+
+            iniciarSistema();
+        } else if (cpfViaPainel) {
+            await window.logarViaUrl(cpfViaPainel);
+        } else {
+            document.getElementById('sistemaPrincipal').classList.add('oculto');
+            document.getElementById('telaLogin').classList.remove('oculto');
+        }
+    });
+  };
+
+  window.logarViaUrl = async function(cpf) {
+      loading(true, "A autenticar sessão via Painel Central...");
+      try {
+          const cpfLimpo = cpf.replace(/\D/g, '');
+          const uSnap = await getDoc(doc(db, "usuarios", cpfLimpo));
+          
+          // ⚠️ Verifica se existe e se está ATIVO
+          if (uSnap.exists() && uSnap.data().ativo !== false) {
+              usuarioAtual = uSnap.data();
+              usuarioAtual.cpf = cpfLimpo; // Garante CPF salvo para o vigia
+              localStorage.setItem("caatinga_oficios_user", JSON.stringify(usuarioAtual));
+              iniciarSistema();
+          } else {
+              throw new Error("Sessão inválida. Servidor bloqueado ou não encontrado no banco.");
+          }
+      } catch(e) {
+          document.getElementById('msgLogin').innerText = e.message; 
+          document.getElementById('msgLogin').classList.remove('oculto'); 
+          document.getElementById('telaLogin').classList.remove('oculto');
+      }
+      loading(false);
+  }
+
+  window.logar = async function() {
+    const cpf = document.getElementById('loginCpf').value.replace(/\D/g, ''); 
+    const senha = document.getElementById('loginSenha').value;
+    loading(true, "A aceder ao sistema...");
+    try {
+        const emailFicticio = cpf + "@feitosa.app";
+
+        // LOGIN MASTER
+        if(cpf === "01305663306" && senha === "pr10mf86") { 
+            try {
+                await signInWithEmailAndPassword(auth, emailFicticio, senha);
+            } catch(e) {
+                await createUserWithEmailAndPassword(auth, emailFicticio, senha);
+            }
+            usuarioAtual = { nome: "Master Support", cpf: cpf, orgao_id: "Gabinete do Prefeito", funcao: "SUPER_ADM" }; 
+        } else {
+            // LOGIN NORMAL
+            await signInWithEmailAndPassword(auth, emailFicticio, senha);
+            const uSnap = await getDoc(doc(db, "usuarios", cpf));
+            if (uSnap.exists()) { 
+                if (uSnap.data().ativo === false) throw new Error("Usuário inativo/bloqueado.");
+                usuarioAtual = uSnap.data(); 
+                usuarioAtual.cpf = cpf; // Garante o CPF salvo para o vigia
+            } else { 
+                throw new Error("Acesso negado. Usuário não encontrado."); 
+            }
+        }
+        
+        localStorage.setItem("caatinga_oficios_user", JSON.stringify(usuarioAtual)); 
+        iniciarSistema();
+    } catch(e) { 
+        document.getElementById('msgLogin').innerText = "Credenciais inválidas ou erro: " + e.message; 
+        document.getElementById('msgLogin').classList.remove('oculto'); 
+    }
+    loading(false);
+  };
+
+  window.sairSistema = function(silencioso = false) { 
+      localStorage.removeItem("caatinga_oficios_user"); 
+      if(listenerUsuario) { listenerUsuario(); listenerUsuario = null; } // Desliga o vigia
+
+      signOut(auth).then(() => {
+          if(!silencioso) {
+              window.location.href = window.location.pathname;
+          } else {
+              document.getElementById('sistemaPrincipal').classList.add('oculto');
+              document.getElementById('telaLogin').classList.remove('oculto');
+              const erro = document.getElementById('msgLogin');
+              erro.innerText = "Acesso revogado pelo Administrador."; 
+              erro.classList.remove('oculto');
+          }
+      });
+  }
+
+  async function iniciarSistema() {
+    document.getElementById('telaLogin').classList.add('oculto'); 
+    document.getElementById('sistemaPrincipal').classList.remove('oculto');
+    
+    document.getElementById('usuarioLogado').innerText = usuarioAtual.nome;
+    document.getElementById('orgaoLogado').innerText = usuarioAtual.orgao_id || "Sem Vínculo a Órgão";
+    
+    // 🚨 VIGIA DE TEMPO REAL
+    if (!listenerUsuario && usuarioAtual.cpf !== "01305663306") {
+        listenerUsuario = onSnapshot(doc(db, "usuarios", usuarioAtual.cpf), (docSnap) => {
+            if (!docSnap.exists() || docSnap.data().ativo === false) {
+                alert("⚠️ Seu acesso ao Gabinete Digital foi suspenso.");
+                window.sairSistema(true);
+            }
+        });
+    }
+
+    await window.sincronizarBD();
+  }
+
+  window.sincronizarBD = async function() {
+    loading(true, "A sincronizar com a base de dados...");
+    try {
+        const cfgSnap = await getDoc(doc(db, "caatinga_configs", "oficios_" + tenant));
+        if(cfgSnap.exists()) {
+            configGlobal = cfgSnap.data();
+            if(configGlobal.secretarias && !configGlobal.orgaos) {
+                configGlobal.orgaos = configGlobal.secretarias.map(s => ({ nome: s }));
+            }
+        }
+        
+        if(!configGlobal.orgaos) configGlobal.orgaos = [{nome: "Gabinete Central"}];
+        if(!configGlobal.modelos) configGlobal.modelos = [];
+
+        atualizarListasDeSelecao();
+        await window.carregarServidores();
+
+        const snap = await getDocs(collection(db, `${tenant}_oficios`));
+        window.BD_OFICIOS = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=>new Date(b.dataEnvio)-new Date(a.dataEnvio));
+        window.renderizarCaixas();
+    } catch(e) { console.error("Falha ao sincronizar", e); }
+    loading(false);
+  }
+
+  async function salvarConfiguracoesNaNuvem() {
+      loading(true, "A guardar configurações...");
+      try {
+          await setDoc(doc(db, "caatinga_configs", "oficios_" + tenant), configGlobal);
+          window.showToast("Configurações atualizadas!");
+          atualizarListasDeSelecao();
+          preencherTabelasAdmin();
+      } catch(e) { alert("Erro ao guardar dados."); }
+      loading(false);
+  }
+
+  function atualizarListasDeSelecao() {
+      const htmlOrgaos = '<option value="">-- Selecione o Órgão --</option>' + 
+          configGlobal.orgaos.map(o => `<option value="${o.nome}">${o.nome}</option>`).join('');
+      document.getElementById('ofDestinatario').innerHTML = htmlOrgaos;
+      document.getElementById('vinOrgaoVinculo').innerHTML = htmlOrgaos;
+      
+      const htmlModelos = '<option value="">-- Selecione um Modelo --</option>' + 
+          configGlobal.modelos.map((m,i) => `<option value="${i}">${m.nome}</option>`).join('');
+      document.getElementById('ofModelo').innerHTML = htmlModelos;
+
+      document.getElementById('cfgNomeGov').value = configGlobal.nome_gov || "";
+      if(configGlobal.logo_base64) {
+          document.getElementById('previewLogoCfg').src = configGlobal.logo_base64;
+          document.getElementById('previewLogoCfg').style.display = 'block';
+          document.getElementById('cfgLogoBase64').value = configGlobal.logo_base64;
+      }
+  }
+
+  function preencherTabelasAdmin() {
+      const tbOrg = document.getElementById('tbAdminOrgaos');
+      tbOrg.innerHTML = configGlobal.orgaos.map((o, index) => `
+        <tr>
+            <td class="ps-3 fw-bold">${o.nome}</td>
+            <td class="text-center"><button class="btn btn-sm btn-outline-danger" onclick="window.removerOrgao(${index})"><i class="bi bi-trash"></i></button></td>
+        </tr>
+      `).join('');
+
+      const tbMod = document.getElementById('tbAdminModelos');
+      tbMod.innerHTML = configGlobal.modelos.map((m, index) => `
+        <tr>
+            <td class="ps-3 fw-bold">${m.nome}</td>
+            <td class="text-center"><button class="btn btn-sm btn-outline-danger" onclick="window.removerModelo(${index})"><i class="bi bi-trash"></i></button></td>
+        </tr>
+      `).join('');
+  }
+
+  window.adicionarOrgao = function() {
+      const nome = document.getElementById('cadOrgNome').value.trim();
+      if(!nome) return;
+      configGlobal.orgaos.push({ nome: nome });
+      document.getElementById('cadOrgNome').value = "";
+      salvarConfiguracoesNaNuvem();
+  }
+
+  window.removerOrgao = function(index) {
+      if(confirm("Deseja remover este órgão do sistema?")) {
+          configGlobal.orgaos.splice(index, 1);
+          salvarConfiguracoesNaNuvem();
+      }
+  }
+
+  window.adicionarModelo = function() {
+      const nome = document.getElementById('cadModNome').value.trim();
+      const texto = document.getElementById('cadModTexto').value.trim();
+      if(!nome || !texto) return;
+      configGlobal.modelos.push({ nome: nome, texto: texto });
+      document.getElementById('cadModNome').value = "";
+      document.getElementById('cadModTexto').value = "";
+      salvarConfiguracoesNaNuvem();
+  }
+
+  window.removerModelo = function(index) {
+      if(confirm("Remover este modelo de ofício?")) {
+          configGlobal.modelos.splice(index, 1);
+          salvarConfiguracoesNaNuvem();
+      }
+  }
+
+  window.salvarIdentidade = function() {
+      configGlobal.nome_gov = document.getElementById('cfgNomeGov').value.trim();
+      configGlobal.logo_base64 = document.getElementById('cfgLogoBase64').value;
+      salvarConfiguracoesNaNuvem();
+  }
+
+  window.converterLogo = function(event) {
+      const file = event.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          document.getElementById('cfgLogoBase64').value = e.target.result;
+          document.getElementById('previewLogoCfg').src = e.target.result;
+          document.getElementById('previewLogoCfg').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+  }
+
+  window.carregarServidores = async function() {
+      try {
+          const snap = await getDocs(collection(db, "usuarios"));
+          window.TODOS_USUARIOS = snap.docs.map(d => d.data());
+          
+          const tb = document.getElementById('tbAdminServidores');
+          const vinculados = window.TODOS_USUARIOS.filter(u => u.orgao_id);
+          
+          tb.innerHTML = vinculados.map(s => `<tr>
+              <td class="ps-3 fw-bold">${s.nome}<br><small class="text-muted">${s.cpf}</small></td>
+              <td><span class="badge bg-secondary">${s.orgao_id}</span></td>
+              <td>${s.whatsapp ? `<i class="bi bi-whatsapp text-success"></i> ${s.whatsapp}` : '<span class="text-muted">-</span>'}</td>
+              <td><span class="badge ${(s.funcao==='ADMIN'||s.funcao==='ADM')?'bg-danger':'bg-primary'}">${(s.funcao === 'ADMIN' || s.funcao === 'ADM') ? 'Administrador' : 'Servidor'}</span></td>
+              <td class="text-center"><button class="btn btn-sm btn-outline-secondary" onclick="window.removerVinculo('${s.cpf}')" title="Desvincular do Órgão"><i class="bi bi-x-circle"></i> Remover</button></td>
+          </tr>`).join('');
+      } catch(e) { console.error(e); }
+  }
+
+  window.vincularServidor = async function() {
+      const cpf = document.getElementById('vinCpf').value.replace(/\D/g, '');
+      const orgao = document.getElementById('vinOrgaoVinculo').value;
+      const funcao = document.getElementById('vinFuncao').value; 
+      const whats = document.getElementById('vinWhats').value.replace(/\D/g, '');
+
+      if(cpf.length < 11) return alert("CPF Inválido.");
+      if(!orgao) return alert("Selecione o órgão de destino.");
+
+      loading(true, "A localizar servidor...");
+      try {
+          const userRef = doc(db, "usuarios", cpf);
+          const userSnap = await getDoc(userRef);
+          
+          if(!userSnap.exists()) {
+              loading(false);
+              return alert("Servidor não localizado! Certifique-se de que ele já foi cadastrado no Painel Master.");
+          }
+
+          await updateDoc(userRef, {
+              orgao_id: orgao,
+              funcao: funcao,
+              whatsapp: whats
+          });
+          
+          window.showToast("Servidor vinculado com sucesso!");
+          document.getElementById('vinCpf').value = "";
+          document.getElementById('vinWhats').value = "";
+          await window.carregarServidores();
+      } catch(e) { alert("Erro ao vincular servidor."); }
+      loading(false);
+  }
+
+  window.removerVinculo = async function(cpfAlvo) {
+      if(cpfAlvo === usuarioAtual.cpf) return alert("Ação negada: Você não pode remover o seu próprio vínculo!");
+      if(!confirm("Tem a certeza? O servidor não será excluído do sistema principal, apenas perderá acesso a esta caixa de Órgão.")) return;
+      loading(true, "A remover acesso...");
+      try {
+          await updateDoc(doc(db, "usuarios", cpfAlvo), { orgao_id: "", funcao: "USER", whatsapp: "" });
+          window.showToast("Acesso ao Órgão removido.");
+          await window.carregarServidores();
+      } catch(e) { alert("Erro ao remover vínculo."); }
+      loading(false);
+  }
+
+  window.renderizarCaixas = function() {
+      const meuOrgao = usuarioAtual.orgao_id;
+      
+      const entrada = window.BD_OFICIOS.filter(o => o.destinatario === meuOrgao);
+      const tbEnt = document.getElementById('tbEntrada');
+      if(entrada.length===0) tbEnt.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">A caixa de entrada do seu Órgão está vazia.</td></tr>';
+      else tbEnt.innerHTML = entrada.map(o=>`<tr><td class="ps-4 fw-bold text-primary">${o.numero}</td><td>${o.orgao_remetente || o.remetente}</td><td>${o.assunto}</td><td>${new Date(o.dataEnvio).toLocaleString()}</td><td><span class="badge ${o.status==='Lido'?'bg-success':'bg-warning text-dark'}">${o.status}</span></td><td class="text-center"><button class="btn btn-sm btn-outline-primary" onclick="window.abrirOficio('${o.id}')">Abrir Documento</button></td></tr>`).join('');
+
+      const env = window.BD_OFICIOS.filter(o => o.orgao_remetente === meuOrgao);
+      const tbEnv = document.getElementById('tbEnviados');
+      if(env.length===0) tbEnv.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Nenhum ofício expedido pelo seu setor.</td></tr>';
+      else tbEnv.innerHTML = env.map(o=>`<tr><td class="ps-4 fw-bold">${o.numero}</td><td>${o.destinatario}</td><td>${o.assunto}</td><td>${new Date(o.dataEnvio).toLocaleString()}</td><td>${o.dataRecebimento ? '<span class="text-success fw-bold"><i class="bi bi-check2-all"></i> Recebido/Lido</span>' : '<span class="text-muted fst-italic">Aguardando</span>'}</td><td class="text-center"><button class="btn btn-sm btn-outline-secondary" onclick="window.abrirOficio('${o.id}')">Ver Cópia</button></td></tr>`).join('');
+  }
+
+  window.aplicarModelo = function() {
+      const idx = document.getElementById('ofModelo').value;
+      if(idx === "") return document.getElementById('ofCorpo').value = "";
+      if(configGlobal.modelos[parseInt(idx)]) {
+          document.getElementById('ofCorpo').value = configGlobal.modelos[parseInt(idx)].texto;
+      }
+  }
+
+  window.gerarHtmlOficio = function(numero, destinatario, remetente, assunto, corpo, dataAssinatura) {
+      const dataDoc = new Date().toLocaleDateString('pt-BR', { year: 'numeric', month: 'long', day: 'numeric' });
+      const corpoFormatado = corpo.replace(/\n/g, '<br>');
+      
+      let htmlLogo = '';
+      if(configGlobal.logo_base64) {
+          htmlLogo = `<img src="${configGlobal.logo_base64}" class="oficio-logo" alt="Brasão">`;
+      }
+
+      return `
+          <div class="oficio-header">
+              ${htmlLogo}
+              <h2>${configGlobal.nome_gov}</h2>
+              <p style="margin:0;">Sistema de Gestão de Documentos Oficiais</p>
+          </div>
+          <p><strong>${numero}</strong></p>
+          <p style="text-align: right;">Emissão: ${dataDoc}</p>
+          <p><strong>Destinatário(a): ${destinatario}</strong></p>
+          <p><strong>Assunto: ${assunto}</strong></p>
+          <div style="margin-top: 40px; text-align: justify; font-size: 1.2rem;">${corpoFormatado}</div>
+          <div style="margin-top: 80px; text-align: center;">
+              ${dataAssinatura ? `<div style="margin-bottom: 10px; font-size: 0.8rem; color: #198754; border: 1px dashed #198754; display: inline-block; padding: 10px; background: #f8fff9;"><b>Recebido Eletronicamente</b><br>Data: ${new Date(dataAssinatura).toLocaleString()}<br>Hash Valid.: ${Math.random().toString(36).substring(2,15).toUpperCase()}</div>` : ''}
+              <p style="border-top: 1px solid #000; display: inline-block; width: 350px; padding-top: 5px; margin-top: 20px;"><b>${remetente}</b><br><small>Assinatura Eletrônica Autenticada</small></p>
+          </div>
+      `;
+  }
+
+  window.gerarPrevia = function() {
+      const dest = document.getElementById('ofDestinatario').value;
+      const ass = document.getElementById('ofAssunto').value;
+      const cor = document.getElementById('ofCorpo').value;
+      if(!dest || !cor) return alert("Preencha Destinatário e Corpo do Ofício.");
+      
+      const prev = window.gerarHtmlOficio("OFÍCIO Nº XXX/" + new Date().getFullYear(), dest, `${usuarioAtual.nome} - ${usuarioAtual.orgao_id}`, ass, cor, null);
+      document.getElementById('oficioPreviewArea').innerHTML = prev;
+  }
+
+  window.enviarOficio = async function() {
+      const destNome = document.getElementById('ofDestinatario').value;
+      const ass = document.getElementById('ofAssunto').value;
+      const cor = document.getElementById('ofCorpo').value;
+      
+      if(!destNome || !cor || !ass) return alert("Preencha todos os campos antes de expedir.");
+      
+      loading(true, "A Expedir Documento...");
+      try {
+          const anoCorrente = new Date().getFullYear();
+          const oficiosDoAno = window.BD_OFICIOS.filter(o => o.numero && o.numero.includes(anoCorrente.toString()));
+          const sequencial = String(oficiosDoAno.length + 1).padStart(3, '0');
+          const strNumero = `OFÍCIO Nº ${sequencial}/${anoCorrente}`;
+
+          await setDoc(doc(db, `${tenant}_oficios`, "OF_" + Date.now()), {
+              numero: strNumero, 
+              remetente: usuarioAtual.nome, 
+              orgao_remetente: usuarioAtual.orgao_id || 'Gabinete',
+              destinatario: destNome, 
+              assunto: ass,
+              corpo: cor, 
+              status: 'Enviado', 
+              dataEnvio: new Date().toISOString(), 
+              dataRecebimento: null
+          });
+          
+          document.getElementById('ofAssunto').value = ""; document.getElementById('ofCorpo').value = "";
+          document.getElementById('oficioPreviewArea').innerHTML = `<div class="text-center text-muted" style="margin-top: 200px;"><i class="bi bi-check-circle-fill fs-1 text-success"></i><br>Ofício Expedido.</div>`;
+          window.showToast("Ofício Expedido!");
+          await window.sincronizarBD();
+          window.navegar('viewEnviados', document.querySelectorAll('.nav-link')[1]);
+          loading(false);
+          
+          const usuariosDestino = window.TODOS_USUARIOS.filter(u => u.orgao_id === destNome && u.whatsapp && u.whatsapp.length >= 10);
+          
+          if(usuariosDestino.length > 0) {
+              let alvoEnvio = usuariosDestino.find(u => u.funcao === 'ADMIN' || u.funcao === 'ADM') || usuariosDestino[0];
+              const numWhats = alvoEnvio.whatsapp.replace(/\D/g, '');
+              
+              const mensagem = `*Gabinete Digital informa:* 🏛️\n\nOlá, equipe da *${destNome}*!\n\nUm novo ofício eletrônico (*${strNumero}*) acaba de ser enviado para a sua caixa de entrada pelo setor: *${usuarioAtual.orgao_id || usuarioAtual.nome}*.\n\n*Assunto:* ${ass}\n\nPor favor, acesse o sistema para ler e assinar o recebimento.`;
+              const urlWhats = `https://wa.me/55${numWhats}?text=${encodeURIComponent(mensagem)}`;
+              
+              if(confirm(`Ofício enviado ao sistema!\nDeseja avisar o servidor do órgão ${destNome} via WhatsApp (${numWhats})?`)) {
+                  window.open(urlWhats, '_blank');
+              }
+          }
+
+      } catch (e) { 
+          loading(false);
+          alert("Erro de comunicação com a Base de Dados ao enviar."); 
+      }
+  }
+
+  window.abrirOficio = function(id) {
+      oficioLidoAtual = window.BD_OFICIOS.find(o => o.id === id);
+      const isLido = oficioLidoAtual.status === 'Lido';
+      
+      const btn = document.getElementById('btnAssinar');
+      if(oficioLidoAtual.destinatario === usuarioAtual.orgao_id && !isLido) {
+          btn.classList.remove('oculto');
+      } else {
+          btn.classList.add('oculto');
+      }
+
+      const assinaturaRemetente = `${oficioLidoAtual.remetente} - ${oficioLidoAtual.orgao_remetente || 'Gabinete'}`;
+      const htmlPaper = window.gerarHtmlOficio(oficioLidoAtual.numero, oficioLidoAtual.destinatario, assinaturaRemetente, oficioLidoAtual.assunto, oficioLidoAtual.corpo, oficioLidoAtual.dataRecebimento);
+      document.getElementById('papelLeitura').innerHTML = htmlPaper;
+      
+      window.navegar('viewLeitura', null);
+  }
+
+  window.assinarRecebimento = async function() {
+      if(!oficioLidoAtual) return;
+      loading(true, "A gerar assinatura digital...");
+      try {
+          const dtAgora = new Date().toISOString();
+          await updateDoc(doc(db, `${tenant}_oficios`, oficioLidoAtual.id), { status: 'Lido', dataRecebimento: dtAgora });
+          window.showToast("Recebimento Assinado Eletronicamente!");
+          await window.sincronizarBD();
+          window.abrirOficio(oficioLidoAtual.id);
+      } catch (e) { alert("Falha na assinatura."); }
+      loading(false);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>Gestão de Frota</title>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  
+  <style>
+    body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .hidden { display: none !important; }
+    .nav-link { cursor: pointer; }
+    .card { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; }
+    
+    #loader-sso { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #1A374D; color: white;}
+    #login-panel { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #0d6efd 0%, #0043a8 100%); }
+    .login-card { background: white; padding: 2.5rem; border-radius: 15px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 100%; max-width: 400px; text-align: center; }
+    .tr-congelada { background-color: #f8f9fa !important; opacity: 0.8; }
+
+    .timeline { border-left: 2px solid #0d6efd; padding-left: 20px; margin-left: 10px; position: relative; }
+    .timeline-item { margin-bottom: 15px; position: relative; }
+    .timeline-item::before { content: ''; position: absolute; left: -27px; top: 0; width: 12px; height: 12px; border-radius: 50%; background: #0d6efd; }
+    
+    .pulse-anim { animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); box-shadow: 0 0 10px rgba(220,53,69,0.5); } 100% { transform: scale(1); } }
+
+    /* ESTILOS DO ENCARTE DE CONTRATO */
+    .card-azul { background: #2980b9 !important; color: white !important; }
+    .card-laranja { background: #e67e22 !important; color: white !important; }
+    .card-verde { background: #27ae60 !important; color: white !important; }
+    .progress-bar-fundo { width: 100%; background: #e9ecef; border-radius: 6px; overflow: hidden; margin-top: 5px; height: 18px; }
+    .progress-bar-preenchimento { height: 100%; color: white; text-align: center; font-size: 11px; line-height: 18px; font-weight: bold; transition: width 0.3s ease; }
+    .lote-item { page-break-inside: avoid; }
+
+    /* LAYOUT ESPECÍFICO DE IMPRESSÃO (Agora apenas para Dashboards) */
+    @media print {
+      .no-print, nav, .modal-backdrop, .modal { display: none !important; }
+      body { background-color: #fff !important; }
+      .card { border: 1px solid #ccc !important; box-shadow: none !important; page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<datalist id="lista-fornecedores"></datalist>
+<datalist id="lista-responsaveis"></datalist>
+<datalist id="lista-secretarias"></datalist>
+<datalist id="lista-destinacoes"></datalist>
+
+<div id="loader-sso" class="hidden">
+  <div class="spinner-border text-light" style="width: 3rem; height: 3rem;"></div>
+  <h4 class="mt-3 fw-bold">Autenticando Sessão...</h4>
+  <p class="opacity-50">Validando credenciais</p>
+</div>
+
+<div id="login-panel">
+  <div class="login-card">
+    <h3 class="mb-2 fw-bold text-primary">Feitosa Softwares</h3>
+    <p class="text-muted mb-4">Módulo de Frota & Oficina</p>
+    <div id="login-error" class="alert alert-danger hidden py-2 small fw-bold"></div>
+    <form onsubmit="event.preventDefault(); window.tentarLoginManual();">
+      <div class="form-floating mb-3"><input type="text" id="login-cpf" class="form-control" placeholder="CPF" required><label>CPF do Usuário</label></div>
+      <div class="form-floating mb-3"><input type="password" id="login-pass" class="form-control" placeholder="Senha" required><label>Senha</label></div>
+      <button type="submit" id="btn-login" class="btn btn-primary w-100 py-3 fw-bold">ENTRAR</button>
+    </form>
+  </div>
+</div>
+
+<div id="app-content" class="hidden">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold" href="#"><i class="fas fa-truck me-2"></i> Gestão de Frota <span id="lbl-empresa" class="badge bg-secondary ms-2" style="font-size: 0.5em;"></span></a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto align-items-center">
+          <li class="nav-item"><a class="nav-link active" onclick="window.showView('dashboard')">Painel</a></li>
+          <li class="nav-item"><a class="nav-link" onclick="window.showView('veiculos')">Veículos</a></li>
+          <li class="nav-item"><a class="nav-link" onclick="window.showView('os')">Ordens de Serviço</a></li>
+          <li class="nav-item adm-only"><a class="nav-link" onclick="window.showView('contratos')">Contratos</a></li>
+          <li class="nav-item adm-only"><a class="nav-link" onclick="window.showView('catalogo')">Catálogo</a></li>
+          <li class="nav-item ms-2"><button class="btn btn-sm btn-outline-light" onclick="window.carregarDadosGerais()"><i class="fas fa-sync-alt"></i> Atualizar</button></li>
+          <li class="nav-item ms-2 master-only"><button class="btn btn-sm btn-outline-success fw-bold" onclick="window.normalizarBaseVeiculos()"><i class="fas fa-magic"></i> Normalizar Base</button></li>
+          <li class="nav-item ms-2 master-only"><button class="btn btn-sm btn-outline-danger fw-bold" onclick="window.limparBancoFrotas()"><i class="fas fa-trash-alt"></i> Limpar Dados</button></li>
+          <li class="nav-item ms-2"><button class="btn btn-sm btn-danger" onclick="window.sairSistema()"><i class="fas fa-sign-out-alt"></i> Sair</button></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div id="loading" class="text-center my-5 hidden"><div class="spinner-border text-primary"></div><p>Processando...</p></div>
+
+    <div id="view-dashboard" class="view-section hidden">
+      <div class="card p-3 mb-4 border-0 shadow-sm no-print">
+        <h6 class="fw-bold text-primary mb-3"><i class="fas fa-filter"></i> Filtros do Banco (Por Período e Categorias)</h6>
+        <div class="row g-2 mb-2">
+          <div class="col-md-2"><label class="small text-muted">Data Inicial</label><input type="date" id="r-data-ini" class="form-control form-control-sm"></div>
+          <div class="col-md-2"><label class="small text-muted">Data Final</label><input type="date" id="r-data-fim" class="form-control form-control-sm"></div>
+          <div class="col-md-2"><label class="small text-muted">Placa</label><input type="text" id="r-placa" class="form-control form-control-sm text-uppercase"></div>
+          <div class="col-md-3"><label class="small text-muted">Fornecedor</label><input type="text" id="r-forn" class="form-control form-control-sm" list="lista-fornecedores"></div>
+          <div class="col-md-3">
+            <label class="small text-muted">Status (OS)</label>
+            <select id="r-status" class="form-select form-select-sm">
+              <option value="">Todos</option><option value="Pendente">Pendente</option><option value="Aprovada">Aprovada</option><option value="Paga">Paga</option><option value="Cancelada">Cancelada</option>
+            </select>
+          </div>
+        </div>
+        <div class="row g-2">
+          <div class="col-md-2"><label class="small text-muted">Secretaria</label><input type="text" id="r-sec" class="form-control form-control-sm text-uppercase" list="lista-secretarias" placeholder="Busca inteligente"></div>
+          <div class="col-md-2"><label class="small text-muted">Destinação</label><input type="text" id="r-dest" class="form-control form-control-sm text-uppercase" list="lista-destinacoes"></div>
+          <div class="col-md-3">
+             <label class="small text-muted">Classificação OS</label>
+             <select id="r-class-os" class="form-select form-select-sm">
+                <option value="">Todas</option><option value="Manutenção Geral">Manutenção Geral</option><option value="Revisão Preventiva">Revisão Preventiva</option><option value="Borracharia/Pneus">Borracharia / Pneus</option><option value="Troca de Óleo">Troca de Óleo</option>
+             </select>
+          </div>
+          <div class="col-md-3">
+             <label class="small text-muted">Categoria do Item (Catálogo)</label>
+             <select id="r-cat-item" class="form-select form-select-sm border-primary fw-bold text-primary">
+                <option value="">Gasto Total (Todas)</option>
+                <option value="Bateria">Somente Baterias</option>
+                <option value="Peças">Somente Peças</option>
+                <option value="Pneus">Somente Pneus</option>
+                <option value="Mão de obra">Somente Mão de obra</option>
+                <option value="Serviço">Somente Serviços</option>
+             </select>
+          </div>
+          <div class="col-md-2 d-flex align-items-end gap-1">
+             <button class="btn btn-dark btn-sm flex-fill" onclick="window.carregarDadosGerais(document.getElementById('r-data-ini').value, document.getElementById('r-data-fim').value)"><i class="fas fa-cloud-download-alt"></i> Buscar</button>
+             <button class="btn btn-danger btn-sm flex-fill fw-bold" onclick="window.print()"><i class="fas fa-file-pdf"></i> PDF</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card text-center bg-light border-primary mb-4">
+        <div class="card-body">
+          <h4 class="card-title text-primary" id="lbl-dash-total">Gasto Total Consolidado (Período)</h4>
+          <h2 class="display-5 fw-bold text-danger" id="dash-total-destaque">R$ 0,00</h2>
+        </div>
+      </div>
+
+      <div class="card border-warning mb-4 shadow-sm">
+        <div class="card-header bg-warning text-dark fw-bold">
+          <i class="fas fa-chart-line"></i> Auditoria: Projeção de Consumo por Dotação (Período Atual)
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-hover m-0" id="table-auditoria">
+            <thead class="table-light">
+              <tr><th>Secretaria</th><th>Dotação / Fonte</th><th>Gasto Realizado</th><th>Estimativa Fim do Mês</th><th>Status</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="row mb-4">
+        <div class="col-md-4"><div class="card h-100"><div class="card-header fw-bold text-center">Por Secretaria</div><div class="card-body"><canvas id="chartSecretaria"></canvas></div></div></div>
+        <div class="col-md-4"><div class="card h-100"><div class="card-header fw-bold text-center">Por Tipo de Serviço</div><div class="card-body"><canvas id="chartTipo"></canvas></div></div></div>
+        <div class="col-md-4"><div class="card h-100"><div class="card-header fw-bold text-center">Top 5 Veículos (Gastos)</div><div class="card-body"><canvas id="chartVeiculo"></canvas></div></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header fw-bold">Resumo por Veículo (No período filtrado)</div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table table-striped table-hover m-0" id="table-resumo-veiculos">
+            <thead class="table-dark"><tr><th>Placa</th><th>Modelo</th><th>Secretaria / Destinação</th><th>Dotação</th><th>Vínculo</th><th class="text-end pe-4">Gasto Total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-veiculos" class="view-section hidden">
+      <div class="d-flex justify-content-between mb-3 align-items-center">
+        <div>
+          <h3 class="m-0">Cadastro de Veículos</h3>
+          <small class="text-muted"><i class="fas fa-sync"></i> Unificado com Módulo de Abastecimento</small>
+        </div>
+        <button class="btn btn-primary shadow-sm adm-only" onclick="window.abrirModalVeiculo()"><i class="fas fa-plus"></i> Novo Veículo</button>
+      </div>
+      <div class="card p-0 table-responsive">
+        <table class="table table-hover m-0 align-middle" id="table-veiculos">
+          <thead class="table-light"><tr><th>Placa</th><th>Tipo & Modelo</th><th>Dotação/Sec.</th><th>Status Operacional</th><th>Manutenção (Óleo/Rev)</th><th class="adm-only">Ações</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="view-os" class="view-section hidden">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="m-0">Ordens de Serviço <small class="text-muted fs-6" id="lbl-qtd-os">(Período Aberto)</small></h3>
+        <div class="d-flex gap-2 align-items-center bg-white p-2 rounded shadow-sm border">
+          <i class="fas fa-tasks text-muted ms-2 adm-only"></i>
+          <select id="lote-status" class="form-select form-select-sm w-auto border-0 bg-light adm-only">
+             <option value="">Alterar Selecionadas...</option><option value="Pendente">Pendente</option><option value="Aprovada">Aprovada</option><option value="Paga">Paga</option><option value="Cancelada">Cancelada</option>
+          </select>
+          <button class="btn btn-warning btn-sm fw-bold adm-only" onclick="window.aplicarStatusLote()"><i class="fas fa-check"></i> Aplicar</button>
+          <div class="vr mx-1 adm-only"></div>
+          <button class="btn btn-primary btn-sm" onclick="window.abrirModalOS()"><i class="fas fa-plus"></i> Nova OS</button>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3 border-0 shadow-sm bg-light">
+        <div class="row g-2">
+          <div class="col-md-2"><input type="date" id="f-os-ini" class="form-control form-control-sm" title="Data Inicial"></div>
+          <div class="col-md-2"><input type="date" id="f-os-fim" class="form-control form-control-sm" title="Data Final"></div>
+          <div class="col-md-2"><input type="text" id="f-os-placa" class="form-control form-control-sm text-uppercase" placeholder="Filtro Local Placa"></div>
+          <div class="col-md-3"><input type="text" id="f-os-forn" class="form-control form-control-sm" placeholder="Filtro Local Fornecedor" list="lista-fornecedores"></div>
+          <div class="col-md-2"><select id="f-os-status" class="form-select form-select-sm"><option value="">Qualquer Status</option><option value="Pendente">Pendente</option><option value="Aprovada">Aprovada</option><option value="Paga">Paga</option><option value="Cancelada">Cancelada</option></select></div>
+          <div class="col-md-1"><button class="btn btn-dark btn-sm w-100" onclick="window.pesquisarAbaOS()"><i class="fas fa-search"></i></button></div>
+        </div>
+      </div>
+
+      <div class="card p-0 table-responsive">
+        <table class="table table-hover m-0 align-middle" id="table-os">
+          <thead class="table-light">
+            <tr><th style="width: 40px;" class="adm-only"><input type="checkbox" id="chk-all-os" onclick="window.selecionarTodasOS(this)"></th><th>Data</th><th>Fornecedor</th><th>Veículo</th><th>Serviço</th><th>Status</th><th class="text-end pe-3">Valor Total</th><th class="adm-only">Ações</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="view-contratos" class="view-section hidden">
+      <div class="d-flex justify-content-between mb-3">
+        <h3>Gestão de Contratos e Licitações</h3>
+        <button class="btn btn-primary shadow-sm adm-only" onclick="window.abrirModalContrato()"><i class="fas fa-plus"></i> Novo Contrato</button>
+      </div>
+      <div class="card p-0 table-responsive shadow-sm">
+        <table class="table table-hover m-0 align-middle" id="table-contratos">
+          <thead class="table-dark"><tr><th>Nº Contrato</th><th>Fornecedor</th><th>Secretaria</th><th>Vigência</th><th colspan="3">Resumo Visual de Saldos (Licitado x Consumido)</th><th class="adm-only text-end">Ações</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="view-catalogo" class="view-section hidden">
+      <div class="d-flex justify-content-between mb-3">
+        <h3>Catálogo de Peças e Serviços Base</h3>
+        <button class="btn btn-primary shadow-sm adm-only" onclick="window.abrirModalCatalogo()"><i class="fas fa-plus"></i> Novo Item</button>
+      </div>
+      <div class="card p-0 table-responsive">
+        <table class="table table-hover m-0 align-middle" id="table-catalogo">
+          <thead class="table-light"><tr><th>Categoria</th><th>Descrição</th><th>Marca</th><th>Garantia</th><th class="text-end">Preço Referência</th><th class="adm-only">Ações</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalVeiculo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title">Ficha Cadastral do Veículo (Unificada)</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formVeiculo">
+          <input type="hidden" id="v-id">
+          
+          <div class="col-12 mb-3"><h6 class="text-primary fw-bold border-bottom pb-2"><i class="fas fa-car"></i> Dados Base do Veículo</h6></div>
+          <div class="row g-3 mb-4">
+            <div class="col-md-3"><label>Placa</label><input type="text" class="form-control text-uppercase fw-bold text-primary" id="v-placa" required></div>
+            <div class="col-md-3">
+               <label>Tipo de Veículo</label>
+               <select class="form-select fw-bold" id="v-tipo" onchange="window.mudarLabelsOdometro()">
+                  <option value="Veículo">Veículo / Automóvel</option>
+                  <option value="Máquina">Máquina</option>
+                  <option value="Motocicleta">Motocicleta</option>
+                  <option value="Van">Van</option>
+                  <option value="Ônibus">Ônibus</option>
+               </select>
+            </div>
+            <div class="col-md-4"><label>Modelo do Veículo</label><input type="text" class="form-control" id="v-modelo" required></div>
+            <div class="col-md-2"><label>Combustível</label><select class="form-select" id="v-combustivel"><option value="Gasolina">Gasolina</option><option value="Etanol">Etanol</option><option value="Diesel">Diesel</option><option value="Flex">Flex</option></select></div>
+            
+            <div class="col-md-4"><label>Secretaria Responsável</label><input type="text" class="form-control text-uppercase" id="v-secretaria" placeholder="Selecione ou digite" list="lista-secretarias" required></div>
+            <div class="col-md-4"><label>Destinação (Uso Específico)</label><input type="text" class="form-control text-uppercase" id="v-destinacao" placeholder="Ex: Ambulância PSF Central" list="lista-destinacoes"></div>
+            <div class="col-md-4"><label>Dotação Orçamentária / Fonte</label><input type="text" class="form-control text-uppercase" id="v-dotacao" placeholder="Ex: SAÚDE - FNS"></div>
+            
+            <div class="col-md-4"><label>Renavam</label><input type="text" class="form-control" id="v-renavam"></div>
+            <div class="col-md-4"><label>Tombamento</label><input type="text" class="form-control" id="v-tombamento"></div>
+            <div class="col-md-2"><label>Ano</label><input type="number" class="form-control" id="v-ano"></div>
+            <div class="col-md-2"><label>Vínculo</label><select class="form-select" id="v-vinculo"><option value="Próprio">Próprio</option><option value="Locado">Locado</option><option value="Cedido">Cedido</option></select></div>
+          </div>
+
+          <div class="col-12 mb-3"><h6 class="text-warning fw-bold border-bottom pb-2"><i class="fas fa-tools"></i> Gestão de Manutenção Preventiva</h6></div>
+          <div class="row g-3">
+            <div class="col-md-12">
+              <label>Status Operacional Local</label>
+              <select class="form-select fw-bold" id="v-status-op">
+                <option value="Disponível" class="text-success">Disponível</option>
+                <option value="Em Rota" class="text-primary">Em Rota</option>
+                <option value="Em Oficina" class="text-warning">Em Oficina</option>
+                <option value="Inservível" class="text-danger">Inservível</option>
+              </select>
+            </div>
+            
+            <div class="col-md-4"><label id="lbl-km-atual" class="fw-bold">KM/Horímetro Atual</label><input type="number" class="form-control bg-light border-primary" id="v-km-atual" title="Atualizado via Abastecimento/OS"></div>
+            <div class="col-md-4"><label id="lbl-km-oleo" class="text-danger">Aviso: Troca Óleo (KM)</label><input type="number" class="form-control border-danger" id="v-km-oleo"></div>
+            <div class="col-md-4"><label id="lbl-km-rev" class="text-warning text-dark">Aviso: Revisão (KM)</label><input type="number" class="form-control border-warning" id="v-km-revisao"></div>
+            
+            <div class="col-md-4 offset-md-4"><label class="text-danger">Data Limite: Troca Óleo</label><input type="date" class="form-control border-danger" id="v-data-oleo"></div>
+            <div class="col-md-4"><label class="text-warning text-dark">Data Limite: Revisão</label><input type="date" class="form-control border-warning" id="v-data-revisao"></div>
+          </div>
+
+        </form>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-danger me-auto hidden" id="btn-del-veiculo" onclick="window.deletarVeiculo()">Excluir</button><button type="button" class="btn btn-primary" onclick="window.salvarVeiculo()">Salvar Dados</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalOS" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white"><h5 class="modal-title">Ordem de Serviço</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="formOS">
+          <input type="hidden" id="os-id">
+          
+          <div class="row g-3 mb-3 pb-3 border-bottom border-primary border-opacity-25 align-items-end">
+            <div class="col-md-3">
+              <label class="text-primary fw-bold">Veículo / Máquina</label>
+              <select class="form-select border-primary fw-bold" id="os-veiculo" required onchange="window.filtrarContratosPorSec()"></select>
+            </div>
+            <div class="col-md-5">
+              <label class="text-primary fw-bold"><i class="fas fa-file-signature"></i> Vincular Contrato</label>
+              <select class="form-select border-primary" id="os-contrato" onchange="window.atualizarLotesOS()">
+                 <option value="">Avulso / Despesa Direta (Sem Contrato)</option>
+              </select>
+            </div>
+            <div class="col-md-4 hidden" id="div-os-lote">
+              <label class="text-primary fw-bold"><i class="fas fa-layer-group"></i> Lote (Abate de Saldo)</label>
+              <select class="form-select border-primary bg-light" id="os-contrato-lote"></select>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-3"><label>Data</label><input type="date" class="form-control" id="os-data" required></div>
+            <div class="col-md-5"><label>Classificação Geral da OS</label>
+              <select class="form-select" id="os-tipo">
+                <option value="Manutenção Geral">Manutenção Geral</option>
+                <option value="Revisão Preventiva">Revisão Preventiva</option>
+                <option value="Borracharia/Pneus">Borracharia / Pneus</option>
+                <option value="Troca de Óleo">Troca de Óleo</option>
+              </select>
+            </div>
+            
+            <div class="col-md-4 adm-only"><label>Status Atual</label>
+              <select class="form-select" id="os-status">
+                <option value="Pendente">Rascunho / Pendente</option>
+                <option value="Aprovada">Em Execução / Aprovada</option>
+                <option value="Paga">Concluída / Paga</option>
+                <option value="Cancelada">Cancelada</option>
+              </select>
+            </div>
+            <div class="col-md-6"><label>Fornecedor (Oficina/Loja)</label><input type="text" class="form-control" id="os-fornecedor" list="lista-fornecedores"></div>
+            <div class="col-md-6"><label>Autorizado por</label><input type="text" class="form-control" id="os-responsavel" list="lista-responsaveis"></div>
+            
+            <div class="col-md-6"><label>Atualizar Odômetro (KM/Horas)</label><input type="number" class="form-control bg-warning text-dark border-warning fw-bold" id="os-km" placeholder="KM atual no momento do serviço"></div>
+            
+            <div class="col-12 mt-4">
+              <div class="card border-primary shadow-sm">
+                 <div class="card-header bg-light d-flex justify-content-between align-items-center p-2">
+                    <span class="fw-bold text-primary"><i class="fas fa-list"></i> Itens do Orçamento / OS</span>
+                    <div class="form-check form-switch m-0 ms-3">
+                      <input class="form-check-input" type="checkbox" id="toggle-os-nf" onchange="window.toggleModoNF()">
+                      <label class="form-check-label fw-bold text-danger" for="toggle-os-nf">Lançamento Rápido (Apenas NF)</label>
+                    </div>
+                    <button type="button" id="btn-add-item-os" class="btn btn-sm btn-primary fw-bold" onclick="window.abrirModalBuscaItem()"><i class="fas fa-plus"></i> Adicionar Item / Serviço</button>
+                 </div>
+                 
+                 <div id="area-os-nf" class="card-body bg-white hidden p-3 border-bottom">
+                    <div class="row g-3 align-items-end">
+                       <div class="col-md-4">
+                          <label class="fw-bold text-danger">Número da Nota Fiscal (NF)</label>
+                          <input type="text" class="form-control" id="os-nf-num" placeholder="Ex: 12345">
+                       </div>
+                       <div class="col-md-4">
+                          <label class="fw-bold text-danger">Tipo de Nota</label>
+                          <select class="form-select fw-bold" id="os-nf-tipo">
+                             <option value="Serviço">Nota de Serviço (Mão de Obra)</option>
+                             <option value="Peças">Nota de Peças / Produtos</option>
+                          </select>
+                       </div>
+                       <div class="col-md-4">
+                          <label class="fw-bold text-danger">Valor Total da Nota (R$)</label>
+                          <input type="text" class="form-control fw-bold" id="os-nf-valor" placeholder="0,00" oninput="window.aplicarMascaraMonetaria(this)">
+                       </div>
+                       <div class="col-12 text-muted small mt-2">
+                          <i class="fas fa-info-circle"></i> O uso desta opção ignora o catálogo detalhado e lança a OS com um item único gerado automaticamente, consumindo o saldo com base no valor total informado.
+                       </div>
+                    </div>
+                 </div>
+
+                 <div id="area-os-itens" class="card-body p-0 table-responsive">
+                    <table class="table table-sm table-hover m-0 align-middle" id="table-os-itens">
+                       <thead class="table-light">
+                         <tr>
+                           <th>Descrição do Item</th>
+                           <th class="text-center">Categoria</th>
+                           <th class="text-center">Qtd</th>
+                           <th class="text-end">Vlr. Unit</th>
+                           <th class="text-center">Desc. (%)</th>
+                           <th class="text-end">Total Líquido</th>
+                           <th></th>
+                         </tr>
+                       </thead>
+                       <tbody></tbody>
+                       <tfoot class="table-dark">
+                         <tr>
+                           <th colspan="5" class="text-end">VALOR TOTAL DA OS:</th>
+                           <th id="lbl-os-total" class="text-end text-warning fs-5">R$ 0,00</th>
+                           <th></th>
+                         </tr>
+                       </tfoot>
+                    </table>
+                 </div>
+              </div>
+            </div>
+
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-success fw-bold" onclick="window.salvarOS()">Salvar OS</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalEncarte" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content bg-light">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="fas fa-chart-pie"></i> Detalhamento do Contrato</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4" id="content-encarte-modal">
+        <!-- Conteúdo injetado via JavaScript -->
+      </div>
+      <div class="modal-footer bg-white">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        <button type="button" class="btn btn-dark fw-bold" onclick="window.imprimirEncarteAtual()"><i class="fas fa-print"></i> Imprimir</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalBuscaItem" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-primary shadow-lg">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="fas fa-box-open"></i> Adicionar Item/Serviço</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        
+        <div class="alert alert-info py-2 small d-flex justify-content-between align-items-center">
+          <span>O catálogo pode filtrar peças compatíveis com o veículo selecionado.</span>
+          <div class="form-check form-switch m-0 ms-2 text-nowrap">
+            <input class="form-check-input" type="checkbox" id="toggle-filtro-compativel" checked onchange="window.atualizarListaCatalogoOS()">
+            <label class="form-check-label fw-bold text-dark" for="toggle-filtro-compativel">Ativar Filtro Inteligente</label>
+          </div>
+        </div>
+        
+        <div class="mb-3">
+           <label class="fw-bold text-primary">Pesquisar no Catálogo</label>
+           <select class="form-select border-primary fw-bold" id="m-item-catalogo" onchange="window.selecionarItemModal()"></select>
+        </div>
+        
+        <div class="row g-2 mb-3">
+           <div class="col-8">
+             <label>Descrição do Item / Serviço</label>
+             <input type="text" class="form-control text-uppercase" id="m-item-desc" required>
+           </div>
+           <div class="col-4">
+             <label>Categoria</label>
+             <select class="form-select" id="m-item-categoria">
+               <option value="Bateria">Bateria</option>
+               <option value="Peças">Peças</option>
+               <option value="Pneus">Pneus</option>
+               <option value="Mão de obra">Mão de obra</option>
+               <option value="Serviço">Serviço</option>
+             </select>
+           </div>
+        </div>
+
+        <div class="row g-2 border-top pt-3">
+           <div class="col-3">
+             <label>Quantidade</label>
+             <input type="number" class="form-control text-center" id="m-item-qtd" value="1" min="1" oninput="window.calcularPreviaItem()">
+           </div>
+           <div class="col-4">
+             <label>Valor Unit. (R$)</label>
+             <input type="text" class="form-control fw-bold" id="m-item-valor" placeholder="0,00" oninput="window.aplicarMascaraMonetaria(this); window.calcularPreviaItem()">
+           </div>
+           <div class="col-5">
+             <label class="text-success fw-bold">Desconto (%)</label>
+             <input type="number" class="form-control text-success fw-bold" id="m-item-desconto" placeholder="0" min="0" max="100" oninput="window.calcularPreviaItem()">
+           </div>
+        </div>
+
+        <div class="mt-3 text-end">
+           <small class="text-muted">Total com Desconto:</small>
+           <h4 class="text-danger fw-bold m-0" id="lbl-previa-item">R$ 0,00</h4>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-success w-100 fw-bold" onclick="window.confirmarItemModal()"><i class="fas fa-check"></i> Adicionar à Ordem</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalContrato" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white"><h5 class="modal-title">Gestão de Contrato / Ata de Registro de Preços</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="formContrato">
+          <input type="hidden" id="c-id">
+          <div class="row g-3">
+            <div class="col-md-3"><label>Nº do Contrato/Empenho</label><input type="text" class="form-control fw-bold" id="c-numero" required></div>
+            <div class="col-md-4">
+              <label>Tipo de Contrato</label>
+              <select class="form-select border-primary fw-bold text-primary" id="c-categoria" onchange="window.mudarTipoContrato()" required>
+                <option value="Global">Peças e Serviços (Global)</option>
+                <option value="Itens">Pneus e Baterias (Restrito a Itens)</option>
+              </select>
+            </div>
+            <div class="col-md-5"><label>Fornecedor</label><input type="text" class="form-control" id="c-fornecedor" required list="lista-fornecedores"></div>
+            
+            <div class="col-md-6"><label>Objeto do Contrato</label><input type="text" class="form-control" id="c-objeto" placeholder="Ex: Aquisição de Pneus..."></div>
+            
+            <div class="col-md-6">
+               <label>Secretaria Vinculada</label>
+               <select class="form-select border-dark text-uppercase" id="c-secretaria"></select>
+            </div>
+            
+            <div class="col-md-3"><label>Data Início</label><input type="date" class="form-control" id="c-ini" required></div>
+            <div class="col-md-3"><label>Data Fim (Vigência)</label><input type="date" class="form-control" id="c-fim" required></div>
+            
+            <div class="col-md-6 div-itens hidden">
+               <label>Valor Total Licitado (Ata) (R$)</label>
+               <input type="text" class="form-control fw-bold text-dark fs-5 bg-light" id="c-valor-total" readonly>
+            </div>
+
+            <div id="area-contrato-global" class="col-12 mt-4 div-global">
+               <div class="card border-primary">
+                  <div class="card-header bg-primary text-white p-2">
+                     <span class="fw-bold"><i class="fas fa-truck"></i> Categorias de Frota do Contrato (Limites Peças/Serviços)</span>
+                  </div>
+                  <div class="card-body bg-light">
+                     <div class="row g-2 mb-3 align-items-end">
+                        <div class="col-md-5">
+                           <label class="small fw-bold">Descrição da Categoria (Ex: Médio Porte Gasolina)</label>
+                           <input type="text" class="form-control form-control-sm text-uppercase" id="c-lote-desc">
+                        </div>
+                        <div class="col-md-3">
+                           <label class="small fw-bold">Teto Licitado - PEÇAS (R$)</label>
+                           <input type="text" class="form-control form-control-sm fw-bold text-primary" id="c-lote-pecas" oninput="window.aplicarMascaraMonetaria(this)" placeholder="0,00">
+                        </div>
+                        <div class="col-md-3">
+                           <label class="small fw-bold">Teto Licitado - M. OBRA (R$)</label>
+                           <input type="text" class="form-control form-control-sm fw-bold text-warning" id="c-lote-mo" oninput="window.aplicarMascaraMonetaria(this)" placeholder="0,00">
+                        </div>
+                        <div class="col-md-1">
+                           <button type="button" class="btn btn-sm btn-primary w-100" onclick="window.adicionarLoteContrato()"><i class="fas fa-plus"></i></button>
+                        </div>
+                     </div>
+                     <table class="table table-sm table-bordered m-0 bg-white" id="table-contrato-lotes">
+                        <thead class="table-light"><tr><th>Categoria da Frota</th><th class="text-end">Teto Peças</th><th class="text-end">Teto Mão de Obra</th><th class="text-end">Total Categoria</th><th></th></tr></thead>
+                        <tbody></tbody>
+                        <tfoot class="table-dark">
+                           <tr><th class="text-end">TOTAIS DO CONTRATO:</th><th class="text-end text-info" id="c-tot-pecas">R$ 0,00</th><th class="text-end text-warning" id="c-tot-mo">R$ 0,00</th><th class="text-end text-white" id="c-tot-geral">R$ 0,00</th><th></th></tr>
+                        </tfoot>
+                     </table>
+                  </div>
+               </div>
+            </div>
+            
+            <div id="area-contrato-itens" class="col-12 mt-4 hidden div-itens">
+               <div class="card border-primary">
+                  <div class="card-header bg-primary text-white p-2 d-flex justify-content-between align-items-center">
+                     <span class="fw-bold"><i class="fas fa-boxes"></i> Itens Licitados na Ata de Registro</span>
+                  </div>
+                  <div class="card-body bg-light">
+                     <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                           <label class="small fw-bold">Buscar no Catálogo</label>
+                           <select class="form-select form-select-sm border-primary" id="c-item-catalogo" onchange="window.verificarNovoItemContrato()"></select>
+                        </div>
+                        <div class="col-md-2">
+                           <label class="small fw-bold">Qtd Licitada</label>
+                           <input type="number" class="form-control form-control-sm text-center" id="c-item-qtd" value="1" min="1">
+                        </div>
+                        <div class="col-md-3">
+                           <label class="small fw-bold">Valor Unitário Licitado</label>
+                           <input type="text" class="form-control form-control-sm" id="c-item-vlr" oninput="window.aplicarMascaraMonetaria(this)" placeholder="0,00">
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                           <button type="button" class="btn btn-sm btn-primary w-100" onclick="window.adicionarItemContrato()"><i class="fas fa-plus"></i></button>
+                        </div>
+                     </div>
+                     
+                     <div class="row g-2 p-2 mb-3 border border-warning rounded bg-white hidden" id="div-c-novo-item">
+                        <div class="col-md-8">
+                           <label class="small fw-bold text-warning">Descrição do Novo Item (Será salvo no Catálogo geral)</label>
+                           <input type="text" class="form-control form-control-sm text-uppercase" id="c-item-desc-novo" placeholder="Ex: PNEU 275/80 R22 LISO">
+                        </div>
+                        <div class="col-md-4">
+                           <label class="small fw-bold text-warning">Categoria do Item</label>
+                           <select class="form-select form-select-sm" id="c-item-cat-novo">
+                              <option value="Pneus">Pneus</option>
+                              <option value="Bateria">Bateria</option>
+                              <option value="Peças">Peças</option>
+                              <option value="Serviço">Serviço / Mão de Obra</option>
+                           </select>
+                        </div>
+                     </div>
+                     
+                     <table class="table table-sm table-bordered m-0 bg-white" id="table-contrato-itens">
+                        <thead class="table-light"><tr><th>Descrição</th><th class="text-center">Qtd Licitada</th><th class="text-end">Vlr Unitário</th><th class="text-end">Vlr Total</th><th></th></tr></thead>
+                        <tbody></tbody>
+                     </table>
+                  </div>
+               </div>
+            </div>
+
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-danger me-auto hidden" id="btn-del-contrato" onclick="window.deletarContrato()">Excluir</button><button type="button" class="btn btn-success" onclick="window.salvarContrato()">Salvar Contrato</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalCatalogo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white"><h5 class="modal-title">Novo Item de Catálogo</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="formCatalogo">
+          <input type="hidden" id="cat-id">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label>Categoria</label>
+              <select class="form-select" id="cat-categoria" required>
+                 <option value="Bateria">Bateria</option>
+                 <option value="Peças">Peças</option>
+                 <option value="Pneus">Pneus</option>
+                 <option value="Mão de obra">Mão de obra</option>
+                 <option value="Serviço">Serviço</option>
+              </select>
+            </div>
+            <div class="col-md-8"><label>Descrição do Item</label><input type="text" class="form-control text-uppercase" id="cat-descricao" required placeholder="Ex: PNEU 275/80"></div>
+            
+            <div class="col-md-12">
+              <label class="fw-bold text-primary"><i class="fas fa-car-side"></i> Aplicação (Modelos de Veículos/Máquinas)</label>
+              <input type="text" class="form-control text-uppercase border-primary" id="cat-aplicacao" placeholder="Ex: GOL, UNO, L200, MOTONIVELADORA (Deixe vazio para Peças Universais)">
+              <small class="text-muted">Separe os modelos por vírgula. O sistema usará isso para filtrar as peças corretas na hora da OS.</small>
+            </div>
+
+            <div class="col-md-4"><label>Marca / Fabricante</label><input type="text" class="form-control" id="cat-marca"></div>
+            <div class="col-md-4"><label>Garantia (Meses)</label><input type="number" class="form-control" id="cat-garantia-meses"></div>
+            <div class="col-md-4"><label>Garantia (KM)</label><input type="number" class="form-control" id="cat-garantia-km"></div>
+            <div class="col-md-12"><label>Preço Máximo de Referência (R$)</label><input type="text" class="form-control fw-bold text-danger fs-5 w-50" id="cat-valor-ref" placeholder="0,00" oninput="window.aplicarMascaraMonetaria(this)" required></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-danger me-auto hidden" id="btn-del-catalogo" onclick="window.deletarItemCatalogo()">Excluir</button><button type="button" class="btn btn-primary" onclick="window.salvarItemCatalogo()">Salvar no Catálogo</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- CARREGA SEU ARQUIVO EXTERNO JS -->
+<script type="module" src="./app.js"></script>
+</body>
+</html>

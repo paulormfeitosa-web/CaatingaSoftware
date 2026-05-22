@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestão Hospitalar - Caatinga Software</title>
+    
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <style>
+      :root { 
+        --prio-1: #dc3545; /* Emergência - Vermelho */
+        --prio-2: #fd7e14; /* Urgência - Laranja */
+        --prio-3: #ffc107; /* Pouco Urgente - Amarelo */
+        --prio-4: #198754; /* Não Urgente - Verde */
+        --prio-5: #0dcaf0; /* Azul */
+      }
+      body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; font-size: 0.9rem; }
+      #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+      .hidden { display: none !important; }
+      
+      .linha-vermelha { border-left: 6px solid var(--prio-1) !important; background-color: #fff5f5; }
+      .linha-laranja { border-left: 6px solid var(--prio-2) !important; background-color: #fff9f2; }
+      .linha-amarela { border-left: 6px solid var(--prio-3) !important; background-color: #fffdf5; }
+      .linha-verde { border-left: 6px solid var(--prio-4) !important; background-color: #f6fbf8; }
+      .linha-azul { border-left: 6px solid var(--prio-5) !important; background-color: #f4fcfe; }
+
+      .nav-tabs .nav-link.active { font-weight: bold; border-top: 3px solid #0d6efd; color: #0d6efd; background-color: #fff; }
+      .historico-box { max-height: 250px; overflow-y: auto; background: #fff; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px; }
+      .linha-tempo { border-left: 2px solid #dee2e6; padding-left: 15px; position: relative; margin-bottom: 15px; }
+      .linha-tempo::before { content: ''; position: absolute; left: -6px; top: 0; width: 10px; height: 10px; border-radius: 50%; background: #0d6efd; }
+      .linha-tempo-enf::before { background: #198754; } /* Verde para enfermagem */
+
+      /* Estilos do Painel de TV */
+      #telaTV { position: fixed; inset: 0; z-index: 10000; background-color: #0a0a0a; color: white; display: flex; flex-direction: column; }
+      .tv-header { background: #111; border-bottom: 2px solid #333; }
+      .tv-footer { background: #111; border-top: 2px solid #333; }
+      @keyframes blinkChamada { 0%, 100% { background-color: #0a0a0a; } 50% { background-color: #082d1c; } }
+      .piscar-tv { animation: blinkChamada 1.5s 3; }
+      .chamado-card { background: #1a1a1a; border-left: 5px solid #0d6efd; border-radius: 8px; }
+
+      /* ==========================================
+         ESTILOS DE IMPRESSÃO
+         ========================================== */
+      @media print {
+          body > *:not(#areaImpressao) { display: none !important; }
+          body { background: white !important; }
+          #areaImpressao { 
+              display: block !important; 
+              position: absolute; top: 0; left: 0; width: 100%; 
+              color: black; background: white;
+              padding: 20px; font-size: 12pt;
+          }
+          .no-print { display: none !important; }
+          .print-break { page-break-after: always; }
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- OVERLAY CARREGAMENTO -->
+    <div id="loadingOverlay" class="hidden">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div class="mt-2 fw-bold text-muted" id="loading-msg">Carregando Sistema...</div>
+    </div>
+
+    <!-- AREA DE IMPRESSÃO INVISÍVEL NA TELA -->
+    <div id="areaImpressao" class="hidden"></div>
+
+    <!-- NAVBAR PADRÃO -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm" id="mainNavbar">
+      <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="#"><i class="bi bi-hospital"></i> Gestão Hospitalar <span id="lbl-empresa" class="badge bg-secondary ms-2" style="font-size: 0.5em;"></span></a>
+        <div id="areaUsuario" class="d-flex text-white align-items-center ms-auto hidden">
+          <button class="btn btn-warning btn-sm me-3 fw-bold shadow-sm tab-recepcao hidden" onclick="window.abrirPainelTV()"><i class="bi bi-display"></i> Abrir Painel TV</button>
+          <div class="me-3 text-end lh-1 d-none d-md-block"><div id="uNome" class="fw-bold"></div><small id="uFuncao" class="badge bg-primary text-white"></small></div>
+          <button class="btn btn-outline-light btn-sm ms-2" onclick="window.logout()" title="Sair"><i class="bi bi-box-arrow-right"></i></button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- TELA DE LOGIN -->
+    <div id="telaLogin" class="container mt-5" style="max-width: 400px;">
+      <div class="card shadow border-0">
+        <div class="card-body p-4">
+          <h4 class="text-center mb-4 text-primary fw-bold">Caatinga Software</h4>
+          <p class="text-center text-muted mb-4">Prontuário Eletrônico</p>
+          <input type="number" id="loginCpf" class="form-control mb-3" placeholder="CPF do Usuário">
+          <input type="password" id="loginSenha" class="form-control mb-3" placeholder="Senha">
+          <button class="btn btn-primary w-100 py-2 fw-bold" onclick="window.autenticar()">ENTRAR</button>
+          <div id="msgLogin" class="text-danger mt-3 text-center small fw-bold hidden"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAINEL PRINCIPAL -->
+    <div id="telaPrincipal" class="container-fluid mt-4 px-2 px-md-3 hidden">
+      
+      <!-- ABAS DE NAVEGAÇÃO -->
+      <ul class="nav nav-tabs mb-3 shadow-sm bg-white rounded-top" id="minhasAbas" role="tablist">
+        <li class="nav-item tab-recepcao hidden"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-pacientes"><i class="bi bi-people"></i> Recepção (Pacientes)</button></li>
+        <li class="nav-item tab-triagem hidden"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-triagem"><i class="bi bi-clipboard-pulse"></i> Fila Triagem <span class="badge bg-danger ms-1" id="badgeFilaTriagem">0</span></button></li>
+        <li class="nav-item tab-medico hidden"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-medico"><i class="bi bi-heart-pulse"></i> Consultório Médico <span class="badge bg-danger ms-1" id="badgeFilaMedico">0</span></button></li>
+        <li class="nav-item tab-enfermagem hidden"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-enfermagem"><i class="bi bi-capsule"></i> Enfermagem / Medicação <span class="badge bg-danger ms-1" id="badgeFilaEnf">0</span></button></li>
+      </ul>
+
+      <div class="tab-content">
+        
+        <!-- ABA: RECEPÇÃO -->
+        <div class="tab-pane fade" id="tab-pacientes">
+          <div class="d-flex flex-wrap justify-content-between mb-3 gap-2">
+            <div class="input-group" style="max-width: 400px;">
+                <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="filtroPaciente" class="form-control border-start-0" placeholder="Buscar por Nome ou CPF..." onkeyup="window.renderizarPacientes()">
+            </div>
+            <button class="btn btn-success shadow-sm fw-bold" onclick="window.abrirModalPaciente()"><i class="bi bi-person-plus"></i> Novo Paciente</button>
+          </div>
+          <div class="table-responsive shadow-sm bg-white rounded" style="min-height: 50vh;">
+            <table class="table table-hover align-middle mb-0 text-nowrap">
+              <thead class="table-dark"><tr><th>Nome do Paciente</th><th>CPF</th><th>Data Nasc.</th><th>Telefone</th><th class="text-end">Ações</th></tr></thead>
+              <tbody id="tabelaCorpoPacientes"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ABA: TRIAGEM -->
+        <div class="tab-pane fade" id="tab-triagem">
+          <div class="alert alert-info shadow-sm"><i class="bi bi-info-circle"></i> Fila de pacientes aguardando avaliação de sinais vitais e alergias.</div>
+          <div class="table-responsive shadow-sm bg-white rounded" style="min-height: 50vh;">
+            <table class="table table-hover align-middle mb-0 text-nowrap">
+              <thead class="table-dark"><tr><th>Entrada</th><th>Paciente</th><th>Status</th><th class="text-end">Ações na Fila</th></tr></thead>
+              <tbody id="tabelaCorpoTriagem"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ABA: CONSULTÓRIO MÉDICO -->
+        <div class="tab-pane fade" id="tab-medico">
+          <div class="d-flex gap-2 mb-3 text-sm fw-bold p-2 bg-white rounded shadow-sm flex-wrap">
+             <span>Legenda:</span>
+             <span class="badge" style="background-color: var(--prio-1)">Emergência (Vermelho)</span>
+             <span class="badge" style="background-color: var(--prio-2)">Urgência (Laranja)</span>
+             <span class="badge text-dark" style="background-color: var(--prio-3)">Pouco Urgente (Amarelo)</span>
+             <span class="badge" style="background-color: var(--prio-4)">Não Urgente (Verde)</span>
+             <span class="badge text-dark" style="background-color: var(--prio-5)">Azul</span>
+          </div>
+          <div class="table-responsive shadow-sm bg-white rounded" style="min-height: 50vh;">
+            <table class="table table-hover align-middle mb-0 text-nowrap">
+              <thead class="table-dark"><tr><th>Prioridade</th><th>Paciente</th><th>Idade</th><th>Sintomas (Triagem)</th><th>Espera</th><th class="text-end">Ações no Consultório</th></tr></thead>
+              <tbody id="tabelaCorpoMedico"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ABA: ENFERMAGEM E OBSERVAÇÃO -->
+        <div class="tab-pane fade" id="tab-enfermagem">
+          <div class="alert alert-success shadow-sm"><i class="bi bi-capsule"></i> Fila de pacientes aguardando medicação, exames ou em observação.</div>
+          <div class="table-responsive shadow-sm bg-white rounded" style="min-height: 50vh;">
+            <table class="table table-hover align-middle mb-0 text-nowrap">
+              <thead class="table-dark"><tr><th>Entrada</th><th>Paciente</th><th>Prioridade</th><th>Prescrição Médica</th><th class="text-end">Ações de Enfermagem</th></tr></thead>
+              <tbody id="tabelaCorpoEnf"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TELA DE TV (CHAMADAS) -->
+    <div id="telaTV" class="hidden">
+        <div class="tv-header p-4 d-flex justify-content-between align-items-center">
+            <h2 class="fw-bold text-primary m-0"><i class="bi bi-hospital"></i> Hospital Geral</h2>
+            <h2 id="tvRelogio" class="fw-bold text-white m-0" style="font-family: monospace;">00:00:00</h2>
+        </div>
+        <div class="row flex-grow-1 m-0">
+            <div class="col-8 d-flex flex-column justify-content-center align-items-center border-end border-secondary" id="tvAreaPrincipal">
+                <h1 class="text-secondary mb-2" style="font-size: 3rem; letter-spacing: 5px;">PACIENTE</h1>
+                <h1 id="tvNomePrincipal" class="fw-bold text-warning text-center text-uppercase lh-1 mb-5" style="font-size: 6vw;">AGUARDANDO...</h1>
+                <h1 class="text-secondary mt-4 mb-2" style="font-size: 2.5rem; letter-spacing: 5px;">DIRIJA-SE À</h1>
+                <h1 id="tvLocalPrincipal" class="fw-bold text-success text-center text-uppercase lh-1" style="font-size: 4vw;">--</h1>
+            </div>
+            <div class="col-4 py-4 px-4 d-flex flex-column">
+                <h3 class="text-center text-muted fw-bold border-bottom border-secondary pb-3 mb-4"><i class="bi bi-list-ul"></i> ÚLTIMOS CHAMADOS</h3>
+                <div id="tvListaHistorico" class="d-flex flex-column gap-3 overflow-hidden flex-grow-1">
+                    <div class="text-center text-secondary mt-5">Nenhum chamado recente.</div>
+                </div>
+            </div>
+        </div>
+        <div class="tv-footer p-3 d-flex justify-content-around align-items-center">
+            <h3 class="text-info m-0"><i class="bi bi-clipboard-pulse"></i> Triagem: <span id="tvTotalTriagem" class="fw-bold">0</span> aguardando</h3>
+            <h3 class="text-danger m-0"><i class="bi bi-heart-pulse"></i> Médico: <span id="tvTotalMedico" class="fw-bold">0</span> aguardando</h3>
+        </div>
+    </div>
+
+    <!-- MODAIS -->
+
+    <!-- Modal: Paciente -->
+    <div class="modal fade" id="modalPaciente" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header bg-dark text-white"><h5 class="modal-title"><i class="bi bi-person-vcard"></i> Ficha do Paciente</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <form id="formPaciente">
+              <input type="hidden" id="pacId">
+              <div class="mb-3"><label class="small fw-bold">Nome Completo</label><input type="text" id="pacNome" class="form-control" required></div>
+              <div class="row g-2 mb-3">
+                <div class="col-6"><label class="small fw-bold">CPF</label><input type="text" id="pacCpf" class="form-control"></div>
+                <div class="col-6"><label class="small fw-bold">Data Nasc.</label><input type="date" id="pacNasc" class="form-control"></div>
+              </div>
+              <div class="mb-3"><label class="small fw-bold">Telefone</label><input type="text" id="pacTel" class="form-control"></div>
+            </form>
+          </div>
+          <div class="modal-footer">
+              <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button class="btn btn-success fw-bold" onclick="window.salvarPaciente()">Gravar Paciente</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Triagem -->
+    <div class="modal fade" id="modalTriagem" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header text-white" style="background-color: #fd7e14;"><h5 class="modal-title"><i class="bi bi-heart-pulse"></i> Realizar Triagem</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body bg-light">
+            <input type="hidden" id="triAtendimentoId">
+            <div class="mb-3 p-2 bg-white border rounded shadow-sm d-flex justify-content-between align-items-center">
+                <span class="fw-bold text-primary fs-5" id="triNomePaciente">Paciente</span>
+                <button class="btn btn-sm btn-outline-secondary" onclick="window.imprimirFichaTriagemAtual()"><i class="bi bi-printer"></i> Imprimir Ficha</button>
+            </div>
+            
+            <div class="row g-3 mb-3">
+              <div class="col-6 col-md-3"><label class="small fw-bold">P.A (mmHg)</label><input type="text" id="triPA" class="form-control" placeholder="120/80"></div>
+              <div class="col-6 col-md-3"><label class="small fw-bold">Temp (°C)</label><input type="number" step="0.1" id="triTemp" class="form-control" placeholder="36.5"></div>
+              <div class="col-6 col-md-3"><label class="small fw-bold">BPM</label><input type="number" id="triBPM" class="form-control" placeholder="80"></div>
+              <div class="col-6 col-md-3"><label class="small fw-bold">SpO2 (%)</label><input type="number" id="triSpO2" class="form-control" placeholder="98"></div>
+            </div>
+            
+            <div class="mb-3">
+              <label class="small fw-bold text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Alergias Registradas (Muito Importante!)</label>
+              <input type="text" id="triAlergias" class="form-control border-danger bg-danger bg-opacity-10 fw-bold" placeholder="Ex: Dipirona, Penicilina, Plasil (ou 'Nenhuma')">
+            </div>
+
+            <div class="mb-3">
+              <label class="small fw-bold">Queixa Principal / Sintomas</label>
+              <textarea id="triSintomas" class="form-control" rows="2"></textarea>
+            </div>
+
+            <label class="small fw-bold mb-2">Classificação de Risco (Manchester)</label>
+            <div class="d-flex flex-wrap gap-2">
+                <input type="radio" class="btn-check" name="triCor" id="cor1" value="1"><label class="btn btn-outline-danger flex-fill fw-bold" for="cor1">Emergência</label>
+                <input type="radio" class="btn-check" name="triCor" id="cor2" value="2"><label class="btn btn-outline-warning flex-fill fw-bold text-dark" for="cor2">Urgência</label>
+                <input type="radio" class="btn-check" name="triCor" id="cor3" value="3"><label class="btn btn-outline-success flex-fill fw-bold" style="color:#ffc107; border-color:#ffc107" for="cor3">Pouco Urg.</label>
+                <input type="radio" class="btn-check" name="triCor" id="cor4" value="4"><label class="btn btn-outline-success flex-fill fw-bold" for="cor4">Não Urg.</label>
+                <input type="radio" class="btn-check" name="triCor" id="cor5" value="5" checked><label class="btn btn-outline-info flex-fill fw-bold" for="cor5">Azul</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+              <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button class="btn btn-primary fw-bold" onclick="window.salvarTriagem()">Enviar p/ Médico</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Atendimento Médico -->
+    <div class="modal fade" id="modalMedico" tabindex="-1">
+      <div class="modal-dialog modal-xl modal-fullscreen-lg-down">
+        <div class="modal-content h-100">
+          <div class="modal-header bg-primary text-white d-flex justify-content-between">
+              <h5 class="modal-title"><i class="bi bi-file-medical"></i> Prontuário Eletrônico (Médico)</h5>
+              <div>
+                  <button class="btn btn-sm btn-light text-primary me-2 fw-bold shadow-sm" onclick="window.imprimirProntuarioAtual()"><i class="bi bi-printer"></i> Imprimir</button>
+                  <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+              </div>
+          </div>
+          <div class="modal-body p-0" style="overflow-y: auto;">
+            <div class="row m-0 h-100">
+              <div class="col-md-4 bg-light p-3 border-end h-100" style="overflow-y: auto;">
+                  <h4 class="fw-bold text-primary mb-0" id="medNomePaciente">Nome</h4>
+                  <div class="text-muted small mb-2" id="medIdadePaciente">Idade / CPF</div>
+
+                  <div id="medBoxAlergia" class="alert alert-danger p-2 mb-3 fw-bold d-none">
+                      <i class="bi bi-exclamation-triangle-fill"></i> ALERGIAS: <span id="medAlergiasTexto"></span>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white fw-bold small">Dados da Triagem</div>
+                    <div class="card-body p-2 small">
+                      <div class="row text-center mb-2">
+                        <div class="col-3"><b>PA</b><br><span id="medPA">--</span></div>
+                        <div class="col-3"><b>Temp</b><br><span id="medTemp">--</span></div>
+                        <div class="col-3"><b>BPM</b><br><span id="medBPM">--</span></div>
+                        <div class="col-3"><b>O2</b><br><span id="medO2">--</span></div>
+                      </div>
+                      <div class="bg-warning bg-opacity-10 p-2 rounded border border-warning">
+                        <b>Queixa:</b> <span id="medQueixa">--</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <h6 class="fw-bold text-secondary border-bottom pb-1"><i class="bi bi-clock-history"></i> Histórico Clínico Anterior</h6>
+                  <div class="historico-box" id="medHistoricoContainer"></div>
+              </div>
+              <div class="col-md-8 p-3 h-100 d-flex flex-column">
+                  <input type="hidden" id="medAtendimentoId">
+                  <input type="hidden" id="medPacienteId">
+                  
+                  <div class="row g-2 mb-3">
+                      <div class="col-md-8">
+                          <label class="fw-bold text-primary mb-1">Evolução Clínica / Anamnese</label>
+                          <textarea id="medEvolucao" class="form-control shadow-sm" rows="5" placeholder="Avaliação, queixas detalhadas..."></textarea>
+                      </div>
+                      <div class="col-md-4">
+                          <label class="fw-bold text-info mb-1">Diagnóstico (HD / CID)</label>
+                          <textarea id="medDiagnostico" class="form-control shadow-sm" rows="5" placeholder="Ex: J03.9 Amigdalite aguda"></textarea>
+                      </div>
+                  </div>
+
+                  <div class="mb-3 flex-grow-1 d-flex flex-column">
+                    <label class="fw-bold text-success mb-1">Conduta / Prescrição Médica</label>
+                    <textarea id="medPrescricao" class="form-control shadow-sm flex-grow-1" placeholder="Ex: \n1. Dipirona 1g EV agora \n2. Repouso 3 dias \n3. Observação 2h..."></textarea>
+                  </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer bg-light d-flex justify-content-between">
+              <button class="btn btn-secondary" data-bs-dismiss="modal">Sair (Sem Salvar)</button>
+              <div>
+                  <button class="btn btn-warning fw-bold text-dark px-3 shadow me-2" onclick="window.finalizarMedico('Enfermagem')"><i class="bi bi-capsule"></i> Encaminhar p/ Enfermagem</button>
+                  <button class="btn btn-success fw-bold px-3 shadow" onclick="window.finalizarMedico('Finalizado')"><i class="bi bi-check-circle"></i> Dar Alta / Finalizar</button>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Enfermagem / Medicação -->
+    <div class="modal fade" id="modalEnfermagem" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+              <h5 class="modal-title"><i class="bi bi-capsule"></i> Painel de Enfermagem</h5>
+              <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body bg-light">
+            <input type="hidden" id="enfAtendimentoId">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h4 class="fw-bold text-success m-0" id="enfNomePaciente">Nome Paciente</h4>
+                <button class="btn btn-sm btn-outline-secondary shadow-sm" onclick="window.imprimirProntuarioEnf()"><i class="bi bi-printer"></i> Imprimir Evolução</button>
+            </div>
+            
+            <div id="enfBoxAlergia" class="alert alert-danger p-2 mb-3 fw-bold fs-5 text-center d-none">
+                <i class="bi bi-exclamation-triangle-fill"></i> ATENÇÃO ALERGIA: <span id="enfAlergiasTexto"></span>
+            </div>
+
+            <div class="card border-success border-opacity-50 shadow-sm mb-3">
+                <div class="card-header bg-success bg-opacity-10 fw-bold text-success"><i class="bi bi-file-medical"></i> Prescrição Médica Atual</div>
+                <div class="card-body p-2" style="white-space: pre-wrap; font-family: monospace;" id="enfPrescricaoMedica"></div>
+            </div>
+
+            <h6 class="fw-bold text-secondary border-bottom pb-1"><i class="bi bi-journal-medical"></i> Evoluções de Enfermagem e Medicações Feitas</h6>
+            <div class="historico-box mb-3 bg-white" id="enfHistoricoAplicacoes" style="height: 150px;"></div>
+
+            <div class="mb-2">
+                <label class="fw-bold small">Registrar Nova Evolução / Medicação Aplicada:</label>
+                <textarea id="enfNovaEvolucao" class="form-control border-success" rows="3" placeholder="Ex: Administrado Dipirona 1g EV conforme prescrição. Paciente sem queixas no momento..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer d-flex justify-content-between">
+              <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+              <div>
+                  <button class="btn btn-success fw-bold shadow me-2" onclick="window.salvarEvolucaoEnfermagem()"><i class="bi bi-plus-circle"></i> Gravar Evolução</button>
+                  <button class="btn btn-danger fw-bold shadow" onclick="window.darAltaEnfermagem()"><i class="bi bi-door-open"></i> Liberar Paciente (Alta)</button>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+      import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+      import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+      
+      const firebaseConfig = {
+        apiKey: "AIzaSyBOEgd1WCElKtngAcQ-ygnx0_2lpHLUAyM",
+        authDomain: "caatingasoftware.firebaseapp.com",
+        projectId: "caatingasoftware",
+        storageBucket: "caatingasoftware.firebasestorage.app",
+        messagingSenderId: "357801806903",
+        appId: "1:357801806903:web:7b03d8f9f0189bf32943b2"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const auth = getAuth(app);
+
+      let USUARIO = null;
+      let listenerUsuario = null; 
+      let unsubPacientes = null, unsubAtendimentos = null, unsubChamadas = null;
+      let tenant = "";
+      
+      let modalPacienteObj, modalTriagemObj, modalMedicoObj, modalEnfermagemObj;
+      let DADOS_PACIENTES = [];
+      let DADOS_ATENDIMENTOS = [];
+      
+      const isTV = new URLSearchParams(window.location.search).get('tv') === 'true';
+      let initialLoadTV = true;
+      let relogioInterval;
+
+      function loading(mostrar, msg="Processando...") { 
+        document.getElementById('loading-msg').innerText = msg;
+        if(mostrar) document.getElementById('loadingOverlay').classList.remove('hidden');
+        else document.getElementById('loadingOverlay').classList.add('hidden');
+      }
+
+      window.calcularIdade = function(dataNasc) {
+          if(!dataNasc) return "N/I";
+          const hoje = new Date();
+          const nasc = new Date(dataNasc);
+          let idade = hoje.getFullYear() - nasc.getFullYear();
+          const m = hoje.getMonth() - nasc.getMonth();
+          if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+          return idade + " anos";
+      }
+
+      window.onload = function() { 
+        modalPacienteObj = new bootstrap.Modal(document.getElementById('modalPaciente')); 
+        modalTriagemObj = new bootstrap.Modal(document.getElementById('modalTriagem'));
+        modalMedicoObj = new bootstrap.Modal(document.getElementById('modalMedico'));
+        modalEnfermagemObj = new bootstrap.Modal(document.getElementById('modalEnfermagem'));
+        
+        onAuthStateChanged(auth, async (userAuth) => {
+            const cracha = localStorage.getItem("caatinga_user");
+            if (userAuth && cracha) { 
+                USUARIO = JSON.parse(cracha); 
+                if (USUARIO.cpf !== "01305663306" && !isTV) {
+                    try {
+                        const docVerifica = await getDoc(doc(db, "usuarios", USUARIO.cpf));
+                        if (!docVerifica.exists() || docVerifica.data().ativo === false) { window.logout(true); return; }
+                    } catch (e) {}
+                }
+                initApp(); 
+            } else { 
+                if(!isTV) document.getElementById('telaLogin').classList.remove('hidden'); 
+            }
+        });
+      };
+      
+      window.logout = function(silencioso = false) { 
+          localStorage.removeItem("caatinga_user"); 
+          if(listenerUsuario) listenerUsuario(); 
+          if(unsubPacientes) unsubPacientes();
+          if(unsubAtendimentos) unsubAtendimentos();
+          if(unsubChamadas) unsubChamadas();
+
+          signOut(auth).then(() => {
+              if(!silencioso) { location.reload(); } 
+              else {
+                  document.getElementById('telaPrincipal').classList.add('hidden');
+                  document.getElementById('mainNavbar').classList.add('hidden');
+                  document.getElementById('telaLogin').classList.remove('hidden');
+                  document.getElementById('msgLogin').innerText = "Acesso revogado.";
+                  document.getElementById('msgLogin').classList.remove('hidden');
+              }
+          });
+      }
+
+      window.autenticar = async function() {
+        const cpf = document.getElementById('loginCpf').value.replace(/\D/g, '');
+        const senha = document.getElementById('loginSenha').value;
+        const erro = document.getElementById('msgLogin'); erro.classList.add('hidden');
+        loading(true, "Autenticando...");
+        try {
+          const emailFicticio = cpf + "@feitosa.app";
+          if (cpf === "01305663306" && senha === "pr10mf86") {
+             try { await signInWithEmailAndPassword(auth, emailFicticio, senha); } 
+             catch(e) { await createUserWithEmailAndPassword(auth, emailFicticio, senha); }
+             USUARIO = { cpf: cpf, nome: "Master", empresa_id: "pref_aiuaba", funcao: "Gestor" };
+             localStorage.setItem("caatinga_user", JSON.stringify(USUARIO));
+             initApp(); return;
+          }
+
+          await signInWithEmailAndPassword(auth, emailFicticio, senha);
+          const userSnap = await getDoc(doc(db, "usuarios", cpf));
+          
+          if (userSnap.exists() && userSnap.data().ativo !== false) {
+             let u = userSnap.data(); let dados = u; dados.cpf = cpf;
+             USUARIO = dados;
+             localStorage.setItem("caatinga_user", JSON.stringify(USUARIO));
+             initApp();
+          } else { throw new Error("Sem permissão"); }
+        } catch(e) { 
+             erro.innerText = "Acesso negado. Verifique CPF/Senha."; erro.classList.remove('hidden'); loading(false); 
+        }
+      }
+
+      function initApp() {
+        tenant = String(USUARIO.empresa_id || "pref_aiuaba").toLowerCase().trim();
+        if (tenant === "undefined" || tenant === "global") tenant = "pref_aiuaba";
+
+        // Modo TV Exclusivo
+        if (isTV) {
+            document.getElementById('telaLogin').classList.add('hidden');
+            document.getElementById('telaPrincipal').classList.add('hidden');
+            document.getElementById('mainNavbar').classList.add('hidden');
+            document.getElementById('telaTV').classList.remove('hidden');
+            iniciarRelogio();
+            iniciarListenersTV();
+            return;
+        }
+
+        // Modo Sistema Normal
+        let nivel = String(USUARIO.nivel_acesso || '').toUpperCase();
+        let setor = String(USUARIO.setor || '').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
+        if(nivel.includes('ADM') || nivel.includes('MASTER') || nivel === 'GESTOR') { USUARIO.funcao = "Gestor"; } 
+        else if(setor.includes('MEDICO') || setor.includes('CLINICO')) { USUARIO.funcao = "Medico"; } 
+        else if(setor.includes('ENFERMA') || setor.includes('TECNICO')) { USUARIO.funcao = "Enfermagem"; }
+        else if(setor.includes('TRIAGEM')) { USUARIO.funcao = "Triagem"; } 
+        else { USUARIO.funcao = "Recepcao"; } 
+
+        document.getElementById('telaLogin').classList.add('hidden');
+        document.getElementById('telaPrincipal').classList.remove('hidden');
+        document.getElementById('areaUsuario').classList.remove('hidden');
+        document.getElementById('uNome').innerText = USUARIO.nome;
+        document.getElementById('uFuncao').innerText = USUARIO.funcao;
+        document.getElementById('lbl-empresa').innerText = tenant.toUpperCase();
+
+        // Controle de Abas
+        if(USUARIO.funcao === 'Gestor') {
+            document.querySelectorAll('.tab-recepcao, .tab-triagem, .tab-medico, .tab-enfermagem').forEach(e => e.classList.remove('hidden'));
+            document.querySelector('.tab-recepcao button').click();
+        } else if(USUARIO.funcao === 'Recepcao') {
+            document.querySelector('.tab-recepcao').classList.remove('hidden');
+            document.querySelector('.tab-recepcao button').click();
+        } else if(USUARIO.funcao === 'Triagem') {
+            document.querySelectorAll('.tab-triagem, .tab-enfermagem').forEach(e => e.classList.remove('hidden'));
+            document.querySelector('.tab-triagem button').click();
+        } else if(USUARIO.funcao === 'Enfermagem') {
+            document.querySelectorAll('.tab-triagem, .tab-enfermagem').forEach(e => e.classList.remove('hidden'));
+            document.querySelector('.tab-enfermagem button').click();
+        } else if(USUARIO.funcao === 'Medico') {
+            document.querySelector('.tab-medico').classList.remove('hidden');
+            document.querySelector('.tab-medico button').click();
+        }
+
+        if (!listenerUsuario && USUARIO.cpf !== "01305663306") {
+            listenerUsuario = onSnapshot(doc(db, "usuarios", USUARIO.cpf), (docSnap) => {
+                if (!docSnap.exists() || docSnap.data().ativo === false) { window.logout(true); }
+            });
+        }
+        window.iniciarListenersRealTime();
+      }
+
+      // ===============================================
+      // CORE: SINCRONIZAÇÃO EM TEMPO REAL (onSnapshot)
+      // ===============================================
+      window.iniciarListenersRealTime = function() {
+          loading(true, "Conectando banco de dados...");
+          
+          unsubPacientes = onSnapshot(collection(db, `${tenant}_pacientes`), (snap) => {
+              DADOS_PACIENTES = [];
+              snap.forEach(d => { let p = d.data(); p.id = d.id; DADOS_PACIENTES.push(p); });
+              window.renderizarPacientes();
+              window.renderizarTriagem();
+              window.renderizarMedico();
+              window.renderizarEnfermagem();
+              loading(false);
+          });
+
+          let hojeStr = new Date().toISOString().split('T')[0];
+          unsubAtendimentos = onSnapshot(collection(db, `${tenant}_atendimentos`), (snap) => {
+              DADOS_ATENDIMENTOS = [];
+              let tAguardando = 0, mAguardando = 0, eAguardando = 0;
+
+              snap.forEach(d => { 
+                  let a = d.data(); a.id = d.id; 
+                  if(a.status !== 'Finalizado' || (a.dataEntrada && a.dataEntrada.startsWith(hojeStr))) { DADOS_ATENDIMENTOS.push(a); }
+                  if(a.status === 'Triagem') tAguardando++;
+                  if(a.status === 'Medico') mAguardando++;
+                  if(a.status === 'Enfermagem') eAguardando++;
+              });
+              
+              document.getElementById('badgeFilaTriagem').innerText = tAguardando;
+              document.getElementById('badgeFilaMedico').innerText = mAguardando;
+              document.getElementById('badgeFilaEnf').innerText = eAguardando;
+              
+              window.renderizarTriagem();
+              window.renderizarMedico();
+              window.renderizarEnfermagem();
+          });
+      }
+
+
+      // ===============================================
+      // TV PAINEL DE CHAMADAS
+      // ===============================================
+      window.abrirPainelTV = function() {
+          // Abre a TV em uma NOVA ABA em vez de esconder a tela atual!
+          const tvUrl = window.location.href.split('?')[0] + '?tv=true';
+          window.open(tvUrl, '_blank');
+      }
+
+      function iniciarListenersTV() {
+          // Atualiza contadores p/ TV
+          unsubAtendimentos = onSnapshot(collection(db, `${tenant}_atendimentos`), (snap) => {
+              let tAguardando = 0, mAguardando = 0;
+              snap.forEach(d => { 
+                  let a = d.data();
+                  if(a.status === 'Triagem') tAguardando++;
+                  if(a.status === 'Medico') mAguardando++;
+              });
+              document.getElementById('tvTotalTriagem').innerText = tAguardando;
+              document.getElementById('tvTotalMedico').innerText = mAguardando;
+          });
+
+          // Ouve as chamadas
+          const qTV = query(collection(db, `${tenant}_chamadas`), orderBy("hora", "desc"), limit(5));
+          unsubChamadas = onSnapshot(qTV, (snap) => {
+              let chamados = [];
+              snap.forEach(doc => { chamados.push(doc.data()); });
+              
+              if(chamados.length > 0) {
+                  let principal = chamados[0];
+                  document.getElementById('tvNomePrincipal').innerText = principal.nomePaciente;
+                  document.getElementById('tvLocalPrincipal').innerText = principal.localDestino;
+                  
+                  let listaLateral = chamados.slice(1);
+                  const areaLista = document.getElementById('tvListaHistorico');
+                  if(listaLateral.length > 0) {
+                      areaLista.innerHTML = listaLateral.map(c => `
+                          <div class="chamado-card p-3 shadow-sm">
+                              <h4 class="text-white mb-1 fw-bold text-truncate">${c.nomePaciente}</h4>
+                              <h6 class="text-info m-0 text-truncate"><i class="bi bi-geo-alt-fill"></i> ${c.localDestino}</h6>
+                          </div>
+                      `).join('');
+                  }
+                  
+                  snap.docChanges().forEach((change) => {
+                      if (change.type === "added" && !initialLoadTV) {
+                          tocarCampainhaWebAudio();
+                          animarTelaChamada();
+                      }
+                  });
+              }
+              initialLoadTV = false;
+          });
+      }
+
+      function iniciarRelogio() {
+          relogioInterval = setInterval(() => { document.getElementById('tvRelogio').innerText = new Date().toLocaleTimeString('pt-BR'); }, 1000);
+      }
+
+      function animarTelaChamada() {
+          const area = document.getElementById('tvAreaPrincipal');
+          area.classList.remove('piscar-tv');
+          void area.offsetWidth; area.classList.add('piscar-tv');
+      }
+
+      function tocarCampainhaWebAudio() {
+          try {
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              const osc1 = ctx.createOscillator(); const osc2 = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc1.connect(gain); osc2.connect(gain); gain.connect(ctx.destination);
+              osc1.type = 'sine'; osc2.type = 'sine';
+              const start = ctx.currentTime;
+              osc1.frequency.setValueAtTime(659.25, start); gain.gain.setValueAtTime(0, start);
+              gain.gain.linearRampToValueAtTime(1, start + 0.05); gain.gain.exponentialRampToValueAtTime(0.001, start + 0.8);
+              osc1.start(start); osc1.stop(start + 1);
+              osc2.frequency.setValueAtTime(523.25, start + 0.6); gain.gain.setValueAtTime(0, start + 0.5);
+              gain.gain.linearRampToValueAtTime(1, start + 0.65); gain.gain.exponentialRampToValueAtTime(0.001, start + 2.5);
+              osc2.start(start + 0.6); osc2.stop(start + 3);
+          } catch(e) {}
+      }
+
+      window.chamarNoPainel = async function(nomePaciente, defaultLocal) {
+          let local = prompt(`Informe o local para onde o paciente '${nomePaciente}' deve ir:`, defaultLocal);
+          if(!local) return; 
+          try {
+              await addDoc(collection(db, `${tenant}_chamadas`), { nomePaciente: nomePaciente.toUpperCase(), localDestino: local.toUpperCase(), hora: serverTimestamp() });
+          } catch(e) { alert("Erro ao enviar para TV."); }
+      }
+
+
+      // ===============================================
+      // LÓGICA DE TELAS (RECEP/TRI/MED/ENF)
+      // ===============================================
+      
+      // -- Recepção --
+      window.renderizarPacientes = function() {
+          const termo = document.getElementById('filtroPaciente').value.toLowerCase();
+          const tbody = document.getElementById('tabelaCorpoPacientes');
+          let filtrados = DADOS_PACIENTES;
+          if(termo) filtrados = filtrados.filter(p => (p.nome && p.nome.toLowerCase().includes(termo)) || (p.cpf && p.cpf.includes(termo)));
+
+          if(filtrados.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted p-4">Nenhum paciente.</td></tr>`; return; }
+
+          tbody.innerHTML = filtrados.slice(0, 50).map(p => {
+              let ativo = DADOS_ATENDIMENTOS.find(a => a.idPaciente === p.id && a.status !== 'Finalizado');
+              let btn = ativo ? `<span class="badge bg-secondary">Na Fila: ${ativo.status}</span>` : `<button class="btn btn-sm btn-outline-primary fw-bold" onclick="window.criarAtendimento('${p.id}')"><i class="bi bi-arrow-right-circle"></i> Abrir Ficha</button>`;
+              let jP = encodeURIComponent(JSON.stringify(p));
+              return `<tr><td class="fw-bold">${p.nome}</td><td>${p.cpf || '-'}</td><td>${p.dataNasc ? new Date(p.dataNasc).toLocaleDateString('pt-BR') : '-'}</td><td>${p.telefone || '-'}</td><td class="text-end"><button class="btn btn-sm btn-light text-primary me-2" onclick="window.abrirEdicaoPaciente('${jP}')"><i class="bi bi-pencil"></i></button>${btn}</td></tr>`;
+          }).join('');
+      }
+
+      window.abrirModalPaciente = function() { document.getElementById('formPaciente').reset(); document.getElementById('pacId').value = ''; modalPacienteObj.show(); }
+      window.abrirEdicaoPaciente = function(jStr) {
+          let p = JSON.parse(decodeURIComponent(jStr));
+          document.getElementById('pacId').value = p.id; document.getElementById('pacNome').value = p.nome;
+          document.getElementById('pacCpf').value = p.cpf || ''; document.getElementById('pacNasc').value = p.dataNasc || '';
+          document.getElementById('pacTel').value = p.telefone || ''; modalPacienteObj.show();
+      }
+
+      window.salvarPaciente = async function() {
+          const nome = document.getElementById('pacNome').value.trim(); if(!nome) return alert("Nome é obrigatório!");
+          let docId = document.getElementById('pacId').value || "PAC-" + Date.now();
+          let dados = { nome: nome.toUpperCase(), cpf: document.getElementById('pacCpf').value, dataNasc: document.getElementById('pacNasc').value, telefone: document.getElementById('pacTel').value };
+          try { await setDoc(doc(db, `${tenant}_pacientes`, docId), dados, {merge:true}); modalPacienteObj.hide(); } catch(e) { alert("Erro."); }
+      }
+
+      window.criarAtendimento = async function(id) {
+          if(!confirm("Abrir ficha e enviar para Triagem?")) return;
+          try { await setDoc(doc(db, `${tenant}_atendimentos`, "ATD-" + Date.now()), { idPaciente: id, status: 'Triagem', dataEntrada: new Date().toISOString(), prioridade: 5 }); } catch(e) {}
+      }
+
+      // -- Triagem --
+      window.renderizarTriagem = function() {
+          const tbody = document.getElementById('tabelaCorpoTriagem');
+          let fila = DADOS_ATENDIMENTOS.filter(a => a.status === 'Triagem').sort((a,b) => new Date(a.dataEntrada) - new Date(b.dataEntrada));
+          if(fila.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted p-4">Fila vazia.</td></tr>`; return; }
+
+          tbody.innerHTML = fila.map(a => {
+              let p = DADOS_PACIENTES.find(x => x.id === a.idPaciente); if(!p) return '';
+              let dIn = new Date(a.dataEntrada); let tEspera = Math.floor((new Date() - dIn)/60000);
+              return `<tr><td><div class="fw-bold">${dIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div><small class="text-danger">${tEspera} min</small></td><td class="fw-bold fs-6">${p.nome}</td><td><span class="badge bg-warning text-dark">Aguardando Avaliação</span></td><td class="text-end"><button class="btn btn-sm btn-dark fw-bold me-2" onclick="window.chamarNoPainel('${p.nome}', 'Sala de Triagem')"><i class="bi bi-display"></i> Chamar</button><button class="btn btn-sm text-white fw-bold shadow-sm" style="background-color:#fd7e14;" onclick="window.abrirModalTriagem('${a.id}')">Avaliar</button></td></tr>`;
+          }).join('');
+      }
+
+      window.abrirModalTriagem = function(id) {
+          let a = DADOS_ATENDIMENTOS.find(x => x.id === id); let p = DADOS_PACIENTES.find(x => x.id === a.idPaciente);
+          document.getElementById('triAtendimentoId').value = a.id; document.getElementById('triNomePaciente').innerText = p.nome;
+          document.getElementById('triPA').value=''; document.getElementById('triTemp').value=''; document.getElementById('triBPM').value=''; document.getElementById('triSpO2').value=''; document.getElementById('triSintomas').value=''; document.getElementById('triAlergias').value=''; document.getElementById('cor5').checked = true;
+          modalTriagemObj.show();
+      }
+
+      window.salvarTriagem = async function() {
+          const id = document.getElementById('triAtendimentoId').value;
+          const prio = parseInt(document.querySelector('input[name="triCor"]:checked').value);
+          let atualizacao = { status: 'Medico', prioridade: prio, dataTriagem: new Date().toISOString(), dadosTriagem: { pa: document.getElementById('triPA').value, temp: document.getElementById('triTemp').value, bpm: document.getElementById('triBPM').value, spo2: document.getElementById('triSpO2').value, queixa: document.getElementById('triSintomas').value, alergias: document.getElementById('triAlergias').value } };
+          try { await setDoc(doc(db, `${tenant}_atendimentos`, id), atualizacao, {merge:true}); modalTriagemObj.hide(); } catch(e) {}
+      }
+
+      // -- Medico --
+      window.renderizarMedico = function() {
+          const tbody = document.getElementById('tabelaCorpoMedico');
+          let fila = DADOS_ATENDIMENTOS.filter(a => a.status === 'Medico').sort((a,b) => {
+              if(a.prioridade !== b.prioridade) return a.prioridade - b.prioridade;
+              return new Date(a.dataTriagem || a.dataEntrada) - new Date(b.dataTriagem || b.dataEntrada);
+          });
+          if(fila.length === 0) { tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-4">Fila vazia.</td></tr>`; return; }
+
+          tbody.innerHTML = fila.map(a => {
+              let p = DADOS_PACIENTES.find(x => x.id === a.idPaciente); if(!p) return '';
+              let config = {1:{c:'vermelha', n:'Emergência'}, 2:{c:'laranja', n:'Urgência'}, 3:{c:'amarela', n:'Pouco Urg.'}, 4:{c:'verde', n:'Não Urg.'}, 5:{c:'azul', n:'Azul'}};
+              let cr = config[a.prioridade];
+              let dTri = new Date(a.dataTriagem || a.dataEntrada); let tEspera = Math.floor((new Date() - dTri)/60000);
+              let qx = a.dadosTriagem ? a.dadosTriagem.queixa : 'N/I';
+              let alergiaIcon = (a.dadosTriagem && a.dadosTriagem.alergias && a.dadosTriagem.alergias.trim().toLowerCase() !== 'nenhuma' && a.dadosTriagem.alergias.trim() !== '') ? '<i class="bi bi-exclamation-triangle-fill text-danger fs-5" title="Alergia"></i> ' : '';
+
+              return `<tr class="linha-${cr.c}"><td class="fw-bold text-uppercase small">${cr.n}</td><td class="fw-bold fs-6">${alergiaIcon}${p.nome}</td><td>${window.calcularIdade(p.dataNasc)}</td><td><div class="text-truncate" style="max-width:250px;" title="${qx}">${qx}</div></td><td class="text-danger fw-bold">${tEspera} min</td><td class="text-end"><button class="btn btn-sm btn-dark fw-bold me-2" onclick="window.chamarNoPainel('${p.nome}', 'Consultório Médico')"><i class="bi bi-display"></i> TV</button><button class="btn btn-sm btn-primary fw-bold shadow-sm" onclick="window.abrirModalMedico('${a.id}')"><i class="bi bi-stethoscope"></i> Atender</button></td></tr>`;
+          }).join('');
+      }
+
+      window.abrirModalMedico = async function(id) {
+          let a = DADOS_ATENDIMENTOS.find(x => x.id === id); let p = DADOS_PACIENTES.find(x => x.id === a.idPaciente);
+          document.getElementById('medAtendimentoId').value = a.id; document.getElementById('medPacienteId').value = p.id;
+          document.getElementById('medNomePaciente').innerText = p.nome; document.getElementById('medIdadePaciente').innerText = `${window.calcularIdade(p.dataNasc)} | CPF: ${p.cpf || '-'}`;
+          
+          let bxAl = document.getElementById('medBoxAlergia');
+          if(a.dadosTriagem && a.dadosTriagem.alergias && a.dadosTriagem.alergias.toLowerCase() !== 'nenhuma' && a.dadosTriagem.alergias.trim() !== '') {
+              document.getElementById('medAlergiasTexto').innerText = a.dadosTriagem.alergias.toUpperCase(); bxAl.classList.remove('d-none');
+          } else { bxAl.classList.add('d-none'); }
+
+          if(a.dadosTriagem) {
+              document.getElementById('medPA').innerText = a.dadosTriagem.pa || '--'; document.getElementById('medTemp').innerText = a.dadosTriagem.temp ? a.dadosTriagem.temp+'°' : '--';
+              document.getElementById('medBPM').innerText = a.dadosTriagem.bpm || '--'; document.getElementById('medO2').innerText = a.dadosTriagem.spo2 ? a.dadosTriagem.spo2+'%' : '--';
+              document.getElementById('medQueixa').innerText = a.dadosTriagem.queixa || '--';
+          }
+          document.getElementById('medEvolucao').value = ''; document.getElementById('medDiagnostico').value = ''; document.getElementById('medPrescricao').value = '';
+          
+          const histCont = document.getElementById('medHistoricoContainer'); histCont.innerHTML = '<div class="text-muted small">Carregando...</div>';
+          try {
+              const snap = await getDocs(collection(db, `${tenant}_atendimentos`)); let h = [];
+              snap.forEach(doc => { let d=doc.data(); if(d.idPaciente===p.id && (d.status==='Finalizado' || d.status==='Enfermagem')) h.push(d); });
+              if(h.length===0) histCont.innerHTML='<div class="small text-muted">Nenhum histórico.</div>';
+              else {
+                  h.sort((x,y) => new Date(y.dataFinalizacao || y.dataMedica) - new Date(x.dataFinalizacao || x.dataMedica));
+                  histCont.innerHTML = h.map(i => `<div class="linha-tempo"><div class="fw-bold text-primary small">${new Date(i.dataFinalizacao || i.dataMedica).toLocaleDateString()} - ${i.medico || 'Médico'}</div><div class="small mt-1 text-muted"><b>HD:</b> ${i.dadosMedico?.diagnostico||'--'}<br><b>Evol:</b> ${i.dadosMedico?.evolucao||'--'}</div></div>`).join('');
+              }
+          } catch(e){}
+          modalMedicoObj.show();
+      }
+
+      window.finalizarMedico = async function(novoStatus) {
+          const ev = document.getElementById('medEvolucao').value.trim();
+          if(!ev) return alert("A Evolução Clínica é obrigatória.");
+          let msg = novoStatus === 'Finalizado' ? "Dar ALTA e finalizar atendimento?" : "Encaminhar paciente para a ENFERMAGEM/OBSERVAÇÃO?";
+          if(!confirm(msg)) return;
+          try {
+              let payload = { status: novoStatus, medico: USUARIO.nome, dataMedica: new Date().toISOString(), dadosMedico: { evolucao: ev, diagnostico: document.getElementById('medDiagnostico').value.trim(), prescricao: document.getElementById('medPrescricao').value.trim() } };
+              if(novoStatus === 'Finalizado') payload.dataFinalizacao = new Date().toISOString();
+              await setDoc(doc(db, `${tenant}_atendimentos`, document.getElementById('medAtendimentoId').value), payload, {merge:true});
+              modalMedicoObj.hide();
+          } catch(e) { alert("Erro."); }
+      }
+
+      // -- Enfermagem --
+      window.renderizarEnfermagem = function() {
+          const tbody = document.getElementById('tabelaCorpoEnf');
+          let fila = DADOS_ATENDIMENTOS.filter(a => a.status === 'Enfermagem').sort((a,b) => new Date(a.dataMedica) - new Date(b.dataMedica));
+          if(fila.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted p-4">Nenhum paciente em observação.</td></tr>`; return; }
+
+          tbody.innerHTML = fila.map(a => {
+              let p = DADOS_PACIENTES.find(x => x.id === a.idPaciente); if(!p) return '';
+              let prescrito = a.dadosMedico?.prescricao ? 'Sim' : 'Não';
+              let dMed = a.dataMedica ? new Date(a.dataMedica).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+              return `<tr><td><div class="fw-bold">${dMed}</div></td><td class="fw-bold fs-6">${p.nome}</td><td><span class="badge bg-secondary">Prioridade ${a.prioridade}</span></td><td><div class="text-truncate text-success fw-bold" style="max-width:200px;">${a.dadosMedico?.prescricao || 'Sem prescrição'}</div></td><td class="text-end"><button class="btn btn-sm btn-dark fw-bold me-2" onclick="window.chamarNoPainel('${p.nome}', 'Sala de Medicação')"><i class="bi bi-display"></i> TV</button><button class="btn btn-sm btn-success fw-bold shadow-sm" onclick="window.abrirModalEnfermagem('${a.id}')"><i class="bi bi-capsule"></i> Painel Enf.</button></td></tr>`;
+          }).join('');
+      }
+
+      window.abrirModalEnfermagem = function(id) {
+          let a = DADOS_ATENDIMENTOS.find(x => x.id === id); let p = DADOS_PACIENTES.find(x => x.id === a.idPaciente);
+          document.getElementById('enfAtendimentoId').value = a.id; document.getElementById('enfNomePaciente').innerText = p.nome;
+          
+          let bxAl = document.getElementById('enfBoxAlergia');
+          if(a.dadosTriagem && a.dadosTriagem.alergias && a.dadosTriagem.alergias.toLowerCase() !== 'nenhuma' && a.dadosTriagem.alergias.trim() !== '') {
+              document.getElementById('enfAlergiasTexto').innerText = a.dadosTriagem.alergias.toUpperCase(); bxAl.classList.remove('d-none');
+          } else { bxAl.classList.add('d-none'); }
+
+          document.getElementById('enfPrescricaoMedica').innerText = a.dadosMedico?.prescricao || 'Nenhuma prescrição médica detalhada.';
+          document.getElementById('enfNovaEvolucao').value = '';
+          
+          renderizarEvolucoesEnf(a.evolucoesEnfermagem || []);
+          modalEnfermagemObj.show();
+      }
+
+      function renderizarEvolucoesEnf(evs) {
+          const cont = document.getElementById('enfHistoricoAplicacoes');
+          if(!evs || evs.length === 0) { cont.innerHTML = '<div class="text-muted small p-2">Nenhum registro da enfermagem ainda.</div>'; return; }
+          let h = [...evs].sort((a,b) => new Date(b.data) - new Date(a.data)); // mais novo no topo
+          cont.innerHTML = h.map(i => `<div class="linha-tempo linha-tempo-enf"><div class="fw-bold text-success small">${new Date(i.data).toLocaleString()} - ${i.usuario}</div><div class="small mt-1 text-dark">${i.texto}</div></div>`).join('');
+      }
+
+      window.salvarEvolucaoEnfermagem = async function() {
+          const txt = document.getElementById('enfNovaEvolucao').value.trim();
+          if(!txt) return alert("Digite algo para registrar.");
+          const id = document.getElementById('enfAtendimentoId').value;
+          let a = DADOS_ATENDIMENTOS.find(x => x.id === id);
+          let evs = a.evolucoesEnfermagem || [];
+          evs.push({ data: new Date().toISOString(), usuario: USUARIO.nome, texto: txt });
+          
+          try {
+              await setDoc(doc(db, `${tenant}_atendimentos`, id), { evolucoesEnfermagem: evs }, {merge:true});
+              document.getElementById('enfNovaEvolucao').value = '';
+              renderizarEvolucoesEnf(evs);
+          } catch(e) { alert("Erro ao salvar evolução."); }
+      }
+
+      window.darAltaEnfermagem = async function() {
+          if(!confirm("Tem certeza que deseja dar alta / liberar este paciente da enfermagem?")) return;
+          const id = document.getElementById('enfAtendimentoId').value;
+          try {
+              await setDoc(doc(db, `${tenant}_atendimentos`, id), { status: 'Finalizado', dataFinalizacao: new Date().toISOString() }, {merge:true});
+              modalEnfermagemObj.hide();
+          } catch(e) { alert("Erro."); }
+      }
+
+      // ===============================================
+      // SISTEMA DE IMPRESSÃO
+      // ===============================================
+      window.imprimirFichaTriagemAtual = function() {
+          let aId = document.getElementById('triAtendimentoId').value;
+          let a = DADOS_ATENDIMENTOS.find(x => x.id === aId); if(!a) return;
+          let p = DADOS_PACIENTES.find(x => x.id === a.idPaciente);
+          
+          let html = `
+              <div style="border: 2px solid #000; padding: 20px;">
+                  <h2 style="text-align:center; border-bottom:1px solid #000; padding-bottom:10px;">FICHA DE ATENDIMENTO / TRIAGEM</h2>
+                  <p><b>Data/Hora Entrada:</b> ${new Date(a.dataEntrada).toLocaleString()}</p>
+                  <h3>DADOS DO PACIENTE</h3>
+                  <p><b>Nome:</b> ${p.nome} &nbsp;&nbsp; <b>Idade:</b> ${window.calcularIdade(p.dataNasc)} &nbsp;&nbsp; <b>CPF:</b> ${p.cpf || 'N/I'}</p>
+                  <hr>
+                  <h3>DADOS DA TRIAGEM (SINAIS VITAIS)</h3>
+                  <table style="width:100%; border-collapse: collapse; text-align: left;" border="1" cellpadding="5">
+                      <tr><th>P.A.</th><th>Temp.</th><th>BPM</th><th>SpO2</th></tr>
+                      <tr>
+                          <td>${document.getElementById('triPA').value || '--'}</td>
+                          <td>${document.getElementById('triTemp').value || '--'} °C</td>
+                          <td>${document.getElementById('triBPM').value || '--'}</td>
+                          <td>${document.getElementById('triSpO2').value || '--'} %</td>
+                      </tr>
+                  </table>
+                  <br>
+                  <p><b>ALERGIAS RELATADAS:</b> <span style="font-size:1.2em; border:1px solid red; padding:3px;">${document.getElementById('triAlergias').value || 'NENHUMA'}</span></p>
+                  <p><b>Queixa Principal:</b> ${document.getElementById('triSintomas').value || '--'}</p>
+                  <br><br><br>
+                  <div style="text-align:center; border-top:1px solid #000; width:60%; margin: 0 auto; padding-top:10px;">Assinatura do Responsável (Triagem)</div>
+              </div>
+          `;
+          acionarImpressao(html);
+      }
+
+      window.imprimirProntuarioAtual = function() {
+          let aId = document.getElementById('medAtendimentoId').value;
+          let a = DADOS_ATENDIMENTOS.find(x => x.id === aId); if(!a) return;
+          let p = DADOS_PACIENTES.find(x => x.id === a.idPaciente);
+          
+          let html = `
+              <div style="font-family: Arial, sans-serif;">
+                  <h2 style="text-align:center; border-bottom:2px solid #000;">PRONTUÁRIO MÉDICO</h2>
+                  <p><b>Data:</b> ${new Date().toLocaleString()}</p>
+                  <p><b>Paciente:</b> ${p.nome} &nbsp;&nbsp; <b>CPF:</b> ${p.cpf || 'N/I'} &nbsp;&nbsp; <b>Idade:</b> ${window.calcularIdade(p.dataNasc)}</p>
+                  <p><b>Alergias:</b> <strong>${a.dadosTriagem?.alergias || 'Nenhuma'}</strong></p>
+                  <hr>
+                  <h4>SINAIS VITAIS (TRIAGEM)</h4>
+                  <p>PA: ${a.dadosTriagem?.pa || '--'} | Temp: ${a.dadosTriagem?.temp || '--'} | BPM: ${a.dadosTriagem?.bpm || '--'} | SpO2: ${a.dadosTriagem?.spo2 || '--'}</p>
+                  <hr>
+                  <h4>EVOLUÇÃO / ANAMNESE</h4>
+                  <p style="white-space: pre-wrap;">${document.getElementById('medEvolucao').value || 'Nenhuma evolução registrada.'}</p>
+                  <h4>DIAGNÓSTICO</h4>
+                  <p>${document.getElementById('medDiagnostico').value || 'N/I'}</p>
+                  <hr>
+                  <h4>PRESCRIÇÃO / CONDUTA</h4>
+                  <p style="white-space: pre-wrap;">${document.getElementById('medPrescricao').value || 'Nenhuma prescrição.'}</p>
+                  <br><br><br>
+                  <div style="text-align:center; border-top:1px solid #000; width:300px; margin: 0 auto; padding-top:5px;">
+                      <b>${USUARIO.nome}</b><br>Médico(a)
+                  </div>
+              </div>
+          `;
+          acionarImpressao(html);
+      }
+
+      window.imprimirProntuarioEnf = function() {
+          let aId = document.getElementById('enfAtendimentoId').value;
+          let a = DADOS_ATENDIMENTOS.find(x => x.id === aId); if(!a) return;
+          let p = DADOS_PACIENTES.find(x => x.id === a.idPaciente);
+          
+          let evolucoesHtml = (a.evolucoesEnfermagem || []).sort((x,y) => new Date(x.data) - new Date(y.data)).map(e => {
+              return `<p><b>${new Date(e.data).toLocaleString()} (${e.usuario}):</b> ${e.texto}</p>`;
+          }).join('') || '<p>Nenhuma evolução registrada.</p>';
+
+          let html = `
+              <div style="font-family: Arial, sans-serif;">
+                  <h2 style="text-align:center; border-bottom:2px solid #000;">EVOLUÇÃO DE ENFERMAGEM</h2>
+                  <p><b>Paciente:</b> ${p.nome} &nbsp;&nbsp; <b>Alergias:</b> <strong>${a.dadosTriagem?.alergias || 'Nenhuma'}</strong></p>
+                  <hr>
+                  <h4>PRESCRIÇÃO MÉDICA VIGENTE</h4>
+                  <div style="padding:10px; background:#f0f0f0; white-space: pre-wrap;">${a.dadosMedico?.prescricao || 'Sem prescrição.'}</div>
+                  <hr>
+                  <h4>REGISTROS DE ENFERMAGEM</h4>
+                  ${evolucoesHtml}
+              </div>
+          `;
+          acionarImpressao(html);
+      }
+
+      function acionarImpressao(htmlContent) {
+          const divPrint = document.getElementById('areaImpressao');
+          divPrint.innerHTML = htmlContent;
+          window.print();
+      }
+
+    </script>
+  </body>
+</html>

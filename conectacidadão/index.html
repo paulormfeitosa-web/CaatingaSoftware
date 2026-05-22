@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>Geo População - Caatinga Software</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    /* Identidade Visual Caatinga Software */
+    :root { 
+      --p: #E06C3F; /* Laranja Caatinga */
+      --s: #1A374D; /* Azul Escuro */
+      --bg: #f4f6f8; 
+    }
+    
+    body { background-color: var(--bg); font-family: 'Segoe UI', sans-serif; color: #333; }
+    
+    /* Navbar Customizada */
+    .navbar-custom { background-color: #fce6dc !important; border-bottom: 2px solid var(--p); }
+    .navbar-brand, .nav-link { color: var(--s) !important; font-weight: 500; cursor: pointer; }
+    .nav-link:hover, .nav-link.active { color: var(--p) !important; font-weight: bold; }
+    
+    /* Utilitários */
+    .oculto { display: none !important; }
+    
+    /* Cards KPI (Dashboard) */
+    .card-kpi { border-radius: 12px; border-left: 5px solid var(--p); background: white; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .card-kpi:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+    
+    /* Configuração do Mapa Leaflet */
+    #mapaDemandas { height: 600px; width: 100%; border-radius: 12px; border: 2px solid #e5e7eb; z-index: 1; }
+    
+    /* Telas Base */
+    #telaLogin { height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--s) 0%, #0d1f2d 100%); }
+    .login-card { background: white; padding: 2.5rem; border-radius: 15px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 100%; max-width: 400px; text-align: center; }
+    
+    /* Overlay de Carregamento */
+    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    
+    /* Badges de Status */
+    .status-badge { font-size: 0.75rem; padding: 5px 12px; border-radius: 20px; font-weight: bold; text-transform: uppercase; }
+    .bg-pendente { background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+    .bg-andamento { background-color: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
+    .bg-concluido { background-color: #d1e7dd; color: #0f5132; border: 1px solid #34d399; }
+
+    /* Área do QR Code */
+    .qr-box { background: white; padding: 25px; border-radius: 15px; border: 1px solid #e5e7eb; text-align: center; }
+    .qr-img { width: 220px; height: 220px; margin: 15px 0; border: 5px solid #f8f9fa; border-radius: 12px; }
+
+    @media (max-width: 768px) {
+        #mapaDemandas { height: 400px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="oculto">
+  <div class="spinner-border" style="color: var(--p); width: 3rem; height: 3rem;" role="status"></div>
+  <div class="mt-3 fw-bold text-dark fs-5" id="loading-msg">Carregando Sistema...</div>
+</div>
+
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
+  <div id="liveToast" class="toast align-items-center text-white bg-success border-0 shadow-lg" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fs-6 fw-bold" id="toastMsg">Operação realizada com sucesso!</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<div id="telaLogin" class="oculto">
+  <div class="login-card mx-3">
+    <h2 class="mb-1 fw-bold" style="color: var(--p);">Caatinga <span style="color: var(--s);">Software</span></h2>
+    <p class="text-muted mb-4 fw-bold">Gestão Zeladoria Municipal</p>
+    
+    <div id="msgLogin" class="alert alert-danger oculto py-2 small fw-bold"></div>
+    
+    <form onsubmit="event.preventDefault(); window.logar();">
+      <div class="form-floating mb-3">
+        <input type="text" id="loginCpf" class="form-control" placeholder="CPF" required>
+        <label>CPF do Gestor</label>
+      </div>
+      <div class="form-floating mb-4">
+        <input type="password" id="loginSenha" class="form-control" placeholder="Senha" required>
+        <label>Senha de Acesso</label>
+      </div>
+      <button type="submit" class="btn text-white w-100 py-3 fw-bold shadow-sm fs-5" style="background-color: var(--p); border-radius: 10px;">ENTRAR NO PAINEL</button>
+      <a href="/" class="btn btn-outline-secondary w-100 mt-3 py-2 fw-bold" style="border-radius: 10px;">Voltar ao Menu Principal</a>
+    </form>
+  </div>
+</div>
+
+<div id="sistemaPrincipal" class="oculto">
+  
+  <nav class="navbar navbar-expand-lg navbar-custom shadow-sm px-3 sticky-top">
+    <span class="navbar-brand fw-bold fs-4">
+      <i class="bi bi-megaphone-fill"></i> Zeladoria<span style="color: var(--p);">Municipal</span> 
+      <span id="lbl-empresa" class="badge bg-secondary ms-2 align-middle" style="font-size: 0.4em; letter-spacing: 1px;"></span>
+    </span>
+    
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menuTopo">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    
+    <div class="collapse navbar-collapse" id="menuTopo">
+      <ul class="navbar-nav me-auto mt-2 mt-lg-0">
+        <li class="nav-item"><a class="nav-link active px-3" onclick="window.navegar('viewMapa', this)"><i class="bi bi-map"></i> Mapa Interativo</a></li>
+        <li class="nav-item"><a class="nav-link px-3" onclick="window.navegar('viewDash', this)"><i class="bi bi-graph-up"></i> Painel de Dados</a></li>
+        <li class="nav-item"><a class="nav-link px-3" onclick="window.navegar('viewChamados', this)"><i class="bi bi-ui-checks"></i> Gestão de Demandas</a></li>
+        <li class="nav-item"><a class="nav-link px-3" onclick="window.navegar('viewConfig', this)"><i class="bi bi-gear-fill"></i> Ajustes do App</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-3 border-start ps-lg-3 mt-3 mt-lg-0">
+        <span class="small fw-bold text-dark d-none d-md-inline" id="usuarioLogado"></span>
+        <button class="btn btn-sm text-white fw-bold px-3 shadow-sm" style="background-color: var(--s); border-radius: 8px;" onclick="window.sairSistema()">Sair</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid mt-4 pb-5 px-3 px-md-4">
+    
+    <div id="viewMapa" class="view-section">
+      <div class="card shadow-sm border-0 mb-3 bg-white">
+        <div class="card-body py-2 d-flex flex-wrap gap-3 align-items-center">
+          <span class="fw-bold text-muted small text-uppercase"><i class="bi bi-funnel-fill"></i> Filtro Rápido:</span>
+          <select id="filtroMapaStatus" class="form-select form-select-sm w-auto fw-bold" onchange="window.atualizarMapa()">
+            <option value="">Exibir Todos os Status</option>
+            <option value="Pendente">🔴 Apenas Pendentes</option>
+            <option value="Em Andamento">🟡 Apenas Em Andamento</option>
+            <option value="Concluido">🟢 Apenas Concluídos</option>
+          </select>
+          <div class="ms-auto small fw-bold d-none d-md-flex gap-4">
+            <span title="Aguardando atendimento"><i class="bi bi-circle-fill text-danger"></i> Pendente</span>
+            <span title="Equipe na rua trabalhando"><i class="bi bi-circle-fill text-warning"></i> Em Andamento</span>
+            <span title="Problema resolvido"><i class="bi bi-circle-fill text-success"></i> Concluído</span>
+          </div>
+        </div>
+      </div>
+      <div id="mapaDemandas" class="shadow"></div>
+    </div>
+
+    <div id="viewDash" class="view-section oculto">
+      <div class="row g-3 mb-4">
+        <div class="col-12 col-md-4">
+          <div class="card-kpi p-4 text-center shadow-sm h-100">
+            <h6 class="text-muted fw-bold mb-2">TOTAL DE DEMANDAS</h6>
+            <h1 id="kpi-total" class="m-0 fw-bold text-dark" style="font-size: 3rem;">0</h1>
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="card-kpi p-4 text-center shadow-sm h-100" style="border-left-color: #ef4444;">
+            <h6 class="text-muted fw-bold mb-2">AGUARDANDO ATENDIMENTO</h6>
+            <h1 id="kpi-pendentes" class="m-0 fw-bold text-danger" style="font-size: 3rem;">0</h1>
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="card-kpi p-4 text-center shadow-sm h-100" style="border-left-color: #10b981;">
+            <h6 class="text-muted fw-bold mb-2">PROBLEMAS RESOLVIDOS</h6>
+            <h1 id="kpi-concluidos" class="m-0 fw-bold text-success" style="font-size: 3rem;">0</h1>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-12 col-lg-6">
+          <div class="card shadow-sm border-0 p-4 h-100">
+            <h5 class="fw-bold mb-4 text-center" style="color: var(--s);">Tipos de Serviços Mais Solicitados</h5>
+            <div style="height:300px"><canvas id="chartCategoria"></canvas></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-6">
+          <div class="card shadow-sm border-0 p-4 h-100">
+            <h5 class="fw-bold mb-4 text-center" style="color: var(--s);">Bairros com Mais Ocorrências</h5>
+            <div style="height:300px"><canvas id="chartBairro"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewChamados" class="view-section oculto">
+      <div class="card shadow-sm border-0 bg-white">
+        <div class="card-header bg-white p-3 d-flex justify-content-between align-items-center">
+          <h5 class="m-0 fw-bold" style="color: var(--s);">Demandas da População</h5>
+          <button class="btn btn-sm text-white fw-bold shadow-sm" style="background-color: var(--p);" onclick="window.sincronizarBD()">
+            <i class="bi bi-arrow-clockwise"></i> Recarregar Dados
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+            <thead class="table-light">
+              <tr>
+                <th class="py-3 ps-3">Data e Hora</th>
+                <th class="py-3">Bairro/Local</th>
+                <th class="py-3">Serviço Solicitado</th>
+                <th class="py-3 text-center">Impacto (Agrupamentos)</th>
+                <th class="py-3 text-center">Status Atual</th>
+                <th class="py-3 text-center">Atualizar Status</th>
+              </tr>
+            </thead>
+            <tbody id="tbChamados">
+              </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewConfig" class="view-section oculto">
+      <div class="row g-4">
+        
+        <div class="col-12 col-lg-8">
+          <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white p-3">
+              <h5 class="m-0 fw-bold" style="color: var(--s);"><i class="bi bi-plus-circle-fill" style="color: var(--p);"></i> Adicionar Novo Tipo de Serviço</h5>
+              <small class="text-muted">Isso atualizará imediatamente as opções no aplicativo do cidadão.</small>
+            </div>
+            <div class="card-body p-3">
+              <form onsubmit="event.preventDefault(); window.salvarServico();" class="row g-3 align-items-end">
+                <div class="col-12 col-md-9">
+                  <label class="small fw-bold text-muted mb-1">Nome do Serviço (Ex: Iluminação Pública, Tapa-Buraco, Limpeza)</label>
+                  <input type="text" id="cadServNome" class="form-control form-control-lg" placeholder="Digite o nome da categoria..." required>
+                </div>
+                <div class="col-12 col-md-3">
+                  <button type="submit" class="btn text-white w-100 fw-bold btn-lg shadow-sm" style="background-color: var(--s);">Salvar Serviço</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          
+          <div class="card shadow-sm border-0">
+            <div class="card-header bg-white p-3"><h6 class="m-0 fw-bold text-dark">Serviços Habilitados para a População</h6></div>
+            <div class="card-body p-0 table-responsive">
+              <table class="table table-hover align-middle m-0">
+                <thead class="table-light">
+                  <tr>
+                    <th class="ps-3">Nome do Serviço</th>
+                    <th class="text-center" style="width: 150px;">Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="tbServicos">
+                  </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+          <div class="qr-box shadow-sm">
+            <h5 class="fw-bold" style="color: var(--s);"><i class="bi bi-qr-code-scan"></i> Divulgação do App</h5>
+            <p class="small text-muted mb-4">Aponte a câmera do celular para testar ou baixe a imagem para incluir em panfletos e redes sociais da prefeitura.</p>
+            
+            <img id="imgQrCode" src="" class="qr-img shadow" alt="QR Code do Aplicativo">
+            
+            <div class="alert py-2 small mb-4 text-start fw-bold" style="background-color: #fce6dc; color: #b44a22; border: 1px solid #f6c8b6;">
+              <i class="bi bi-info-circle-fill"></i> Link Oficial Gerado Automaticamente
+            </div>
+
+            <div class="d-grid gap-3">
+              <button onclick="window.baixarQrCode()" class="btn btn-lg fw-bold text-white shadow-sm" style="background-color: var(--p);">
+                <i class="bi bi-cloud-arrow-down-fill"></i> Baixar Imagem do QR
+              </button>
+              <button onclick="window.copiarLinkApp()" class="btn btn-outline-dark fw-bold">
+                <i class="bi bi-link-45deg fs-5 align-middle"></i> Copiar Link do App
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  // ⚠️ IMPORTAÇÃO DO onSnapshot ADICIONADA AQUI
+  import { getFirestore, collection, getDoc, getDocs, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+  // 1. Configuração do Firebase
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOEgd1WCElKtngAcQ-ygnx0_2lpHLUAyM",
+    authDomain: "caatingasoftware.firebaseapp.com",
+    projectId: "caatingasoftware",
+    storageBucket: "caatingasoftware.firebasestorage.app",
+    messagingSenderId: "357801806903",
+    appId: "1:357801806903:web:7b03d8f9f0189bf32943b2"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app); // INICIALIZA A AUTENTICAÇÃO
+  
+  // 2. Variáveis de Estado
+  let usuarioAtual = null;
+  let listenerUsuario = null; // ⚠️ VARIÁVEL DO VIGIA
+  let tenant = ""; 
+  let linkAppCidadao = ""; 
+
+  window.BD_DEMANDAS = [];
+  window.BD_SERVICOS = [];
+  
+  let mapaInstancia = null;
+  let layerDemandas = null;
+  let chartCat = null;
+  let chartBai = null;
+
+  // 3. Funções Utilitárias UI
+  function loading(show, msg="Processando...") { 
+    document.getElementById('loading-msg').innerText = msg;
+    document.getElementById('loadingOverlay').classList.toggle('oculto', !show); 
+  }
+
+  window.showToast = function(msg) { 
+    document.getElementById('toastMsg').innerText = msg; 
+    new bootstrap.Toast(document.getElementById('liveToast')).show(); 
+  };
+
+  // 4. Inicialização do Sistema com Proteção
+  window.onload = function() {
+    // Identifica dinamicamente a URL base
+    const currentPath = window.location.pathname;
+    const folder = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+    linkAppCidadao = window.location.origin + folder + "app/";
+    
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(linkAppCidadao)}`;
+    document.getElementById('imgQrCode').src = qrUrl;
+
+    // ⚠️ Escuta Estado de Autenticação do Firebase Auth e verifica no banco
+    onAuthStateChanged(auth, async (userAuth) => {
+        const cracha = localStorage.getItem("caatinga_user");
+        if (userAuth && cracha) { 
+            usuarioAtual = JSON.parse(cracha); 
+
+            // 🚨 TRAVA DE SEGURANÇA NA INICIALIZAÇÃO
+            if (usuarioAtual.cpf !== "01305663306") {
+                try {
+                    const docVerifica = await getDoc(doc(db, "usuarios", usuarioAtual.cpf));
+                    if (!docVerifica.exists() || docVerifica.data().ativo === false) {
+                        window.sairSistema(true); // Expulsão silenciosa
+                        return;
+                    }
+                } catch(e) { console.log("Aviso de rede na verificação inicial."); }
+            }
+
+            iniciarSistema(); 
+        } else { 
+            document.getElementById('telaLogin').classList.remove('oculto'); 
+            document.getElementById('sistemaPrincipal').classList.add('oculto');
+        }
+    });
+  };
+
+  // 5. Lógica de Autenticação Segura (Firebase Auth)
+  window.logar = async function() {
+    const cpfLimpo = document.getElementById('loginCpf').value.replace(/\D/g, '');
+    const senhaFornecida = document.getElementById('loginSenha').value;
+    const divMsg = document.getElementById('msgLogin');
+    divMsg.classList.add('oculto');
+    
+    if(!cpfLimpo || !senhaFornecida) {
+        divMsg.innerText = "Por favor, preencha CPF e Senha.";
+        divMsg.classList.remove('oculto');
+        return;
+    }
+
+    loading(true, "Autenticando credenciais...");
+    
+    try {
+      const emailFicticio = cpfLimpo + "@feitosa.app";
+
+      // Porta dos fundos para o Master
+      if (cpfLimpo === "01305663306" && senhaFornecida === "pr10mf86") {
+          try {
+              await signInWithEmailAndPassword(auth, emailFicticio, senhaFornecida);
+          } catch(e) {
+              await createUserWithEmailAndPassword(auth, emailFicticio, senhaFornecida);
+          }
+          usuarioAtual = { nome: "Master Admin", empresa_id: "pref_aiuaba", cpf: cpfLimpo };
+          localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual));
+          iniciarSistema();
+      } else {
+          // Login Firebase Auth
+          await signInWithEmailAndPassword(auth, emailFicticio, senhaFornecida);
+
+          const uSnap = await getDoc(doc(db, "usuarios", cpfLimpo));
+          if (uSnap.exists()) {
+              const uData = uSnap.data();
+              if (uData.ativo === false) throw new Error("Usuário inativo ou bloqueado.");
+              usuarioAtual = uData;
+              usuarioAtual.cpf = cpfLimpo; // Garante o CPF no objeto para o vigia
+              localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual));
+              iniciarSistema();
+          } else { 
+              throw new Error("CPF ou Senha incorretos. Acesso Negado."); 
+          }
+      }
+      
+    } catch(e) { 
+      divMsg.innerText = e.message.includes("auth") ? "Credenciais inválidas." : e.message; 
+      divMsg.classList.remove('oculto');
+    } finally {
+      loading(false); 
+    }
+  };
+
+  window.sairSistema = function(silencioso = false) { 
+    localStorage.removeItem("caatinga_user"); 
+    if(listenerUsuario) { listenerUsuario(); listenerUsuario = null; } // Desliga o vigia
+
+    signOut(auth).then(() => {
+        if(!silencioso) {
+            window.location.reload(); 
+        } else {
+            document.getElementById('sistemaPrincipal').classList.add('oculto');
+            document.getElementById('telaLogin').classList.remove('oculto'); 
+            const msgErr = document.getElementById('msgLogin');
+            msgErr.innerText = "Acesso revogado pelo Administrador."; 
+            msgErr.classList.remove('oculto');
+        }
+    });
+  }
+
+  // 6. Configuração Inicial do Painel
+  function iniciarSistema() {
+    document.getElementById('telaLogin').classList.add('oculto'); 
+    document.getElementById('sistemaPrincipal').classList.remove('oculto');
+    
+    tenant = String(usuarioAtual.empresa_id || "pref_aiuaba").toLowerCase().trim();
+    if(tenant === "undefined" || tenant === "global") tenant = "pref_aiuaba";
+    
+    document.getElementById('lbl-empresa').innerText = tenant.toUpperCase();
+    document.getElementById('usuarioLogado').innerText = `👤 ${usuarioAtual.nome}`;
+    
+    // 🚨 VIGIA DE TEMPO REAL
+    if (!listenerUsuario && usuarioAtual.cpf !== "01305663306") {
+        listenerUsuario = onSnapshot(doc(db, "usuarios", usuarioAtual.cpf), (docSnap) => {
+            if (!docSnap.exists() || docSnap.data().ativo === false) {
+                alert("⚠️ Seu acesso à Zeladoria foi suspenso.");
+                window.sairSistema(true);
+            }
+        });
+    }
+
+    iniciarMapaLeaflet();
+    window.sincronizarBD();
+  }
+
+  // 7. Configuração do Mapa Leaflet
+  function iniciarMapaLeaflet() {
+    if(mapaInstancia) return;
+    mapaInstancia = L.map('mapaDemandas').setView([-6.57, -40.12], 13);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+       attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>',
+       maxZoom: 19
+    }).addTo(mapaInstancia);
+    
+    layerDemandas = L.layerGroup().addTo(mapaInstancia);
+  }
+
+  // 8. Sincronização e Leitura de Dados
+  window.sincronizarBD = async function() {
+    loading(true, "Buscando dados da cidade...");
+    try {
+      const pServicos = getDocs(collection(db, `${tenant}_servicos`));
+      const pDemandas = getDocs(collection(db, `${tenant}_demandas`));
+
+      const [snapServ, snapDem] = await Promise.all([pServicos, pDemandas]);
+      
+      window.BD_SERVICOS = snapServ.docs.map(d => ({id: d.id, ...d.data()}));
+      window.BD_DEMANDAS = snapDem.docs.map(d => ({id: d.id, ...d.data()}));
+      
+      window.atualizarMapa(); 
+      window.atualizarDashboard(); 
+      window.atualizarTabelas();
+      
+    } catch (e) { 
+      console.error(e);
+      alert("Falha de conexão com o Banco de Dados Firestore.");
+    }
+    loading(false);
+  }
+
+  // 9. Navegação entre Abas
+  window.navegar = function(viewId, elAtivo) {
+    document.querySelectorAll('.view-section').forEach(v => v.classList.add('oculto'));
+    document.getElementById(viewId).classList.remove('oculto');
+    
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    elAtivo.classList.add('active');
+    
+    if(viewId === 'viewMapa') {
+       setTimeout(() => { mapaInstancia.invalidateSize(); }, 300);
+    }
+  }
+
+  // 10. Atualização Visual do Mapa
+  window.atualizarMapa = function() {
+    layerDemandas.clearLayers();
+    const filtro = document.getElementById('filtroMapaStatus').value;
+    let bounds = []; 
+
+    window.BD_DEMANDAS.forEach(d => {
+      if(filtro && d.status !== filtro) return; 
+      if(!d.lat || !d.lng) return; 
+      
+      let corHex = '#ef4444'; 
+      if (d.status === 'Em Andamento') corHex = '#f59e0b'; 
+      if (d.status === 'Concluido') corHex = '#10b981'; 
+      
+      const marker = L.circleMarker([d.lat, d.lng], {
+          radius: 10, fillColor: corHex, color: "#ffffff", weight: 3, fillOpacity: 0.95
+      });
+      
+      let dataFormatada = d.dataCriacao ? new Date(d.dataCriacao).toLocaleDateString('pt-BR') : '-';
+      let qtdImpacto = (d.reforcos ? d.reforcos.length : 0) + 1;
+      let imgHtml = d.foto ? `<div style="margin-top:8px; text-align:center;"><img src="${d.foto}" style="max-width:100%; height:80px; object-fit:cover; border-radius:5px;"></div>` : '';
+
+      marker.bindPopup(`
+        <div style="font-family: sans-serif; min-width: 200px;">
+          <h6 style="color: #1A374D; font-weight: bold; margin-bottom: 5px;">${d.servico}</h6>
+          <span style="font-size: 12px; color: #666;">Aberto em: ${dataFormatada}</span><br>
+          <span style="font-size: 12px; color: #E06C3F; font-weight: bold;"><i class="bi bi-people-fill"></i> Impacta ${qtdImpacto} pessoas</span>
+          <hr style="margin: 8px 0;">
+          <span style="background-color: ${corHex}; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: bold;">${d.status.toUpperCase()}</span>
+          <div style="margin-top: 10px; font-size: 13px; font-style: italic; color: #333;">"${d.descricao || 'Sem detalhes'}"</div>
+          ${imgHtml}
+        </div>
+      `);
+      
+      layerDemandas.addLayer(marker);
+      bounds.push([d.lat, d.lng]);
+    });
+    
+    if(bounds.length > 0) mapaInstancia.fitBounds(bounds, {padding: [40, 40], maxZoom: 16});
+  }
+
+  // 11. Gráficos e Lógica do Dashboard
+  window.atualizarDashboard = function() {
+    let pendentes = 0, concluidos = 0;
+    let countCat = {}, countBairro = {};
+    
+    window.BD_DEMANDAS.forEach(d => {
+      if(d.status === 'Pendente') pendentes++; 
+      if(d.status === 'Concluido') concluidos++;
+      
+      countCat[d.servico] = (countCat[d.servico] || 0) + 1;
+      countBairro[d.bairro || 'Não Informado'] = (countBairro[d.bairro || 'Não Informado'] || 0) + 1;
+    });
+    
+    document.getElementById('kpi-total').innerText = window.BD_DEMANDAS.length;
+    document.getElementById('kpi-pendentes').innerText = pendentes;
+    document.getElementById('kpi-concluidos').innerText = concluidos;
+    
+    if(chartCat) chartCat.destroy();
+    chartCat = new Chart(document.getElementById('chartCategoria'), { 
+      type: 'doughnut', 
+      data: { 
+        labels: Object.keys(countCat), 
+        datasets: [{ 
+          data: Object.values(countCat), 
+          backgroundColor: ['#E06C3F','#1A374D','#10b981','#f59e0b','#8b5cf6','#3b82f6','#ef4444'] 
+        }] 
+      },
+      options: { maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    });
+
+    let topBairrosArray = Object.keys(countBairro).sort((a,b) => countBairro[b] - countBairro[a]).slice(0, 10);
+    let valoresBairros = topBairrosArray.map(b => countBairro[b]);
+
+    if(chartBai) chartBai.destroy();
+    chartBai = new Chart(document.getElementById('chartBairro'), { 
+      type: 'bar', 
+      data: { 
+        labels: topBairrosArray, 
+        datasets: [{ label: 'Qtd de Chamados', data: valoresBairros, backgroundColor: '#1A374D', borderRadius: 5 }] 
+      },
+      options: { maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+    });
+  }
+
+  // 12. Construção das Tabelas
+  window.atualizarTabelas = function() {
+    
+    document.getElementById('tbServicos').innerHTML = window.BD_SERVICOS.map(s => `
+      <tr>
+        <td class="ps-3 fw-bold text-dark">${s.nome}</td>
+        <td class="text-center">
+          <button class="btn btn-sm btn-outline-danger" onclick="window.excluirServico('${s.id}')" title="Remover do Aplicativo">
+            <i class="bi bi-trash3-fill"></i> Excluir
+          </button>
+        </td>
+      </tr>
+    `).join('');
+    
+    let chamadosOrdenados = window.BD_DEMANDAS.sort((a,b) => new Date(b.dataCriacao) - new Date(a.dataCriacao));
+    
+    let htmlChamados = chamadosOrdenados.map(d => {
+        let qtdReforcos = (d.reforcos ? d.reforcos.length : 0) + 1; 
+        let badgeStyle = d.status === 'Pendente' ? 'bg-pendente' : (d.status === 'Concluido' ? 'bg-concluido' : 'bg-andamento');
+        let dataFormatada = d.dataCriacao ? new Date(d.dataCriacao).toLocaleDateString('pt-BR') : '-';
+        
+        let btnFoto = d.foto ? `<a href="${d.foto}" target="_blank" class="btn btn-sm btn-outline-primary ms-2"><i class="bi bi-camera-fill"></i> Foto</a>` : '';
+
+        return `
+        <tr>
+          <td class="ps-3"><span class="fw-bold d-block text-dark">${dataFormatada}</span><small class="text-muted">ID: ${d.id.split('_')[1]}</small></td>
+          <td>${d.bairro || '<span class="text-muted fst-italic">Desconhecido</span>'}</td>
+          <td>
+            <span class="fw-bold" style="color: var(--p);">${d.servico}</span> ${btnFoto}
+            <div class="small text-muted text-truncate" style="max-width: 250px;" title="${d.descricao}">${d.descricao || ''}</div>
+          </td>
+          <td class="text-center">
+            <span class="badge" style="background-color: var(--s); font-size: 0.85rem;"><i class="bi bi-person-fill-up"></i> ${qtdReforcos} Reclamações</span>
+          </td>
+          <td class="text-center"><span class="status-badge ${badgeStyle}">${d.status}</span></td>
+          <td class="text-center">
+            <select class="form-select form-select-sm fw-bold d-inline-block w-auto" onchange="window.mudarStatus('${d.id}', this.value)">
+              <option value="">Ação...</option>
+              <option value="Pendente" ${d.status === 'Pendente' ? 'disabled' : ''}>Pendente (Aguardar)</option>
+              <option value="Em Andamento" ${d.status === 'Em Andamento' ? 'disabled' : ''}>Mover p/ Em Andamento</option>
+              <option value="Concluido" ${d.status === 'Concluido' ? 'disabled' : ''}>Encerrar (Deletar Foto)</option>
+            </select>
+          </td>
+        </tr>`;
+    }).join('');
+    
+    document.getElementById('tbChamados').innerHTML = htmlChamados || `<tr><td colspan="6" class="text-center text-muted py-4 fs-5"><i class="bi bi-inbox-fill"></i> Nenhum chamado registrado no município.</td></tr>`;
+  }
+
+  // 13. Ações de CRUD
+  window.salvarServico = async function() {
+    const nome = document.getElementById('cadServNome').value.trim();
+    if(!nome) return;
+    
+    loading(true, "Salvando novo serviço...");
+    try {
+      let docId = "SV_" + Date.now();
+      await setDoc(doc(db, `${tenant}_servicos`, docId), { 
+        nome: nome, 
+        ativo: true 
+      });
+      
+      document.getElementById('cadServNome').value = ""; 
+      window.showToast("Catálogo atualizado! O cidadão já pode ver no app.");
+      await window.sincronizarBD();
+      
+    } catch(e) { 
+      console.error(e); alert("Erro ao cadastrar serviço."); 
+    }
+    loading(false);
+  }
+
+  window.excluirServico = async function(id) {
+    if(!confirm("Atenção: Remover este serviço fará com que a população não consiga mais solicitar ele pelo aplicativo. Deseja continuar?")) return;
+    
+    loading(true, "Excluindo...");
+    try {
+      await deleteDoc(doc(db, `${tenant}_servicos`, id));
+      window.showToast("Serviço removido com sucesso.");
+      await window.sincronizarBD();
+    } catch(e) {
+      console.error(e); alert("Erro ao excluir.");
+    }
+    loading(false);
+  }
+
+  window.mudarStatus = async function(id, novoStatus) {
+    if(!novoStatus) return; 
+    
+    loading(true, "Atualizando andamento do chamado...");
+    try {
+      let dadosAtualizacao = { status: novoStatus };
+      
+      if(novoStatus === 'Concluido' || novoStatus === 'Cancelado') {
+         dadosAtualizacao.foto = null; 
+      }
+
+      await setDoc(doc(db, `${tenant}_demandas`, id), dadosAtualizacao, {merge: true});
+      window.showToast("Status modificado! A população será informada.");
+      await window.sincronizarBD();
+    } catch(e) { 
+      console.error(e); alert("Erro ao modificar status."); 
+    }
+    loading(false);
+  }
+
+  // 14. Funções do QR Code
+  window.copiarLinkApp = function() {
+    navigator.clipboard.writeText(linkAppCidadao).then(() => {
+      window.showToast("Link copiado para a área de transferência!");
+    }).catch(err => {
+      alert("Erro ao copiar link: " + linkAppCidadao);
+    });
+  }
+
+  window.baixarQrCode = function() {
+    const urlAlta = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(linkAppCidadao)}`;
+    window.open(urlAlta, '_blank');
+  }
+
+</script>
+</body>
+</html>

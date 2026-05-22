@@ -1,0 +1,16 @@
+{
+  "name": "Geo Cidadão",
+  "short_name": "Geo Cidadão",
+  "description": "Aplicativo de zeladoria e comunicação com a prefeitura",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#1A374D",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1006/1006555.png", 
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

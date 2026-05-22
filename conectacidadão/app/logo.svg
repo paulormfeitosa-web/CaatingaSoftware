@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logomarca GeoCidadão</title>
+    <style>
+        body {
+            background-color: #f4f6f8;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .logo-container {
+            background: white;
+            padding: 40px 60px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .logo-text {
+            font-size: 3rem;
+            font-weight: 800;
+            color: #E06C3F; /* Laranja Caatinga */
+            margin-top: 20px;
+            letter-spacing: -1px;
+        }
+        .logo-text span {
+            color: #1A374D; /* Azul Escuro Caatinga */
+        }
+        .subtext {
+            color: #64748b;
+            font-size: 1rem;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+        .download-btn {
+            margin-top: 30px;
+            background: #1A374D;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+            transition: 0.3s;
+        }
+        .download-btn:hover {
+            background: #E06C3F;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="logo-container">
+        <!-- CÓDIGO SVG DA LOGOMARCA (Você deve salvar este bloco como logo.svg) -->
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="150" height="150">
+            <!-- Pino do Mapa (Laranja) -->
+            <path d="M256,16C158.9,16,80,94.9,80,192c0,133.3,176,304,176,304s176-170.7,176-304C432,94.9,353.1,16,256,16z" fill="#E06C3F"/>
+            <!-- Círculo Central (Branco) -->
+            <circle cx="256" cy="192" r="110" fill="#ffffff"/>
+            <!-- Cidadão - Cabeça (Azul Escuro) -->
+            <circle cx="256" cy="150" r="35" fill="#1A374D"/>
+            <!-- Cidadão - Corpo (Azul Escuro) -->
+            <path d="M326,245.5c-15.6-22.1-41-36.5-70-36.5s-54.4,14.4-70,36.5c-4.3,6.1-6,14.2-6,22.5V280h152v-12C332,259.7,330.3,251.6,326,245.5z" fill="#1A374D"/>
+        </svg>
+
+        <div class="logo-text">Geo<span>Cidadão</span></div>
+        <div class="subtext">Caatinga Software</div>
+        
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>EstéticaGestão PRO - Caatinga Software</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* ================= IDENTIDADE VISUAL ================= */
+    :root { 
+      --p: #d4a373; /* Tom Dourado/Rose Gold */
+      --s: #4a4e69; /* Azul Mudo Elegante */
+      --bg: #f8f9fa; /* Fundo Cinza Claro */
+      --card-bg: #ffffff;
+    }
+    
+    body { 
+        background-color: var(--bg); 
+        font-family: 'Segoe UI', system-ui, sans-serif; 
+        color: #333; 
+        margin: 0; 
+        padding: 0; 
+    }
+    
+    .oculto { display: none !important; }
+
+    /* ================= NAVBAR E MENUS ================= */
+    .navbar-custom { 
+        background-color: var(--card-bg) !important; 
+        border-bottom: 2px solid var(--p); 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05); 
+    }
+    .navbar-brand, .nav-link { 
+        color: var(--s) !important; 
+        font-weight: 500; 
+        cursor: pointer; 
+        transition: 0.3s; 
+    }
+    .nav-link:hover, .nav-link.active { 
+        color: var(--p) !important; 
+        font-weight: bold; 
+        border-bottom: 2px solid var(--p); 
+    }
+    
+    /* ================= CARDS E DASHBOARD ================= */
+    .card-kpi { 
+        border-radius: 15px; 
+        border-left: 5px solid var(--p); 
+        background: white; 
+        transition: 0.3s ease; 
+        border-top: 1px solid #e9ecef;
+        border-right: 1px solid #e9ecef;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .card-kpi:hover { 
+        transform: translateY(-5px); 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08); 
+    }
+    .kpi-icon { 
+        font-size: 2.5rem; 
+        color: var(--p); 
+        opacity: 0.8; 
+    }
+    
+    /* ================= TELA DE LOGIN ================= */
+    #telaLogin { 
+        height: 100vh; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        background: linear-gradient(135deg, var(--s) 0%, #22223b 100%); 
+    }
+    .login-card { 
+        background: white; 
+        padding: 3rem; 
+        border-radius: 20px; 
+        box-shadow: 0 15px 35px rgba(0,0,0,0.3); 
+        width: 100%; 
+        max-width: 420px; 
+        text-align: center; 
+        border-top: 5px solid var(--p); 
+    }
+    
+    /* ================= LOADING GLOBAL ================= */
+    #loadingOverlay { 
+        position: fixed; 
+        top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(255,255,255,0.9); 
+        z-index: 9999; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        flex-direction: column; 
+    }
+    
+    /* ================= BOTÕES E TABELAS ================= */
+    .btn-primary-custom { 
+        background-color: var(--p); 
+        color: white; 
+        border: none; 
+        font-weight: 600; 
+        transition: 0.3s; 
+    }
+    .btn-primary-custom:hover { 
+        background-color: #bc8a5f; 
+        color: white; 
+        transform: translateY(-2px); 
+        box-shadow: 0 4px 10px rgba(212, 163, 115, 0.4);
+    }
+
+    .btn-secondary-custom { 
+        background-color: var(--s); 
+        color: white; 
+        border: none; 
+        font-weight: 600; 
+        transition: 0.3s; 
+    }
+    .btn-secondary-custom:hover { 
+        background-color: #22223b; 
+        color: white; 
+        transform: translateY(-2px); 
+    }
+
+    .table-custom th { 
+        background-color: #f8f9fa; 
+        color: var(--s); 
+        font-weight: 600; 
+        text-transform: uppercase; 
+        font-size: 0.85rem; 
+        letter-spacing: 0.5px; 
+    }
+
+    /* ================= ABAS DO PRONTUÁRIO ================= */
+    .nav-pills-custom .nav-link { 
+        color: var(--s); 
+        font-weight: 600; 
+        border-radius: 30px; 
+        margin-right: 5px; 
+        padding: 8px 20px; 
+        background: #f0f1f3; 
+        border: 1px solid #dee2e6; 
+        transition: 0.3s;
+    }
+    .nav-pills-custom .nav-link:hover {
+        background-color: #e2e8f0;
+    }
+    .nav-pills-custom .nav-link.active { 
+        background-color: var(--p); 
+        color: white; 
+        border-color: var(--p); 
+        box-shadow: 0 4px 10px rgba(212, 163, 115, 0.3);
+    }
+
+    /* ================= MAPAS CORPORAIS COM FOTO REAL ================= */
+    .mapa-corporal { 
+        position: relative; 
+        width: 100%; 
+        max-width: 500px;
+        margin: 0 auto; 
+        text-align: center; 
+        background: #e9ecef;
+        border-radius: 15px; 
+        border: 2px dashed #ced4da; 
+        cursor: crosshair; 
+        padding: 5px; 
+        box-shadow: inset 0 0 15px rgba(0,0,0,0.05); 
+        min-height: 400px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    
+    .img-paciente-mapa {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 10px;
+    }
+    
+    .ponto-marcado { 
+        position: absolute; 
+        width: 16px; 
+        height: 16px; 
+        background-color: #e63946; 
+        border: 2px solid white; 
+        border-radius: 50%; 
+        transform: translate(-50%, -50%); 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.5); 
+        z-index: 10; 
+        pointer-events: none; 
+    }
+
+    .ponto-historico { 
+        position: absolute; 
+        width: 14px; 
+        height: 14px; 
+        background-color: #4a4e69; 
+        border: 2px solid white; 
+        border-radius: 50%; 
+        transform: translate(-50%, -50%); 
+        opacity: 0.7; 
+        pointer-events: none; 
+        z-index: 5; 
+    }
+    
+    #placeholderMapa {
+        color: #6c757d;
+        font-weight: bold;
+        text-align: center;
+    }
+
+    /* ================= TIMELINE DE HISTÓRICO ================= */
+    .timeline-item { 
+        border-left: 2px solid var(--p); 
+        padding-left: 15px; 
+        position: relative; 
+        margin-bottom: 20px; 
+    }
+    .timeline-item::before { 
+        content: ''; 
+        position: absolute; 
+        left: -6px; 
+        top: 0; 
+        width: 10px; 
+        height: 10px; 
+        border-radius: 50%; 
+        background: var(--p); 
+    }
+  </style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="oculto">
+  <div class="spinner-border" style="color: var(--p); width: 3rem; height: 3rem;" role="status"></div>
+  <div class="mt-3 fw-bold text-dark fs-5" id="loading-msg">Carregando Sistema...</div>
+</div>
+
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
+  <div id="liveToast" class="toast align-items-center text-white border-0 shadow-lg" style="background-color: var(--s);" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fs-6 fw-bold" id="toastMsg">Operação realizada com sucesso!</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<div id="telaLogin" class="oculto">
+  <div class="login-card mx-3">
+    <h2 class="mb-1 fw-bold" style="color: var(--p);">Estética<span style="color: var(--s);">Gestão</span></h2>
+    <p class="text-muted mb-4 small fw-bold text-uppercase">Portal Profissional</p>
+    
+    <div id="msgLogin" class="alert alert-danger oculto py-2 small fw-bold"></div>
+    
+    <form onsubmit="event.preventDefault(); window.logar();">
+      <div class="form-floating mb-3">
+        <input type="text" id="loginCpf" class="form-control" placeholder="CPF" required>
+        <label>CPF do Profissional</label>
+      </div>
+      <div class="form-floating mb-4">
+        <input type="password" id="loginSenha" class="form-control" placeholder="Senha" required>
+        <label>Senha de Acesso</label>
+      </div>
+      <button type="submit" class="btn btn-primary-custom w-100 py-3 fs-5 rounded-3 shadow-sm">
+        ENTRAR NA CLÍNICA
+      </button>
+      <a href="/" class="btn btn-link text-muted w-100 mt-3 text-decoration-none small">Voltar ao Painel Geral</a>
+    </form>
+  </div>
+</div>
+
+<div id="sistemaPrincipal" class="oculto">
+  
+  <nav class="navbar navbar-expand-lg navbar-custom px-4 sticky-top">
+    <span class="navbar-brand fw-bold fs-4 d-flex align-items-center gap-2">
+      <i class="bi bi-stars" style="color: var(--p);"></i> 
+      <span>Estética<span style="color: var(--p);">Gestão</span> <small style="font-size: 10px;" class="badge bg-secondary">PRO</small></span>
+    </span>
+    
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#menuTopo">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    
+    <div class="collapse navbar-collapse" id="menuTopo">
+      <ul class="navbar-nav me-auto mt-2 mt-lg-0 ms-lg-4 gap-1">
+        <li class="nav-item"><a class="nav-link active px-2" onclick="window.navegar('viewDash', this)"><i class="bi bi-grid-1x2"></i> Painel</a></li>
+        <li class="nav-item"><a class="nav-link px-2" onclick="window.navegar('viewAgenda', this)"><i class="bi bi-calendar-check"></i> Agenda</a></li>
+        <li class="nav-item"><a class="nav-link px-2" onclick="window.navegar('viewPacientes', this)"><i class="bi bi-people"></i> Pacientes</a></li>
+        <li class="nav-item"><a class="nav-link px-2" onclick="window.navegar('viewProntuario', this)"><i class="bi bi-file-medical"></i> Ficha Clínica</a></li>
+        <li class="nav-item"><a class="nav-link px-2" onclick="window.navegar('viewServicos', this)"><i class="bi bi-tags"></i> Serviços</a></li>
+        <li class="nav-item"><a class="nav-link px-2" onclick="window.navegar('viewFinanceiro', this)"><i class="bi bi-wallet2"></i> Financeiro</a></li>
+        <li class="nav-item"><a class="nav-link px-2" onclick="window.navegar('viewEstoque', this)"><i class="bi bi-box-seam"></i> Estoque</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-3 border-start ps-lg-4">
+        <span class="small fw-bold text-dark d-none d-lg-block" id="usuarioLogado">Dra. Master</span>
+        <button class="btn btn-sm btn-secondary-custom px-3 rounded-pill shadow-sm" onclick="window.sairSistema()">
+          <i class="bi bi-box-arrow-right"></i> Sair
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid mt-4 pb-5 px-3 px-md-4">
+    
+    <div id="viewDash" class="view-section">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+          <h4 class="fw-bold mb-0" style="color: var(--s);">Visão Geral da Clínica</h4>
+          <button class="btn btn-sm btn-outline-secondary fw-bold shadow-sm" onclick="window.sincronizarBD()">
+              <i class="bi bi-arrow-clockwise"></i> Atualizar Dados
+          </button>
+      </div>
+      
+      <div class="row g-4 mb-4">
+        <div class="col-12 col-md-6 col-lg-3">
+          <div class="card-kpi p-4 d-flex justify-content-between align-items-center h-100">
+            <div>
+                <h6 class="text-muted fw-bold mb-1 small text-uppercase">Receita no Mês</h6>
+                <h3 id="kpi-receitas" class="m-0 fw-bold text-success">R$ 0,00</h3>
+            </div>
+            <i class="bi bi-graph-up-arrow fs-1 text-success opacity-50"></i>
+          </div>
+        </div>
+        <div class="col-12 col-md-6 col-lg-3">
+          <div class="card-kpi p-4 d-flex justify-content-between align-items-center h-100" style="border-left-color: var(--s);">
+            <div>
+                <h6 class="text-muted fw-bold mb-1 small text-uppercase">Total Pacientes</h6>
+                <h3 id="kpi-pacientes" class="m-0 fw-bold">0</h3>
+            </div>
+            <i class="bi bi-people fs-1 text-primary opacity-50"></i>
+          </div>
+        </div>
+        <div class="col-12 col-md-6 col-lg-3">
+          <div class="card-kpi p-4 d-flex justify-content-between align-items-center h-100" style="border-left-color: #ffb703;">
+            <div>
+                <h6 class="text-muted fw-bold mb-1 small text-uppercase">Agenda Hoje</h6>
+                <h3 id="kpi-agenda" class="m-0 fw-bold">0</h3>
+            </div>
+            <i class="bi bi-calendar-check fs-1 text-warning opacity-50"></i>
+          </div>
+        </div>
+        <div class="col-12 col-md-6 col-lg-3">
+          <div class="card-kpi p-4 d-flex justify-content-between align-items-center h-100" style="border-left-color: #dc3545;">
+            <div>
+                <h6 class="text-muted fw-bold mb-1 small text-uppercase">Estoque Crítico</h6>
+                <h3 id="kpi-estoque" class="m-0 fw-bold text-danger">0 itens</h3>
+            </div>
+            <i class="bi bi-box-seam fs-1 text-danger opacity-50"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4">
+          <div class="col-12 col-lg-8">
+              <div class="card p-4 border-0 shadow-sm rounded-4 h-100">
+                  <h5 class="fw-bold mb-4" style="color: var(--s);">Estatísticas de Faturamento Financeiro</h5>
+                  <div style="height: 300px; width: 100%;">
+                      <canvas id="chartFinanceiro"></canvas>
+                  </div>
+              </div>
+          </div>
+          <div class="col-12 col-lg-4">
+              <div class="card p-4 border-0 shadow-sm rounded-4 bg-white h-100">
+                  <h5 class="fw-bold mb-3" style="color: var(--s);">
+                      <i class="bi bi-bell-fill text-warning"></i> Alertas de Estoque
+                  </h5>
+                  <div id="listaEstoqueCritico" class="list-group list-group-flush">
+                      <div class="text-muted small fst-italic py-3">Carregando itens críticos...</div>
+                  </div>
+              </div>
+          </div>
+      </div>
+    </div>
+
+    <div id="viewAgenda" class="view-section oculto">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold m-0" style="color: var(--s);">Controle de Agenda</h4>
+        <button class="btn btn-primary-custom rounded-pill fw-bold shadow-sm" onclick="window.abrirModalAgenda()">
+            <i class="bi bi-calendar-plus"></i> Novo Agendamento
+        </button>
+      </div>
+      
+      <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="p-3 bg-light border-bottom d-flex align-items-center gap-3">
+            <label class="fw-bold text-muted mb-0">Filtrar Atendimentos do Dia:</label>
+            <input type="date" id="filtroDataAgenda" class="form-control w-auto fw-bold" onchange="window.renderizarAgenda()">
+            <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('filtroDataAgenda').value=''; window.renderizarAgenda();">Ver Todos</button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-custom">
+              <thead>
+                  <tr>
+                      <th class="ps-4">Data e Hora</th>
+                      <th>Paciente</th>
+                      <th>Procedimento Agendado</th>
+                      <th>Status</th>
+                      <th class="text-center">Ação</th>
+                  </tr>
+              </thead>
+              <tbody id="tbAgenda"></tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewServicos" class="view-section oculto">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold m-0" style="color: var(--s);">Catálogo de Procedimentos</h4>
+        <button class="btn btn-primary-custom rounded-pill fw-bold shadow-sm" onclick="window.abrirModalServico()">
+            <i class="bi bi-plus-circle"></i> Cadastrar Serviço
+        </button>
+      </div>
+      
+      <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-custom">
+              <thead>
+                  <tr>
+                      <th class="ps-4">Nome do Procedimento</th>
+                      <th>Categoria</th>
+                      <th>Valor Base de Tabela (R$)</th>
+                      <th class="text-center">Ação</th>
+                  </tr>
+              </thead>
+              <tbody id="tbServicos"></tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewPacientes" class="view-section oculto">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold m-0" style="color: var(--s);">Gestão de Pacientes</h4>
+        <button class="btn btn-primary-custom rounded-pill fw-bold shadow-sm" onclick="window.abrirModalPaciente()">
+            <i class="bi bi-person-plus"></i> Novo Paciente
+        </button>
+      </div>
+      
+      <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="p-3 bg-white border-bottom">
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                <input type="text" id="buscaPaciente" class="form-control border-start-0 bg-light" placeholder="Buscar paciente por nome..." onkeyup="window.filtrarPacientes()">
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-custom">
+              <thead>
+                  <tr>
+                      <th class="ps-4">Nome do Paciente</th>
+                      <th>WhatsApp / Contato</th>
+                      <th>Data de Cadastro</th>
+                      <th class="text-center">Prontuário</th>
+                  </tr>
+              </thead>
+              <tbody id="tbPacientes"></tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewProntuario" class="view-section oculto">
+      
+      <div class="card p-4 border-0 shadow-sm rounded-4 mb-4 bg-white" style="border-left: 5px solid var(--s);">
+        <label class="fw-bold mb-2 text-muted">Selecione o Paciente para Iniciar o Atendimento</label>
+        <select class="form-select form-select-lg fw-bold" id="prontPaciente" onchange="window.carregarFichaPaciente()">
+            <option value="">-- Clique aqui e escolha um Paciente --</option>
+        </select>
+      </div>
+
+      <div id="areaFicha" class="oculto">
+        <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+          
+          <div class="card-header bg-white p-3 border-bottom-0 pb-0">
+            <ul class="nav nav-pills nav-pills-custom" id="fichaTabs">
+              <li class="nav-item"><a class="nav-link active" data-bs-toggle="pill" href="#tabAnamnese"><i class="bi bi-file-earmark-person"></i> Anamnese</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#tabOrcamento"><i class="bi bi-calculator"></i> Orçamentos</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#tabExecucao"><i class="bi bi-bandaid"></i> Execução de Sessão</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#tabHistorico"><i class="bi bi-clock-history"></i> Histórico Completo</a></li>
+            </ul>
+          </div>
+          
+          <div class="card-body p-4 tab-content border-top mt-3">
+            
+            <div class="tab-pane fade show active" id="tabAnamnese">
+                <h5 class="fw-bold mb-4" style="color: var(--p);">Questionário de Saúde e Avaliação Inicial</h5>
+                <form onsubmit="event.preventDefault(); window.salvarAnamnese();">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label class="small fw-bold text-muted">Queixa Principal / Desejo do Paciente</label>
+                            <input type="text" id="anaQueixa" class="form-control" placeholder="O que mais incomoda o paciente?">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="small fw-bold text-muted">Tipo Fisiológico de Pele</label>
+                            <select id="anaPele" class="form-select">
+                                <option value="Normal">Normal</option>
+                                <option value="Seca">Seca</option>
+                                <option value="Oleosa">Oleosa</option>
+                                <option value="Mista">Mista</option>
+                                <option value="Acneica">Tendência Acneica</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="small fw-bold text-muted">Alergias Conhecidas (Medicamentos, Cosméticos, Alimentos)</label>
+                            <textarea id="anaAlergias" class="form-control" rows="2" placeholder="Relate se houver restrições..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="small fw-bold text-muted">Doenças Crônicas / Medicamentos de Uso Contínuo</label>
+                            <textarea id="anaDoencas" class="form-control" rows="2" placeholder="Ex: Hipertensão, Roacutan, Anticoncepcional..."></textarea>
+                        </div>
+                    </div>
+                    <div class="text-end mt-4">
+                        <button type="submit" class="btn btn-secondary-custom rounded-pill px-5 py-2 fw-bold shadow-sm">
+                            <i class="bi bi-save"></i> Atualizar Dados Clínicos
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="tab-pane fade" id="tabOrcamento">
+                <h5 class="fw-bold mb-4" style="color: var(--p);">Construção de Orçamento e Fechamento</h5>
+                
+                <div class="bg-light p-4 rounded-4 border mb-4 shadow-sm">
+                    <h6 class="fw-bold mb-3 text-secondary">1. Adicionar Procedimentos</h6>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label class="small fw-bold text-muted">Serviço do Catálogo</label>
+                            <select id="orcServico" class="form-select" onchange="window.autoPreencherValorOrc()"></select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small fw-bold text-muted">Valor de Negociação (R$)</label>
+                            <input type="number" step="0.01" id="orcValorUnit" class="form-control fw-bold text-primary">
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-primary-custom w-100 fw-bold" onclick="window.addServicoOrcamento()">
+                                <i class="bi bi-plus-lg"></i> Inserir no Orçamento
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive mb-4">
+                    <table class="table table-bordered table-hover align-middle text-center">
+                        <thead class="table-secondary">
+                            <tr><th>Procedimento Selecionado</th><th>Valor Unitário</th><th>Remover</th></tr>
+                        </thead>
+                        <tbody id="tbItensOrc">
+                            <tr><td colspan="3" class="text-muted py-3">Adicione itens no painel acima.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="row g-4 bg-white p-4 rounded-4 border shadow-sm align-items-center">
+                    <div class="col-md-4">
+                        <label class="small fw-bold text-muted">Forma de Pagamento</label>
+                        <select id="orcPgto" class="form-select fw-bold">
+                            <option value="PIX">PIX / Transferência</option>
+                            <option value="Cartão de Crédito">Cartão de Crédito</option>
+                            <option value="Dinheiro">Espécie (Dinheiro)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="small fw-bold text-muted">Desconto Concedido (R$)</label>
+                        <input type="number" step="0.01" id="orcDesconto" class="form-control text-danger fw-bold" value="0" oninput="window.calcTotalOrc()">
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="text-muted small fw-bold mb-1">Subtotal da Tabela: R$ <span id="valSub">0.00</span></div>
+                        <h3 class="fw-bold text-success m-0 mb-3">TOTAL: R$ <span id="valTotal">0.00</span></h3>
+                        <button class="btn btn-success w-100 fw-bold py-2 shadow-sm rounded-pill" onclick="window.salvarOrcamento()">
+                            <i class="bi bi-check2-circle"></i> Fechar Orçamento
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tabExecucao">
+                <div class="row g-4">
+                    <div class="col-12 col-lg-5">
+                        <h5 class="fw-bold mb-4" style="color: var(--p);">Registro de Execução da Sessão</h5>
+                        
+                        <label class="small fw-bold text-muted mb-1">Serviço Realizado Hoje</label>
+                        <select id="execServico" class="form-select mb-3 fw-bold"></select>
+                        
+                        <label class="small fw-bold text-muted mb-1">Marca / Produto / Lote Utilizado</label>
+                        <input type="text" id="execProduto" class="form-control mb-3" placeholder="Ex: Toxina Botulínica Marca X, Lote 123">
+                        
+                        <label class="small fw-bold text-muted mb-1">Observações da Evolução Terapêutica</label>
+                        <textarea id="execObs" class="form-control mb-4" rows="4" placeholder="Descreva como foi a resposta do paciente ao procedimento, intercorrências, etc..."></textarea>
+                        
+                        <button id="btnSalvarExec" class="btn btn-primary-custom w-100 py-3 fw-bold rounded-pill shadow" onclick="window.salvarExecucao()">
+                            <i class="bi bi-file-earmark-medical"></i> Gravar Sessão e Pontos na Foto
+                        </button>
+                    </div>
+                    
+                    <div class="col-12 col-lg-7 text-center border-start ps-lg-4">
+                        <h6 class="fw-bold mb-3 text-muted">Mapeamento sobre Foto Real <br><small class="fw-normal">Faça upload da foto da paciente e clique para marcar os pontos</small></h6>
+                        
+                        <div class="d-flex gap-2 justify-content-center mb-3">
+                            <label for="execInputFoto" class="btn btn-secondary-custom rounded-pill fw-bold shadow-sm">
+                                <i class="bi bi-camera-fill"></i> Carregar Foto da Paciente
+                            </label>
+                            <input type="file" id="execInputFoto" class="oculto" accept="image/*" onchange="window.carregarFotoParaMapa(this)">
+                            
+                            <button class="btn btn-outline-danger rounded-pill fw-bold shadow-sm" onclick="window.limparPontosAtuais()">
+                                <i class="bi bi-eraser-fill"></i> Limpar Pontos
+                            </button>
+                        </div>
+                        
+                        <div class="mapa-corporal mx-auto" id="mapaCanvas" onclick="window.adicionarPonto(event)">
+                            <div id="placeholderMapa">
+                                <i class="bi bi-image" style="font-size: 4rem; opacity: 0.3;"></i>
+                                <p>Aguardando upload da foto...</p>
+                            </div>
+                            <img id="imgMapaReal" class="img-paciente-mapa oculto" alt="Foto da Paciente">
+                            
+                            <div id="dotsContainer"></div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-center gap-4 mt-3 small fw-bold text-muted">
+                            <span><span class="d-inline-block rounded-circle me-1" style="width:12px; height:12px; background:#e63946;"></span> Ponto Hoje</span>
+                            <span><span class="d-inline-block rounded-circle me-1" style="width:12px; height:12px; background:#4a4e69; opacity:0.7;"></span> Sessões Anteriores</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tabHistorico">
+                <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+                    <h5 class="fw-bold m-0" style="color: var(--p);">Linha do Tempo (Evolução)</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small fw-bold text-muted m-0">Filtrar:</label>
+                        <select id="filtroTipoHist" class="form-select form-select-sm fw-bold w-auto shadow-sm" onchange="window.renderizarHistorico()">
+                            <option value="">Visualizar Todo o Histórico</option>
+                            <option value="orcamento">Mostrar Apenas Orçamentos</option>
+                            <option value="execucao">Mostrar Apenas Procedimentos</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="timelineHistorico" class="px-2" style="max-height: 600px; overflow-y: auto;">
+                    <div class="text-center text-muted py-5 fst-italic">Nenhum evento registrado no histórico deste paciente.</div>
+                </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewFinanceiro" class="view-section oculto">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold m-0" style="color: var(--s);">Caixa e Finanças</h4>
+            <button class="btn btn-primary-custom rounded-pill fw-bold shadow-sm" onclick="window.abrirModalFin()">
+                <i class="bi bi-plus-circle"></i> Novo Lançamento Manual
+            </button>
+        </div>
+        <div class="card p-0 border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 table-custom">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">Data do Registro</th>
+                            <th>Descrição da Movimentação</th>
+                            <th>Natureza (Tipo)</th>
+                            <th>Valor (R$)</th>
+                            <th class="text-center">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbFinanceiro"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewEstoque" class="view-section oculto">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold m-0" style="color: var(--s);">Controle de Estoque e Insumos</h4>
+            <button class="btn btn-secondary-custom rounded-pill fw-bold shadow-sm" onclick="window.abrirModalEstoque()">
+                <i class="bi bi-box-seam"></i> Cadastrar Insumo
+            </button>
+        </div>
+        <div class="card p-0 border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 table-custom">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">Descrição do Produto</th>
+                            <th>Quantidade Atual</th>
+                            <th>Margem de Segurança (Mínimo)</th>
+                            <th class="text-center">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbEstoque"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal fade" id="modalPaciente" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 rounded-4 shadow-lg">
+      <div class="modal-header border-bottom-0 pb-0">
+          <h5 class="modal-title fw-bold" style="color: var(--s);">Novo Paciente</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 pt-3">
+        <form id="formPaciente" onsubmit="event.preventDefault(); window.salvarPaciente();">
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <label class="small fw-bold text-muted">Nome Completo *</label>
+                    <input type="text" id="pacNome" class="form-control" placeholder="Digite o nome completo" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="small fw-bold text-muted">WhatsApp / Contato *</label>
+                    <input type="text" id="pacTel" class="form-control" placeholder="(00) 00000-0000" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="small fw-bold text-muted">CPF</label>
+                    <input type="text" id="pacCpf" class="form-control" placeholder="Opcional">
+                </div>
+                <div class="col-md-6">
+                    <label class="small fw-bold text-muted">Data de Nascimento</label>
+                    <input type="date" id="pacNasc" class="form-control">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary-custom w-100 mt-4 py-3 rounded-pill fw-bold shadow-sm">
+                Salvar Cadastro do Paciente
+            </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalAgenda" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow-lg">
+      <div class="modal-header border-bottom-0">
+          <h5 class="modal-title fw-bold" style="color: var(--s);">Reservar Horário na Agenda</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 pt-2">
+          <form onsubmit="event.preventDefault(); window.salvarAgenda();">
+              <label class="small fw-bold text-muted mb-1">Selecione o Paciente</label>
+              <select id="agPac" class="form-select mb-3" required></select>
+              
+              <label class="small fw-bold text-muted mb-1">Qual Serviço será realizado?</label>
+              <select id="agServ" class="form-select mb-3" required></select>
+              
+              <div class="row g-2 mb-4">
+                  <div class="col-6">
+                      <label class="small fw-bold text-muted mb-1">Data</label>
+                      <input type="date" id="agData" class="form-control" required>
+                  </div>
+                  <div class="col-6">
+                      <label class="small fw-bold text-muted mb-1">Hora</label>
+                      <input type="time" id="agHora" class="form-control" required>
+                  </div>
+              </div>
+              <button type="submit" class="btn btn-primary-custom w-100 py-2 rounded-pill fw-bold shadow-sm">Confirmar Agendamento</button>
+          </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalServico" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow-lg">
+      <div class="modal-header border-bottom-0">
+          <h5 class="modal-title fw-bold" style="color: var(--s);">Adicionar Serviço ao Catálogo</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 pt-2">
+          <form onsubmit="event.preventDefault(); window.salvarServico();">
+              <label class="small fw-bold text-muted mb-1">Nome do Procedimento</label>
+              <input type="text" id="catNome" class="form-control mb-3" placeholder="Ex: Preenchimento de Olheiras" required>
+              
+              <div class="row g-3 mb-4">
+                  <div class="col-6">
+                      <label class="small fw-bold text-muted mb-1">Categoria</label>
+                      <select id="catCategoria" class="form-select">
+                          <option value="Facial">Facial</option>
+                          <option value="Corporal">Corporal</option>
+                          <option value="Capilar">Capilar</option>
+                          <option value="Estética Íntima">Estética Íntima</option>
+                      </select>
+                  </div>
+                  <div class="col-6">
+                      <label class="small fw-bold text-muted mb-1">Preço Base (Tabela)</label>
+                      <input type="number" step="0.01" id="catPreco" class="form-control fw-bold text-success" placeholder="R$" required>
+                  </div>
+              </div>
+              <button type="submit" class="btn btn-primary-custom w-100 py-2 rounded-pill fw-bold shadow-sm">Salvar no Sistema</button>
+          </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalFin" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow-lg">
+      <div class="modal-header border-bottom-0">
+          <h5 class="modal-title fw-bold" style="color: var(--s);">Lançamento de Caixa</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 pt-2">
+        <form onsubmit="event.preventDefault(); window.salvarFinanceiro();">
+            <label class="small fw-bold text-muted mb-1">Tipo da Movimentação</label>
+            <select id="finTipo" class="form-select mb-3" required>
+                <option value="Receita">🟢 Receita (Entrada)</option>
+                <option value="Despesa">🔴 Despesa (Saída)</option>
+            </select>
+            <label class="small fw-bold text-muted mb-1">Descrição Comercial</label>
+            <input type="text" id="finDesc" class="form-control mb-3" placeholder="Ex: Conta de Luz / Venda Produto X" required>
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <label class="small fw-bold text-muted mb-1">Valor</label>
+                    <input type="number" step="0.01" id="finValor" class="form-control" required>
+                </div>
+                <div class="col-6">
+                    <label class="small fw-bold text-muted mb-1">Data</label>
+                    <input type="date" id="finData" class="form-control" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary-custom w-100 py-2 rounded-pill fw-bold shadow-sm">Registrar Transação</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalEst" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow-lg">
+      <div class="modal-header border-bottom-0">
+          <h5 class="modal-title fw-bold" style="color: var(--s);">Entrada de Produto</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 pt-2">
+        <form onsubmit="event.preventDefault(); window.salvarEstoque();">
+            <label class="small fw-bold text-muted mb-1">Nome do Insumo / Produto</label>
+            <input type="text" id="estNome" class="form-control mb-3" placeholder="Ex: Agulhas Lebel" required>
+            <div class="row g-2 mb-4">
+                <div class="col-6">
+                    <label class="small fw-bold text-muted mb-1">Qtd Fìsica Atual</label>
+                    <input type="number" id="estQtd" class="form-control text-primary fw-bold" required>
+                </div>
+                <div class="col-6">
+                    <label class="small fw-bold text-muted mb-1">Alerta Mínimo</label>
+                    <input type="number" id="estMin" class="form-control text-danger fw-bold" placeholder="Avisar com X" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-secondary-custom w-100 py-2 rounded-pill fw-bold shadow-sm">Salvar Estoque</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  // ⚠️ Importação do onSnapshot ADICIONADA AQUI
+  import { getFirestore, collection, getDoc, getDocs, doc, setDoc, deleteDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
+
+  // 1. Configuração Firebase
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOEgd1WCElKtngAcQ-ygnx0_2lpHLUAyM",
+    authDomain: "caatingasoftware.firebaseapp.com",
+    projectId: "caatingasoftware",
+    storageBucket: "caatingasoftware.firebasestorage.app",
+    messagingSenderId: "357801806903",
+    appId: "1:357801806903:web:7b03d8f9f0189bf32943b2"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+  const storage = getStorage(app); 
+  
+  // 2. Variáveis de Estado e Memória
+  let usuarioAtual = null;
+  let listenerUsuario = null; // ⚠️ VARIÁVEL DO VIGIA
+  let tenant = ""; 
+  
+  window.BD_PACIENTES = [];
+  window.BD_FINANCEIRO = [];
+  window.BD_ESTOQUE = [];
+  window.BD_PRONTUARIOS = [];
+  window.BD_SERVICOS = [];
+  window.BD_AGENDA = [];
+
+  // Variaveis da Aba Execução (Foto Real)
+  let pontosSessao = [];
+  let arquivoFotoSessao = null; 
+  
+  // Variáveis para as Instâncias dos Modais (Bootstrap)
+  let mPac, mAg, mServ, mFin, mEst;
+  let graficoDash = null;
+
+  // 4. Utilitários (UI e Loadings)
+  function loading(show, msg="Processando...") { 
+      document.getElementById('loading-msg').innerText = msg; 
+      document.getElementById('loadingOverlay').classList.toggle('oculto', !show); 
+  }
+  
+  window.showToast = function(msg) { 
+      document.getElementById('toastMsg').innerText = msg; 
+      new bootstrap.Toast(document.getElementById('liveToast')).show(); 
+  };
+
+  window.navegar = function(idDaView, elLink) {
+      document.querySelectorAll('.view-section').forEach(v => v.classList.add('oculto'));
+      document.getElementById(idDaView).classList.remove('oculto');
+      document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+      elLink.classList.add('active');
+  }
+
+  // 5. Inicialização (Boot com Auth)
+  window.onload = function() {
+      // Instancia Modais do Bootstrap
+      mPac = new bootstrap.Modal(document.getElementById('modalPaciente'));
+      mAg = new bootstrap.Modal(document.getElementById('modalAgenda'));
+      mServ = new bootstrap.Modal(document.getElementById('modalServico'));
+      mFin = new bootstrap.Modal(document.getElementById('modalFin'));
+      mEst = new bootstrap.Modal(document.getElementById('modalEst'));
+      
+      // Datas padrão de hoje
+      document.getElementById('finData').valueAsDate = new Date();
+      document.getElementById('filtroDataAgenda').valueAsDate = new Date();
+      document.getElementById('agData').valueAsDate = new Date();
+      
+      // ⚠️ Escuta Estado de Autenticação do Firebase Auth e verifica no BD
+      onAuthStateChanged(auth, async (userAuth) => {
+          const cracha = localStorage.getItem("caatinga_user");
+          if (userAuth && cracha) { 
+              usuarioAtual = JSON.parse(cracha); 
+
+              // 🚨 TRAVA DE SEGURANÇA NA INICIALIZAÇÃO
+              if (usuarioAtual.cpf !== "01305663306") {
+                  try {
+                      const docVerifica = await getDoc(doc(db, "usuarios", usuarioAtual.cpf));
+                      if (!docVerifica.exists() || docVerifica.data().ativo === false) {
+                          window.sairSistema(true); // Expulsão silenciosa
+                          return;
+                      }
+                  } catch(e) { console.log("Aviso de rede na verificação inicial."); }
+              }
+
+              iniciarSistema(); 
+          } else { 
+              document.getElementById('telaLogin').classList.remove('oculto'); 
+              document.getElementById('sistemaPrincipal').classList.add('oculto');
+          }
+      });
+  };
+
+  // 6. Autenticação Segura via Firebase Auth
+  window.logar = async function() {
+      const cpfLimpo = document.getElementById('loginCpf').value.replace(/\D/g, '');
+      const senhaFornecida = document.getElementById('loginSenha').value;
+      const divMsg = document.getElementById('msgLogin');
+      divMsg.classList.add('oculto');
+      
+      if(!cpfLimpo || !senhaFornecida) {
+          divMsg.innerText = "Por favor, preencha CPF e Senha.";
+          divMsg.classList.remove('oculto');
+          return;
+      }
+
+      loading(true, "Conectando ao banco de dados...");
+      
+      try {
+          const emailFicticio = cpfLimpo + "@feitosa.app";
+
+          // Acesso Master
+          if (cpfLimpo === "01305663306" && senhaFornecida === "pr10mf86") {
+              try {
+                  await signInWithEmailAndPassword(auth, emailFicticio, senhaFornecida);
+              } catch(e) {
+                  await createUserWithEmailAndPassword(auth, emailFicticio, senhaFornecida);
+              }
+              usuarioAtual = { nome: "Dr(a). Master Admin", empresa_id: "clinica_modelo", cpf: cpfLimpo }; 
+              localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual)); 
+              iniciarSistema();
+          } else {
+              // Login Firebase Auth
+              await signInWithEmailAndPassword(auth, emailFicticio, senhaFornecida);
+              
+              // Verifica existência e autorização no Firestore
+              const userRef = doc(db, "usuarios", cpfLimpo);
+              const uSnap = await getDoc(userRef);
+              
+              if (uSnap.exists()) { 
+                  const uData = uSnap.data();
+                  if (uData.ativo === false) throw new Error("Utilizador inativo ou bloqueado.");
+                  
+                  usuarioAtual = uData; 
+                  usuarioAtual.cpf = cpfLimpo; // ⚠️ Garante o CPF no cache para o Vigia
+                  localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual)); 
+                  iniciarSistema(); 
+              } else { 
+                  throw new Error("Utilizador não encontrado na base de dados de gestão."); 
+              }
+          }
+      } catch(e) { 
+          divMsg.innerText = e.message.includes("auth") ? "Credenciais inválidas." : e.message; 
+          divMsg.classList.remove('oculto'); 
+      } finally {
+          loading(false); 
+      }
+  };
+
+  window.sairSistema = function(silencioso = false) { 
+      localStorage.removeItem("caatinga_user"); 
+      if(listenerUsuario) { listenerUsuario(); listenerUsuario = null; } // Desliga o vigia
+
+      signOut(auth).then(() => {
+          if(!silencioso) {
+              window.location.reload(); 
+          } else {
+              document.getElementById('sistemaPrincipal').classList.add('oculto');
+              document.getElementById('telaLogin').classList.remove('oculto'); 
+              const msgErr = document.getElementById('msgLogin');
+              msgErr.innerText = "Acesso revogado pelo Administrador."; 
+              msgErr.classList.remove('oculto');
+          }
+      });
+  }
+
+  function iniciarSistema() {
+      document.getElementById('telaLogin').classList.add('oculto'); 
+      document.getElementById('sistemaPrincipal').classList.remove('oculto');
+      
+      tenant = String(usuarioAtual.empresa_id || "clinica_modelo").toLowerCase().trim();
+      document.getElementById('usuarioLogado').innerText = usuarioAtual.nome;
+      
+      // 🚨 VIGIA DE TEMPO REAL
+      if (!listenerUsuario && usuarioAtual.cpf !== "01305663306") {
+          listenerUsuario = onSnapshot(doc(db, "usuarios", usuarioAtual.cpf), (docSnap) => {
+              if (!docSnap.exists() || docSnap.data().ativo === false) {
+                  alert("⚠️ Seu acesso à Clínica foi suspenso.");
+                  window.sairSistema(true);
+              }
+          });
+      }
+
+      window.sincronizarBD();
+  }
+
+  // 7. Sincronização Massiva Paralela
+  window.sincronizarBD = async function() {
+      loading(true, "Sincronizando Módulos Clínicos...");
+      try {
+          const [reqPacientes, reqFinancas, reqEstoque, reqProntuarios, reqServicos, reqAgenda] = await Promise.all([
+              getDocs(collection(db, `${tenant}_pacientes`)), 
+              getDocs(collection(db, `${tenant}_financeiro`)),
+              getDocs(collection(db, `${tenant}_estoque`)), 
+              getDocs(collection(db, `${tenant}_prontuarios`)),
+              getDocs(collection(db, `${tenant}_servicos`)), 
+              getDocs(collection(db, `${tenant}_agendamentos`))
+          ]);
+          
+          window.BD_PACIENTES = reqPacientes.docs.map(d=>({id:d.id, ...d.data()}));
+          window.BD_FINANCEIRO = reqFinancas.docs.map(d=>({id:d.id, ...d.data()}));
+          window.BD_ESTOQUE = reqEstoque.docs.map(d=>({id:d.id, ...d.data()}));
+          window.BD_PRONTUARIOS = reqProntuarios.docs.map(d=>({id:d.id, ...d.data()}));
+          window.BD_SERVICOS = reqServicos.docs.map(d=>({id:d.id, ...d.data()}));
+          window.BD_AGENDA = reqAgenda.docs.map(d=>({id:d.id, ...d.data()}));
+          
+          window.renderizarPacientes();
+          window.renderizarServicos();
+          window.renderizarAgenda();
+          window.renderizarFinanceiro();
+          window.renderizarEstoque();
+          window.atualizarDashboard();
+          
+          let opcoesHtml = '<option value="">-- Selecione o Procedimento --</option>';
+          opcoesHtml += window.BD_SERVICOS.map(x => `<option value="${x.nome}" data-preco="${x.valorBase}">${x.nome} (Base: R$ ${x.valorBase.toFixed(2)})</option>`).join('');
+          
+          document.getElementById('orcServico').innerHTML = opcoesHtml;
+          document.getElementById('execServico').innerHTML = opcoesHtml;
+          document.getElementById('agServ').innerHTML = opcoesHtml;
+
+      } catch(e) { 
+          console.error(e); 
+          alert("Aviso: Falha temporária de sincronização com a Nuvem."); 
+      }
+      loading(false);
+  }
+
+  // ====================== MÓDULO 1: PACIENTES ======================
+  window.abrirModalPaciente = function() { 
+      document.getElementById('formPaciente').reset(); 
+      mPac.show(); 
+  }
+
+  window.salvarPaciente = async function() {
+      loading(true, "Salvando Cadastro...");
+      try {
+          const idGerado = "PAC_" + Date.now();
+          const docData = {
+              nome: document.getElementById('pacNome').value, 
+              telefone: document.getElementById('pacTel').value,
+              cpf: document.getElementById('pacCpf').value, 
+              nascimento: document.getElementById('pacNasc').value,
+              dataCadastro: new Date().toISOString()
+          };
+
+          await setDoc(doc(db, `${tenant}_pacientes`, idGerado), docData);
+          mPac.hide(); 
+          window.showToast("Paciente salvo com sucesso!");
+          await window.sincronizarBD();
+      } catch (e) { alert("Ocorreu um erro ao gravar o paciente."); }
+      loading(false);
+  }
+
+  window.renderizarPacientes = function() {
+      const inputBusca = document.getElementById('buscaPaciente').value.toLowerCase();
+      const pacientesFiltrados = window.BD_PACIENTES.filter(x => x.nome.toLowerCase().includes(inputBusca));
+      
+      const tbody = document.getElementById('tbPacientes');
+      
+      if(pacientesFiltrados.length === 0) { 
+          tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">Nenhum paciente localizado.</td></tr>'; 
+      } else {
+          tbody.innerHTML = pacientesFiltrados.map(x => `
+              <tr>
+                  <td class="ps-4 fw-bold" style="color: var(--s);">${x.nome}</td>
+                  <td>${x.telefone}</td>
+                  <td class="text-muted small">${new Date(x.dataCadastro).toLocaleDateString('pt-BR')}</td>
+                  <td class="text-center">
+                      <button class="btn btn-sm btn-outline-primary shadow-sm" onclick="window.abrirProntuarioDireto('${x.id}')">
+                          <i class="bi bi-folder2-open"></i> Abrir Ficha
+                      </button>
+                  </td>
+              </tr>
+          `).join('');
+      }
+
+      const optionsPacientes = '<option value="">-- Escolha um Paciente --</option>' + window.BD_PACIENTES.map(x => `<option value="${x.id}">${x.nome}</option>`).join('');
+      
+      const selectProntuario = document.getElementById('prontPaciente');
+      if (selectProntuario) { 
+          let valorAntigo = selectProntuario.value; 
+          selectProntuario.innerHTML = optionsPacientes; 
+          selectProntuario.value = valorAntigo; 
+      }
+
+      const selectAgenda = document.getElementById('agPac');
+      if (selectAgenda) {
+          selectAgenda.innerHTML = '<option value="">-- Selecione --</option>' + window.BD_PACIENTES.map(x => `<option value="${x.nome}">${x.nome}</option>`).join('');
+      }
+  }
+
+  window.filtrarPacientes = function() { window.renderizarPacientes(); }
+
+  window.abrirProntuarioDireto = function(pacienteId) { 
+      window.navegar('viewProntuario', document.querySelectorAll('.nav-link')[3]); 
+      document.getElementById('prontPaciente').value = pacienteId; 
+      window.carregarFichaPaciente(); 
+  }
+
+  // ====================== MÓDULO 2: PRONTUÁRIO CLÍNICO ======================
+  window.carregarFichaPaciente = function() {
+      const idSelecionado = document.getElementById('prontPaciente').value;
+      const painelFicha = document.getElementById('areaFicha');
+      
+      if(!idSelecionado) { 
+          painelFicha.classList.add('oculto'); 
+          return; 
+      }
+      painelFicha.classList.remove('oculto');
+      
+      const objPaciente = window.BD_PACIENTES.find(x => x.id === idSelecionado);
+      document.getElementById('anaQueixa').value = objPaciente.anaQueixa || '';
+      document.getElementById('anaPele').value = objPaciente.anaPele || 'Normal';
+      document.getElementById('anaAlergias').value = objPaciente.anaAlergias || '';
+      document.getElementById('anaDoencas').value = objPaciente.anaDoencas || '';
+
+      itensOrcamento = []; 
+      window.renderItensOrc(); 
+      document.getElementById('orcDesconto').value = "0";
+      window.calcTotalOrc();
+      
+      window.limparPontosAtuais();
+      window.resetarAreaFotoReal(); 
+      window.renderizarHistorico();
+  }
+
+  window.salvarAnamnese = async function() {
+      const idPaciente = document.getElementById('prontPaciente').value;
+      loading(true, "Salvando dados clínicos...");
+      try {
+          await updateDoc(doc(db, `${tenant}_pacientes`, idPaciente), {
+              anaQueixa: document.getElementById('anaQueixa').value, 
+              anaPele: document.getElementById('anaPele').value,
+              anaAlergias: document.getElementById('anaAlergias').value, 
+              anaDoencas: document.getElementById('anaDoencas').value
+          });
+          window.showToast("Anamnese e questionário de saúde atualizados!"); 
+          await window.sincronizarBD();
+      } catch (e) { alert("Erro crítico ao salvar histórico de anamnese."); }
+      loading(false);
+  }
+
+  // -------- Orçamentos Inteligentes --------
+  window.autoPreencherValorOrc = function() { 
+      const selectElement = document.getElementById('orcServico'); 
+      const optionAtiva = selectElement.options[selectElement.selectedIndex];
+      if (optionAtiva && optionAtiva.dataset.preco) {
+          document.getElementById('orcValorUnit').value = parseFloat(optionAtiva.dataset.preco).toFixed(2);
+      }
+  }
+
+  window.addServicoOrcamento = function() {
+      const descrServico = document.getElementById('orcServico').value;
+      const vlCalculado = parseFloat(document.getElementById('orcValorUnit').value);
+      if(!descrServico || isNaN(vlCalculado)) return alert("Selecione um serviço e verifique o valor.");
+      itensOrcamento.push({ servico: descrServico, valor: vlCalculado }); 
+      window.renderItensOrc();
+  }
+
+  window.removerServicoOrc = function(index) {
+      itensOrcamento.splice(index, 1);
+      window.renderItensOrc();
+  }
+
+  window.renderItensOrc = function() {
+      const tbody = document.getElementById('tbItensOrc');
+      if (itensOrcamento.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="text-muted py-3">Adicione itens no painel acima.</td></tr>';
+      } else {
+          tbody.innerHTML = itensOrcamento.map((item, index) => `
+              <tr>
+                  <td class="fw-bold">${item.servico}</td>
+                  <td class="text-primary">R$ ${item.valor.toFixed(2)}</td>
+                  <td><button class="btn btn-sm btn-outline-danger py-0 px-2 rounded-pill" onclick="window.removerServicoOrc(${index})"><i class="bi bi-x-lg"></i></button></td>
+              </tr>
+          `).join('');
+      }
+      window.calcTotalOrc();
+  }
+
+  window.calcTotalOrc = function() {
+      const sumSubtotal = itensOrcamento.reduce((acc, obj) => acc + obj.valor, 0);
+      const valorDesconto = parseFloat(document.getElementById('orcDesconto').value) || 0;
+      let valorFinal = sumSubtotal - valorDesconto;
+      if (valorFinal < 0) valorFinal = 0;
+      document.getElementById('valSub').innerText = sumSubtotal.toFixed(2);
+      document.getElementById('valTotal').innerText = valorFinal.toFixed(2);
+  }
+
+  window.salvarOrcamento = async function() {
+      const idPac = document.getElementById('prontPaciente').value;
+      const vlrTotalFormato = parseFloat(document.getElementById('valTotal').innerText);
+      if(itensOrcamento.length === 0) return alert("O orçamento está vazio.");
+
+      loading(true, "Gerando Documento...");
+      try {
+          await setDoc(doc(db, `${tenant}_prontuarios`, "ORC_" + Date.now()), {
+              pacienteId: idPac, tipo: 'orcamento', itens: itensOrcamento, 
+              total: vlrTotalFormato, desconto: parseFloat(document.getElementById('orcDesconto').value) || 0,
+              formaPgto: document.getElementById('orcPgto').value, data: new Date().toISOString()
+          });
+          window.showToast("Orçamento Fechado!");
+          itensOrcamento = []; window.renderItensOrc(); document.getElementById('orcDesconto').value = "0"; window.calcTotalOrc();
+          await window.sincronizarBD();
+          new bootstrap.Tab(document.querySelector('#fichaTabs a[href="#tabHistorico"]')).show();
+      } catch (e) { alert("Falha na gravação do orçamento."); }
+      loading(false);
+  }
+
+  // -------- Execução COM FOTO REAL --------
+  window.resetarAreaFotoReal = function() {
+      document.getElementById('placeholderMapa').classList.remove('oculto');
+      const imgHtml = document.getElementById('imgMapaReal');
+      imgHtml.classList.add('oculto');
+      imgHtml.src = "";
+      arquivoFotoSessao = null;
+      document.getElementById('execInputFoto').value = ""; 
+      pontosSessao = [];
+      window.renderizarPontos();
+  }
+
+  window.carregarFotoParaMapa = function(inputInput) {
+      if (inputInput.files && inputInput.files[0]) {
+          loading(true, "Processando imagem...");
+          arquivoFotoSessao = inputInput.files[0]; 
+          
+          const reader = new FileReader();
+          reader.onload = function(e) {
+              document.getElementById('placeholderMapa').classList.add('oculto');
+              const imgHtml = document.getElementById('imgMapaReal');
+              imgHtml.src = e.target.result;
+              imgHtml.classList.remove('oculto');
+              pontosSessao = [];
+              window.renderizarPontos();
+              loading(false);
+          };
+          reader.readAsDataURL(arquivoFotoSessao);
+      }
+  }
+
+  window.adicionarPonto = function(eventoClique) {
+      const pacIdVal = document.getElementById('prontPaciente').value;
+      if (!pacIdVal) return alert("Selecione a ficha do paciente primeiro!");
+      
+      const imgHtml = document.getElementById('imgMapaReal');
+      if (!arquivoFotoSessao && imgHtml.classList.contains('oculto')) {
+          return alert("Por favor, carregue a foto da paciente antes de marcar os pontos.");
+      }
+
+      const elCanvas = document.getElementById('mapaCanvas');
+      const retanguloBound = elCanvas.getBoundingClientRect();
+      const calcX = ((eventoClique.clientX - retanguloBound.left) / retanguloBound.width) * 100;
+      const calcY = ((eventoClique.clientY - retanguloBound.top) / retanguloBound.height) * 100;
+      
+      pontosSessao.push({ x: calcX, y: calcY }); 
+      window.renderizarPontos();
+  }
+
+  window.renderizarPontos = function() {
+      const conteinerBolinhas = document.getElementById('dotsContainer');
+      conteinerBolinhas.innerHTML = '';
+      pontosSessao.forEach(pt => {
+          const divVermelho = document.createElement('div'); 
+          divVermelho.className = 'ponto-marcado'; 
+          divVermelho.style.left = pt.x + '%'; 
+          divVermelho.style.top = pt.y + '%'; 
+          conteinerBolinhas.appendChild(divVermelho);
+      });
+  }
+
+  window.limparPontosAtuais = function() { pontosSessao = []; window.renderizarPontos(); }
+
+  window.salvarExecucao = async function() {
+      const idPacAt = document.getElementById('prontPaciente').value;
+      const servico = document.getElementById('execServico').value;
+      
+      if(!servico) return alert("Selecione o serviço realizado.");
+      if(!arquivoFotoSessao) return alert("É obrigatório carregar a foto real da paciente para marcar os pontos desta sessão.");
+      if(pontosSessao.length === 0 && !confirm("Nenhum ponto marcado na foto. Deseja salvar apenas a foto?")) return;
+
+      const btnSalvar = document.getElementById('btnSalvarExec');
+      btnSalvar.disabled = true;
+      btnSalvar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Enviando Foto...`;
+      loading(true, "Fazendo upload da foto...");
+      
+      try {
+          const dataISO = new Date().toISOString();
+          const nomeArquivo = `${dataISO.replace(/:/g, '-')}.jpg`;
+          const storageRef = ref(storage, `${tenant}/${idPacAt}/${nomeArquivo}`);
+          
+          const snapshot = await uploadBytes(storageRef, arquivoFotoSessao);
+          const urlDownload = await getDownloadURL(snapshot.ref);
+          
+          await setDoc(doc(db, `${tenant}_prontuarios`, "PROC_" + Date.now()), {
+              pacienteId: idPacAt, tipo: 'execucao', servico: servico,
+              produto: document.getElementById('execProduto').value, obs: document.getElementById('execObs').value,
+              pontos: pontosSessao, fotoUrl: urlDownload, data: dataISO
+          });
+          
+          document.getElementById('execProduto').value = ''; document.getElementById('execObs').value = '';
+          window.resetarAreaFotoReal(); 
+          window.showToast("Procedimento Registrado com Foto Real!"); 
+          await window.sincronizarBD();
+          new bootstrap.Tab(document.querySelector('#fichaTabs a[href="#tabHistorico"]')).show();
+
+      } catch (e) { alert("Erro crítico ao fazer upload ou salvar no banco de dados."); } 
+      finally {
+          btnSalvar.disabled = false;
+          btnSalvar.innerHTML = `<i class="bi bi-file-earmark-medical"></i> Gravar Sessão e Pontos na Foto`;
+          loading(false);
+      }
+  }
+
+  // -------- Histórico / Evolução COM FOTO --------
+  window.renderizarHistorico = function() {
+      const idDestePaciente = document.getElementById('prontPaciente').value;
+      const valFiltro = document.getElementById('filtroTipoHist').value;
+      
+      let registros = window.BD_PRONTUARIOS.filter(x => x.pacienteId === idDestePaciente);
+      registros.sort((a,b) => new Date(b.data) - new Date(a.data));
+      if(valFiltro) registros = registros.filter(x => x.tipo === valFiltro);
+      
+      const elTimeline = document.getElementById('timelineHistorico');
+      if(registros.length === 0) return elTimeline.innerHTML = `<div class="text-center text-muted py-5 fst-italic">Nenhum evento registrado no histórico.</div>`;
+
+      elTimeline.innerHTML = registros.map((itemHist, index) => {
+          let strDataFormat = new Date(itemHist.data).toLocaleString('pt-BR');
+          
+          if(itemHist.tipo === 'orcamento') {
+              let arrayNomeItens = itemHist.itens.map(i => i.servico).join(' • ');
+              return `
+                  <div class="timeline-item bg-light p-3 rounded border mb-3">
+                      <small class="text-muted fw-bold"><i class="bi bi-calendar-event"></i> ${strDataFormat}</small>
+                      <h6 class="fw-bold m-0 mt-2 text-success"><i class="bi bi-check2-circle"></i> Fechamento de Orçamento (R$ ${itemHist.total.toFixed(2)})</h6>
+                      <p class="small text-secondary mb-1 mt-1"><strong>Itens:</strong> ${arrayNomeItens}</p>
+                      <span class="badge bg-secondary">Pagamento: ${itemHist.formaPgto}</span>
+                  </div>
+              `;
+          } else {
+              const temFoto = itemHist.fotoUrl ? true : false;
+              return `
+                  <div class="timeline-item bg-white p-3 rounded border mb-3 shadow-sm">
+                      <div class="row g-3">
+                          <div class="col-md-7">
+                              <small class="text-muted fw-bold"><i class="bi bi-clock"></i> ${strDataFormat}</small>
+                              <h6 class="fw-bold m-0 mt-2" style="color: var(--s);"><i class="bi bi-bandaid-fill" style="color: var(--p);"></i> Sessão de ${itemHist.servico || 'Procedimento S/ Nome'}</h6>
+                              <p class="small text-dark mt-2 mb-1"><strong>Protocolo/Insumos:</strong> ${itemHist.produto || 'Não informado'}</p>
+                              <div class="small mt-2 p-2 bg-light border-start border-2 border-secondary fst-italic">"${itemHist.obs || 'Evolução favorável.'}"</div>
+                          </div>
+                          <div class="col-md-5 text-center">
+                              ${temFoto ? `
+                                  <div class="mapa-corporal border shadow-sm" style="max-width: 200px; min-height: 150px; cursor: default;">
+                                      <img src="${itemHist.fotoUrl}" class="img-paciente-mapa" alt="Foto da Sessão">
+                                      ${itemHist.pontos.map(pt => `<div class="ponto-marcado" style="left: ${pt.x}%; top: ${pt.y}%; width: 10px; height: 10px; border-width: 1px;"></div>`).join('')}
+                                  </div>
+                              ` : `<div class="text-muted small fst-italic pt-4"><i class="bi bi-image-slash fs-2 d-block mb-1"></i>Sessão sem registro fotográfico.</div>`}
+                          </div>
+                      </div>
+                  </div>
+              `;
+          }
+      }).join('');
+  }
+
+  // ====================== MÓDULO 3: AGENDA ======================
+  window.abrirModalAgenda = function() { mAg.show(); }
+  window.salvarAgenda = async function() {
+      loading(true, "Reservando...");
+      try {
+          await setDoc(doc(db, `${tenant}_agendamentos`, "AG_" + Date.now()), {
+              paciente: document.getElementById('agPac').value, servico: document.getElementById('agServ').value,
+              data: document.getElementById('agData').value, hora: document.getElementById('agHora').value, status: 'Aguardando'
+          });
+          mAg.hide(); window.showToast("Atendimento Reservado!"); await window.sincronizarBD();
+      } catch(e) { alert("Não foi possível confirmar o agendamento no momento."); }
+      loading(false);
+  }
+  window.renderizarAgenda = function() {
+      const paramData = document.getElementById('filtroDataAgenda').value;
+      let dataset = window.BD_AGENDA;
+      if(paramData) dataset = dataset.filter(x => x.data === paramData);
+      dataset.sort((a,b) => a.hora.localeCompare(b.hora));
+      const tb = document.getElementById('tbAgenda');
+      if(dataset.length === 0) return tb.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-5"><i class="bi bi-calendar-x fs-3 d-block mb-2"></i> Dia Livre.</td></tr>`;
+      tb.innerHTML = dataset.map(a => `<tr><td class="fw-bold text-primary">${a.data.split('-').reverse().join('/')} <br><i class="bi bi-clock"></i> ${a.hora}</td><td class="fw-bold text-dark">${a.paciente}</td><td class="text-muted">${a.servico}</td><td><span class="badge bg-warning text-dark px-3">${a.status}</span></td><td class="text-center"><button class="btn btn-sm btn-outline-danger shadow-sm rounded-pill" onclick="window.excluirAgenda('${a.id}')"><i class="bi bi-x-lg"></i></button></td></tr>`).join('');
+  }
+  window.excluirAgenda = async function(id) { if(confirm("Cancelar este horário?")) { loading(true); await deleteDoc(doc(db, `${tenant}_agendamentos`, id)); window.sincronizarBD(); } }
+
+  // ====================== MÓDULO 4: CATÁLOGO ======================
+  window.abrirModalServico = function() { document.getElementById('catNome').value = ""; document.getElementById('catPreco').value = ""; mServ.show(); }
+  window.salvarServico = async function() {
+      loading(true, "Atualizando Catálogo...");
+      try {
+          await setDoc(doc(db, `${tenant}_servicos`, "SRV_" + Date.now()), { nome: document.getElementById('catNome').value, categoria: document.getElementById('catCategoria').value, valorBase: parseFloat(document.getElementById('catPreco').value) });
+          mServ.hide(); window.showToast("Novo Serviço disponibilizado!"); await window.sincronizarBD();
+      } catch (e) { alert("Erro de transação no catálogo."); }
+      loading(false);
+  }
+  window.renderizarServicos = function() {
+      const tb = document.getElementById('tbServicos');
+      if(window.BD_SERVICOS.length === 0) return tb.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">O Catálogo está Vazio.</td></tr>`;
+      tb.innerHTML = window.BD_SERVICOS.map(s => `<tr><td class="ps-4 fw-bold" style="color: var(--s);">${s.nome}</td><td><span class="badge bg-light text-secondary border">${s.categoria}</span></td><td class="fw-bold text-success">R$ ${s.valorBase.toFixed(2)}</td><td class="text-center"><button class="btn btn-sm text-danger" onclick="window.excluirServico('${s.id}')"><i class="bi bi-trash3-fill"></i></button></td></tr>`).join('');
+  }
+  window.excluirServico = async function(id) { if(confirm("Remover este serviço?")) { loading(true); await deleteDoc(doc(db, `${tenant}_servicos`, id)); window.sincronizarBD(); } }
+
+  // ====================== MÓDULO 5: FINANCEIRO ======================
+  window.abrirModalFin = function() { document.getElementById('finDesc').value = ""; document.getElementById('finValor').value = ""; mFin.show(); }
+  window.salvarFinanceiro = async function() { 
+      loading(true, "Registrando Transação..."); 
+      try { 
+          await setDoc(doc(db, `${tenant}_financeiro`, "FIN_" + Date.now()), { tipo: document.getElementById('finTipo').value, descricao: document.getElementById('finDesc').value, valor: parseFloat(document.getElementById('finValor').value), dataMov: document.getElementById('finData').value }); 
+          mFin.hide(); window.showToast("Caixa Atualizado!"); await window.sincronizarBD(); 
+      } catch (e) { alert("Erro ao faturar."); } loading(false); 
+  }
+  window.excluirFinanceiro = async function(idReg) { if(confirm("Estornar lançamento?")) { loading(true); await deleteDoc(doc(db, `${tenant}_financeiro`, idReg)); window.sincronizarBD(); } }
+  window.renderizarFinanceiro = function() { 
+      let reg = window.BD_FINANCEIRO.sort((a,b) => new Date(b.dataMov) - new Date(a.dataMov)); 
+      const tb = document.getElementById('tbFinanceiro'); 
+      if(reg.length === 0) return tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Nenhuma movimentação hoje.</td></tr>'; 
+      tb.innerHTML = reg.map(f => `<tr><td class="ps-4 fw-bold text-dark">${f.dataMov.split('-').reverse().join('/')}</td><td class="fw-bold">${f.descricao}</td><td><span class="badge ${f.tipo === 'Receita' ? 'bg-success' : 'bg-danger'} bg-opacity-75">${f.tipo}</span></td><td class="fw-bold ${f.tipo === 'Receita' ? 'text-success' : 'text-danger'}">R$ ${f.valor.toFixed(2)}</td><td class="text-center"><button class="btn btn-sm text-danger border-0 bg-transparent" onclick="window.excluirFinanceiro('${f.id}')"><i class="bi bi-trash"></i></button></td></tr>`).join(''); 
+  }
+
+  // ====================== MÓDULO 6: ESTOQUE ======================
+  window.abrirModalEstoque = function() { document.getElementById('estNome').value = ""; document.getElementById('estQtd').value = ""; document.getElementById('estMin').value = ""; mEst.show(); }
+  window.salvarEstoque = async function() { 
+      loading(true, "Cadastrando..."); 
+      try { 
+          await setDoc(doc(db, `${tenant}_estoque`, "EST_" + Date.now()), { nome: document.getElementById('estNome').value, qtdAtual: parseInt(document.getElementById('estQtd').value), qtdMinima: parseInt(document.getElementById('estMin').value) }); 
+          mEst.hide(); window.showToast("Almoxarifado atualizado!"); await window.sincronizarBD(); 
+      } catch (e) { alert("Erro"); } loading(false); 
+  }
+  window.excluirEstoque = async function(id) { if(confirm("Excluir insumo?")) { loading(true); await deleteDoc(doc(db, `${tenant}_estoque`, id)); window.sincronizarBD(); } }
+  window.renderizarEstoque = function() { 
+      const tb = document.getElementById('tbEstoque'); 
+      if(window.BD_ESTOQUE.length === 0) return tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">Insumos não cadastrados.</td></tr>'; 
+      tb.innerHTML = window.BD_ESTOQUE.map(p => `<tr><td class="ps-4 fw-bold" style="color: var(--s);">${p.nome}</td><td class="${p.qtdAtual <= p.qtdMinima ? 'text-danger fw-bold fs-6' : 'fw-bold text-success'}">${p.qtdAtual} unidades</td><td class="text-muted small">${p.qtdMinima} unidades</td><td class="text-center"><button class="btn btn-sm text-danger" onclick="window.excluirEstoque('${p.id}')"><i class="bi bi-trash3-fill"></i></button></td></tr>`).join(''); 
+  }
+
+  // ====================== MÓDULO 7: DASHBOARDS ======================
+  window.atualizarDashboard = function() {
+      let sumRec = window.BD_FINANCEIRO.filter(x => x.tipo === 'Receita').reduce((a, b) => a + b.valor, 0);
+      let sumDesp = window.BD_FINANCEIRO.filter(x => x.tipo === 'Despesa').reduce((a, b) => a + b.valor, 0);
+      document.getElementById('kpi-receitas').innerText = "R$ " + sumRec.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      document.getElementById('kpi-pacientes').innerText = window.BD_PACIENTES.length;
+      document.getElementById('kpi-agenda').innerText = window.BD_AGENDA.filter(a => a.data === new Date().toISOString().split('T')[0]).length;
+      
+      const prodCrit = window.BD_ESTOQUE.filter(e => e.qtdAtual <= e.qtdMinima);
+      document.getElementById('kpi-estoque').innerText = prodCrit.length + " itens";
+      
+      const lc = document.getElementById('listaEstoqueCritico');
+      lc.innerHTML = prodCrit.length > 0 ? prodCrit.map(i => `<div class="list-group-item bg-transparent px-0 border-bottom d-flex justify-content-between align-items-center"><span class="fw-bold text-dark">${i.nome}</span> <span class="badge bg-danger rounded-pill shadow-sm">${i.qtdAtual} de ${i.qtdMinima} restando</span></div>`).join('') : `<div class="text-muted small fst-italic mt-3"><i class="bi bi-shield-check text-success"></i> Nível Operacional.</div>`; 
+
+      if(graficoDash) graficoDash.destroy();
+      graficoDash = new Chart(document.getElementById('chartFinanceiro'), { type: 'bar', data: { labels: ['Panorama Consolidado de Faturamento'], datasets: [ { label: 'Receitas (Ganhos)', data: [sumRec], backgroundColor: '#d4a373', borderRadius: 8 }, { label: 'Despesas (Gastos)', data: [sumDesp], backgroundColor: '#4a4e69', borderRadius: 8 } ] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } } });
+  }
+</script>
+</body>
+</html>

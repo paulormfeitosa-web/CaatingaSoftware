@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>Gestão de Obras - Caatinga Software</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  
+  <style>
+    /* CORES PERSONALIZADAS E NOVO PADRÃO SSO */
+    body { background-color: #fffde7; font-family: 'Segoe UI', sans-serif; color: #333; }
+    .navbar-custom { background-color: #f8bbd0 !important; border-bottom: 1px solid #f48fb1; }
+    .navbar-custom .navbar-brand, .navbar-custom .nav-link { color: #333 !important; font-weight: 500; }
+    .navbar-custom .nav-link:hover { color: #000 !important; font-weight: bold; }
+    .oculto { display: none !important; }
+    .nav-link { cursor: pointer; }
+    .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; }
+    .bg-pago { background-color: #d1e7dd; color: #0f5132; }
+    .bg-pendente { background-color: #fff3cd; color: #664d03; }
+    .saldo-real { color: #0f5132; font-weight: bold; } 
+    .saldo-projetado { color: #0d6efd; font-weight: bold; } 
+    .input-group-text { background-color: #fff; border-right: 0; font-weight: bold; }
+    .input-money { border-left: 0; }
+    
+    /* Telas de Login do Padrão Caatinga */
+    #loader-sso { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #333; color: white;}
+    #telaLogin { height: 100vh; display: flex; align-items: center; justify-content: center; background: #333; }
+    .login-card { background: white; padding: 2.5rem; border-radius: 15px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 100%; max-width: 400px; text-align: center; }
+
+    @media print {
+      body { background-color: white; }
+      #areaImpressao, #areaImpressao * { visibility: visible; }
+      #areaImpressao { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print, nav { display: none !important; }
+      .bg-pago, .bg-pendente { border: 1px solid #ccc; }
+      .card { border: none !important; box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<datalist id="lista-fornecedores"></datalist>
+
+<div id="loader-sso" class="oculto">
+  <div class="spinner-border text-light" style="width: 3rem; height: 3rem;"></div>
+  <h4 class="mt-3 fw-bold">Autenticando Sessão...</h4>
+</div>
+
+<div id="telaLogin">
+  <div class="login-card">
+    <h3 class="mb-2 fw-bold" style="color:#f48fb1">Caatinga Software</h3>
+    <p class="text-muted mb-4">Módulo: Orçamento de Obras</p>
+    <div id="msgLogin" class="alert alert-danger oculto py-2 small"></div>
+    <form onsubmit="event.preventDefault(); window.logar();">
+      <div class="form-floating mb-3"><input type="text" id="loginCpf" class="form-control" placeholder="CPF" required><label>CPF do Usuário</label></div>
+      <div class="form-floating mb-4"><input type="password" id="loginSenha" class="form-control" placeholder="Senha" required><label>Senha</label></div>
+      <button type="submit" id="btn-login" class="btn btn-dark w-100 py-3 fw-bold">ENTRAR</button>
+      <a href="/" class="btn btn-outline-secondary w-100 mt-2 py-2 fw-bold">Voltar ao Painel</a>
+    </form>
+  </div>
+</div>
+
+<div class="container-fluid p-0">
+  <div class="position-fixed top-0 end-0 p-3" style="z-index: 9999">
+    <div id="liveToast" class="toast align-items-center text-white bg-success border-0 shadow" role="alert">
+      <div class="d-flex">
+        <div class="toast-body fs-6" id="toastMsg">Sucesso!</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalEdicao" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-light">
+          <h5 class="modal-title">✏️ Editar</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editId">
+          <input type="hidden" id="editTipo">
+          <div id="formEditGeral">
+            <label class="form-label fw-bold">Nome / Descrição</label>
+            <input type="text" id="editNome" class="form-control mb-2">
+            
+            <div id="divEditFinanceiro" class="oculto">
+               <label class="form-label fw-bold">Fornecedor</label>
+               <input type="text" id="editFornecedor" class="form-control mb-2" list="lista-fornecedores">
+               
+               <div class="row">
+                 <div class="col-6">
+                   <label class="form-label fw-bold">Valor (R$)</label>
+                   <input type="number" step="0.01" id="editValor" class="form-control">
+                 </div>
+                 <div class="col-6">
+                   <label class="form-label fw-bold">Status</label>
+                   <select id="editStatus" class="form-select">
+                     <option value="Pendente">🕒 Pendente</option>
+                     <option value="Pago">✅ Pago</option>
+                   </select>
+                 </div>
+               </div>
+               <label class="form-label fw-bold mt-2">Data</label>
+               <input type="date" id="editData" class="form-control">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button><button type="button" class="btn btn-primary" onclick="window.confirmarEdicao()">Salvar Alteração</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sistemaPrincipal" class="oculto">
+    <nav class="navbar navbar-expand-lg navbar-custom shadow-sm px-3 sticky-top">
+      <span class="navbar-brand fw-bold"><i class="bi bi-building-check"></i> Gestão de Obras <span id="lbl-empresa" class="badge bg-secondary ms-2" style="font-size: 0.5em;"></span></span>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menuTopo"><span class="navbar-toggler-icon"></span></button>
+      <div class="collapse navbar-collapse" id="menuTopo">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item"><a class="nav-link" onclick="window.navegar('viewLancamento')"><i class="bi bi-cash-coin"></i> Lançar Despesa</a></li>
+          <li class="nav-item"><a class="nav-link" onclick="window.navegar('viewCadastro')"><i class="bi bi-list-check"></i> Cadastros</a></li>
+          <li class="nav-item"><a class="nav-link adm-only" onclick="window.navegar('viewDashboard')"><i class="bi bi-graph-up-arrow"></i> Relatório</a></li>
+        </ul>
+        <div class="d-flex align-items-center">
+          <button id="btnAtualizar" class="btn btn-sm btn-outline-dark me-3" onclick="window.atualizarDadosAtuais()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+          <span class="me-3 small fw-bold" id="usuarioLogado"></span>
+          <button class="btn btn-sm btn-danger" onclick="window.sairSistema()">Sair</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container mt-4 pb-5">
+      <div id="viewCadastro" class="view-section oculto">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-0">
+              <div class="card-header bg-white fw-bold text-success border-bottom">1. Obra</div>
+              <div class="card-body">
+                <input type="text" id="cadObraNome" class="form-control mb-2" placeholder="Nome da Obra">
+                <button onclick="window.cadastrarObra()" class="btn btn-success w-100 btn-sm mb-3">Criar</button>
+                <div class="adm-only bg-light p-2 rounded border"><ul id="listaObrasEdicao" class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;"></ul></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-0">
+              <div class="card-header bg-white fw-bold text-primary border-bottom">2. Grupos</div>
+              <div class="card-body">
+                <select id="cadGrupoSelObra" class="form-select mb-2" onchange="window.listarGruposParaEdicao(this.value)"></select>
+                <input type="text" id="cadGrupoNome" class="form-control mb-2" placeholder="Nome Grupo">
+                <button onclick="window.cadastrarGrupo()" class="btn btn-primary w-100 btn-sm mb-3">Criar</button>
+                <div class="adm-only bg-light p-2 rounded border"><ul id="listaGruposEdicao" class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;"></ul></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-0">
+              <div class="card-header bg-white fw-bold text-info border-bottom">3. Subgrupos (Orçamento)</div>
+              <div class="card-body">
+                <select id="cadSubSelObra" class="form-select mb-2" onchange="window.carregarGrupos(this.value, 'cadSubSelGrupo')"></select>
+                <select id="cadSubSelGrupo" class="form-select mb-2" onchange="window.listarSubgruposParaEdicao(this.value)"></select>
+                <input type="text" id="cadSubNome" class="form-control mb-2" placeholder="Item">
+                <div class="input-group mb-2"><span class="input-group-text">R$</span><input type="number" step="0.01" id="cadSubValor" class="form-control input-money" placeholder="0,00"></div>
+                <button onclick="window.cadastrarSubgrupo()" class="btn btn-info text-white w-100 btn-sm mb-3">Criar</button>
+                <div class="adm-only bg-light p-2 rounded border"><ul id="listaSubsEdicao" class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;"></ul></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="viewLancamento" class="view-section oculto">
+        <div class="row justify-content-center">
+          <div class="col-md-8">
+            <div class="card shadow border-0">
+              <div class="card-header bg-white text-dark fw-bold border-bottom">💸 Nova Despesa</div>
+              <div class="card-body p-4" style="background-color: #fff;">
+                <div class="row g-3">
+                  <div class="col-md-3"><label class="small fw-bold">Data</label><input type="date" id="lancData" class="form-control"></div>
+                  <div class="col-md-5"><label class="small fw-bold">Fornecedor</label><input type="text" id="lancFornecedor" class="form-control" placeholder="Loja, Empreiteiro..." list="lista-fornecedores"></div>
+                  <div class="col-md-4"><label class="small fw-bold">Status Inicial</label><select id="lancStatus" class="form-select"><option value="Pendente">🕒 Pendente (A Pagar)</option><option value="Pago">✅ Pago (Baixado)</option></select></div>
+                  <div class="col-md-6"><label class="small fw-bold">Obra</label><select id="lancSelObra" class="form-select" onchange="window.carregarGrupos(this.value, 'lancSelGrupo')"></select></div>
+                  <div class="col-md-6"><label class="small fw-bold">Grupo</label><select id="lancSelGrupo" class="form-select" onchange="window.carregarSubgrupos(this.value, 'lancSelSub')"></select></div>
+                  <div class="col-12"><label class="small fw-bold">Subgrupo (Item de Custo)</label><select id="lancSelSub" class="form-select bg-light"></select></div>
+                  <div class="col-md-8"><label class="small fw-bold">Descrição Detalhada</label><input type="text" id="lancDesc" class="form-control" placeholder="Ex: NF 123 - 50 sacos de cimento"></div>
+                  <div class="col-md-4"><label class="small fw-bold">Valor Total</label><div class="input-group"><span class="input-group-text">R$</span><input type="number" step="0.01" id="lancValor" class="form-control input-money fs-5 text-primary fw-bold" placeholder="0,00"></div></div>
+                </div>
+                <button onclick="window.salvarDespesa()" class="btn btn-success w-100 mt-4 py-2 fw-bold shadow-sm">LANÇAR DESPESA</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="viewDashboard" class="view-section oculto">
+        <div class="card mb-4 no-print border-0 shadow-sm bg-white">
+          <div class="card-body py-3">
+            <h6 class="text-primary fw-bold mb-3"><i class="bi bi-funnel"></i> Filtros Avançados</h6>
+            <div class="row g-2 align-items-end">
+              <div class="col-md-3"><label class="small mb-1">Obra</label><select id="relSelObra" class="form-select" onchange="window.carregarGruposRelatorio(this.value)"></select></div>
+              <div class="col-md-2"><label class="small mb-1">Status</label><select id="relSelStatus" class="form-select"><option value="">Todos</option><option value="Pendente">🕒 Pendentes</option><option value="Pago">✅ Pagos</option></select></div>
+              <div class="col-md-3"><label class="small mb-1">Fornecedor</label><input type="text" id="relFornecedor" class="form-control" placeholder="Buscar..." list="lista-fornecedores"></div>
+              <div class="col-md-2"><label class="small mb-1">Data Início</label><input type="date" id="relDataIni" class="form-control form-control-sm"></div>
+              <div class="col-md-2"><div class="d-grid gap-2"><button onclick="window.gerarRelatorio()" class="btn btn-primary btn-sm fw-bold">Aplicar Filtros</button></div></div>
+            </div>
+            <div class="mt-2">
+               <a class="text-decoration-none small" data-bs-toggle="collapse" href="#filtrosExtra">Mais filtros...</a>
+               <div class="collapse mt-2" id="filtrosExtra">
+                 <div class="row g-2">
+                   <div class="col-md-3"><label class="small">Grupo</label><select id="relSelGrupo" class="form-select form-select-sm" onchange="window.carregarSubgrupos(this.value, 'relSelSub')"><option value="">Todos</option></select></div>
+                   <div class="col-md-3"><label class="small">Subgrupo</label><select id="relSelSub" class="form-select form-select-sm"><option value="">Todos</option></select></div>
+                   <div class="col-md-2"><label class="small">Data Fim</label><input type="date" id="relDataFim" class="form-control form-control-sm"></div>
+                 </div>
+               </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="areaImpressao">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 id="tituloRelatorio" class="fw-bold text-dark m-0">Visão Geral</h3>
+            <button onclick="window.print()" class="btn btn-dark btn-sm no-print"><i class="bi bi-printer"></i> PDF</button>
+          </div>
+
+          <div id="resumoCards" class="row mb-4 oculto">
+            <div class="col-md-3"><div class="card bg-primary text-white p-3 shadow-sm border-0 text-center"><small class="opacity-75">ORÇAMENTO TOTAL</small><h4 id="resTotalOrcado" class="m-0 fw-bold">R$ 0,00</h4></div></div>
+            <div class="col-md-3"><div class="card bg-white p-3 shadow-sm border-0 text-center border-bottom border-success border-4"><small class="text-success fw-bold">JÁ PAGO (REALIZADO)</small><h4 id="resGastoPago" class="m-0 text-success fw-bold">R$ 0,00</h4></div></div>
+            <div class="col-md-3"><div class="card bg-white p-3 shadow-sm border-0 text-center border-bottom border-warning border-4"><small class="text-warning fw-bold">A PAGAR (PENDENTE)</small><h4 id="resGastoPendente" class="m-0 text-warning fw-bold">R$ 0,00</h4></div></div>
+            <div class="col-md-3"><div class="card bg-dark text-white p-3 shadow-sm border-0 text-center"><small class="opacity-75">SALDO PROJETADO</small><h4 id="resSaldoProjetado" class="m-0 fw-bold text-info">R$ 0,00</h4><small style="font-size:0.7em">Real Atual: <span id="resSaldoReal"></span></small></div></div>
+          </div>
+          <div id="conteudoRelatorio"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  // ⚠️ Importação do onSnapshot adicionada
+  import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOEgd1WCElKtngAcQ-ygnx0_2lpHLUAyM",
+    authDomain: "caatingasoftware.firebaseapp.com",
+    projectId: "caatingasoftware",
+    storageBucket: "caatingasoftware.firebasestorage.app",
+    messagingSenderId: "357801806903",
+    appId: "1:357801806903:web:7b03d8f9f0189bf32943b2",
+    measurementId: "G-ZVSVPMDHP0"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app); 
+
+  let usuarioAtual = {};
+  let listenerUsuario = null; // ⚠️ VARIÁVEL DO VIGIA
+  let tenant = "";
+  const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // FUNÇÃO CENTRAL PARA CHECAR PERMISSÕES 
+  function checarPermissaoAdm() {
+    const p = String(usuarioAtual.perfil || usuarioAtual.nivel_acesso || '').toUpperCase();
+    return p.includes('ADM') || p.includes('MASTER') || p.includes('GESTOR') || p.includes('ADMIN');
+  }
+
+  // --- INICIALIZAÇÃO E SSO ---
+  window.onload = function() {
+    // ⚠️ Escuta Estado de Autenticação do Firebase Auth e verifica no banco
+    onAuthStateChanged(auth, async (userAuth) => {
+      const cracha = localStorage.getItem("caatinga_user");
+      if (userAuth && cracha) {
+        usuarioAtual = JSON.parse(cracha);
+
+        // 🚨 TRAVA DE SEGURANÇA NA INICIALIZAÇÃO
+        if (usuarioAtual.cpf !== "01305663306") {
+            try {
+                const docVerifica = await getDoc(doc(db, "usuarios", usuarioAtual.cpf));
+                if (!docVerifica.exists() || docVerifica.data().ativo === false) {
+                    window.sairSistema(true); // Expulsão silenciosa
+                    return;
+                }
+            } catch(e) { console.log("Aviso de rede na verificação inicial."); }
+        }
+
+        iniciarSistema();
+      } else {
+        document.getElementById('loader-sso').classList.add('oculto'); 
+        document.getElementById('telaLogin').classList.remove('oculto');
+        document.getElementById('sistemaPrincipal').classList.add('oculto');
+      }
+    });
+  };
+
+  window.sairSistema = function(silencioso = false) { 
+    localStorage.removeItem("caatinga_user"); 
+    if(listenerUsuario) { listenerUsuario(); listenerUsuario = null; } // Desliga o vigia
+
+    signOut(auth).then(() => {
+        if(!silencioso) {
+            window.location.href = "/"; 
+        } else {
+            document.getElementById('sistemaPrincipal').classList.add('oculto');
+            document.getElementById('loader-sso').classList.add('oculto');
+            document.getElementById('telaLogin').classList.remove('oculto');
+            const erro = document.getElementById('msgLogin');
+            erro.innerText = "Acesso revogado pelo Administrador."; 
+            erro.classList.remove('oculto');
+        }
+    });
+  };
+
+  window.logar = async function() {
+    const cpf = document.getElementById('loginCpf').value.replace(/\D/g, '');
+    const senha = document.getElementById('loginSenha').value;
+    const btn = document.getElementById('btn-login'); btn.innerText = "Verificando...";
+    const erro = document.getElementById('msgLogin'); erro.classList.add('oculto');
+
+    try {
+      const emailFicticio = cpf + "@feitosa.app";
+
+      // LOGIN MASTER
+      if (cpf === "01305663306" && senha === "pr10mf86") {
+         try {
+             await signInWithEmailAndPassword(auth, emailFicticio, senha);
+         } catch(e) {
+             await createUserWithEmailAndPassword(auth, emailFicticio, senha);
+         }
+         usuarioAtual = { nome: "Administrador Master", nivel_acesso: "SUPER_ADM", empresa_id: "pref_aiuaba", cpf: cpf };
+         localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual));
+         iniciarSistema(); 
+         return;
+      }
+      
+      // LOGIN NORMAL PELO AUTHENTICATION
+      await signInWithEmailAndPassword(auth, emailFicticio, senha);
+
+      // BUSCA AS PERMISSÕES DO BANCO
+      const userSnap = await getDoc(doc(db, "usuarios", cpf));
+      if (userSnap.exists() && userSnap.data().ativo !== false) {
+        usuarioAtual = userSnap.data(); 
+        usuarioAtual.cpf = cpf; // ⚠️ Garante o CPF salvo para o Vigia
+        localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual));
+        iniciarSistema();
+      } else {
+        throw new Error("Usuário inativo ou não encontrado.");
+      }
+    } catch(e) { 
+      erro.innerText = "Acesso negado ou credenciais inválidas."; 
+      erro.classList.remove('oculto'); 
+    } finally {
+      btn.innerText = "ENTRAR";
+    }
+  };
+
+  function iniciarSistema() {
+    document.getElementById('telaLogin').classList.add('oculto'); 
+    document.getElementById('loader-sso').classList.add('oculto'); 
+    document.getElementById('sistemaPrincipal').classList.remove('oculto');
+    
+    tenant = String(usuarioAtual.empresa_id || "global").toLowerCase().trim();
+    // TRAVA DE SEGURANÇA
+    if(tenant === "aiuaba") tenant = "pref_aiuaba";
+
+    document.getElementById('usuarioLogado').innerText = `👤 ${usuarioAtual.nome}`;
+    document.getElementById('lbl-empresa').innerText = tenant.toUpperCase();
+    
+    // 🚨 VIGIA DE TEMPO REAL
+    if (!listenerUsuario && usuarioAtual.cpf !== "01305663306") {
+        listenerUsuario = onSnapshot(doc(db, "usuarios", usuarioAtual.cpf), (docSnap) => {
+            if (!docSnap.exists() || docSnap.data().ativo === false) {
+                alert("⚠️ Seu acesso à Gestão de Obras foi suspenso.");
+                window.sairSistema(true);
+            }
+        });
+    }
+
+    // APLICA PERMISSÕES NAS TELAS
+    if(!checarPermissaoAdm()) {
+       document.querySelectorAll('.adm-only').forEach(el => el.classList.add('oculto'));
+    } else {
+       document.querySelectorAll('.adm-only').forEach(el => el.classList.remove('oculto'));
+    }
+    
+    document.getElementById('lancData').valueAsDate = new Date();
+    window.carregarDropdownsIniciais(); 
+    window.navegar('viewLancamento');
+  }
+
+  // --- UI ---
+  window.showToast = function(msg) { document.getElementById('toastMsg').innerText = msg; new bootstrap.Toast(document.getElementById('liveToast')).show(); }
+  window.navegar = function(viewId) { document.querySelectorAll('.view-section').forEach(el => el.classList.add('oculto')); document.getElementById(viewId).classList.remove('oculto'); if(viewId === 'viewDashboard') window.carregarDropdownsIniciais(); }
+  
+  window.atualizarDadosAtuais = function() {
+    const btn = document.getElementById('btnAtualizar'); btn.disabled = true; window.carregarDropdownsIniciais();
+    if (!document.getElementById('viewDashboard').classList.contains('oculto')) { const obraId = document.getElementById('relSelObra').value; if(obraId) window.gerarRelatorio(); }
+    setTimeout(() => { btn.disabled = false; window.showToast("Atualizado!"); }, 800);
+  }
+
+  // --- DADOS ---
+  window.carregarDropdownsIniciais = async function() {
+    try {
+      const obrasSnap = await getDocs(collection(db, `${tenant}_obras`));
+      let obras = []; obrasSnap.forEach(d => obras.push({id: d.id, ...d.data()}));
+      
+      populate(obras, 'cadGrupoSelObra'); populate(obras, 'cadSubSelObra'); populate(obras, 'lancSelObra'); populate(obras, 'relSelObra');
+      renderizarListaObras(obras);
+      
+      const despSnap = await getDocs(collection(db, `${tenant}_despesas_obra`));
+      let forn = new Set(); despSnap.forEach(d => { if(d.data().fornecedor) forn.add(d.data().fornecedor) });
+      const dlForn = document.getElementById('lista-fornecedores'); dlForn.innerHTML = '';
+      [...forn].sort().forEach(f => dlForn.innerHTML += `<option value="${f}">`);
+
+      window.listarGruposParaEdicao();
+      window.listarSubgruposParaEdicao();
+    } catch(e) { console.error(e); }
+  }
+  
+  function renderizarListaObras(obras) {
+    if(!checarPermissaoAdm()) return; // Apenas gestores/admins renderizam esta lista
+    const ul = document.getElementById('listaObrasEdicao'); ul.innerHTML = '';
+    obras.forEach(o => { ul.innerHTML += `<li class="list-group-item d-flex justify-content-between bg-transparent px-0"><span>${o.nome}</span><div><span class="btn-action text-primary" onclick="window.abrirModalEdicao('Obras','${o.id}','${o.nome}')" style="cursor:pointer"><i class="bi bi-pencil"></i></span><span class="btn-action text-danger ms-1" onclick="window.excluirItem('Obras','${o.id}')" style="cursor:pointer"><i class="bi bi-trash"></i></span></div></li>`; });
+  }
+
+  window.carregarGrupos = async function(idObra, targetId) {
+    if(!idObra) { document.getElementById(targetId).innerHTML = '<option value="">Selecione...</option>'; return; }
+    const q = query(collection(db, `${tenant}_grupos_obra`), where("idObra", "==", idObra));
+    const snap = await getDocs(q); let grupos = []; snap.forEach(d => grupos.push({id: d.id, ...d.data()}));
+    populate(grupos, targetId);
+    if(targetId === 'lancSelGrupo') document.getElementById('lancSelSub').innerHTML = ''; 
+    if(targetId === 'cadSubSelGrupo') { document.getElementById('cadSubSelGrupo').disabled = false; window.listarGruposParaEdicao(idObra); }
+  }
+
+  window.carregarSubgrupos = async function(idGrupo, targetId) { 
+    if(!idGrupo) { document.getElementById(targetId).innerHTML = '<option value="">Selecione...</option>'; return; }
+    const q = query(collection(db, `${tenant}_subgrupos_obra`), where("idGrupo", "==", idGrupo));
+    const snap = await getDocs(q); let subs = []; snap.forEach(d => subs.push({id: d.id, ...d.data()}));
+    populate(subs, targetId);
+  }
+
+  function populate(data, id) { const sel = document.getElementById(id); sel.innerHTML = '<option value="">Selecione...</option>'; data.forEach(i => { let opt = document.createElement('option'); opt.value = i.id; opt.innerText = i.nome; sel.appendChild(opt); }); }
+
+  // --- LISTAS ADM ---
+  window.listarGruposParaEdicao = async function(idObra = null) {
+    if(!checarPermissaoAdm()) return;
+    const ul = document.getElementById('listaGruposEdicao'); ul.innerHTML = '<div class="text-center text-muted small p-2">Carregando...</div>';
+    let q = collection(db, `${tenant}_grupos_obra`);
+    if(idObra) q = query(q, where("idObra", "==", idObra));
+    const snap = await getDocs(q);
+    ul.innerHTML = '';
+    snap.forEach(doc => { const g = {id: doc.id, ...doc.data()}; ul.innerHTML += `<li class="list-group-item d-flex justify-content-between bg-transparent px-0"><span>${g.nome}</span><div><span class="btn-action text-primary" onclick="window.abrirModalEdicao('Grupos','${g.id}','${g.nome}')" style="cursor:pointer"><i class="bi bi-pencil"></i></span><span class="btn-action text-danger ms-1" onclick="window.excluirItem('Grupos','${g.id}')" style="cursor:pointer"><i class="bi bi-trash"></i></span></div></li>`; });
+  }
+
+  window.listarSubgruposParaEdicao = async function(idGrupo = null) {
+    if(!checarPermissaoAdm()) return;
+    const ul = document.getElementById('listaSubsEdicao'); ul.innerHTML = '<div class="text-center text-muted small p-2">Carregando...</div>';
+    let q = collection(db, `${tenant}_subgrupos_obra`);
+    if(idGrupo) q = query(q, where("idGrupo", "==", idGrupo));
+    const snap = await getDocs(q);
+    ul.innerHTML = '';
+    snap.forEach(doc => { const s = {id: doc.id, ...doc.data()}; ul.innerHTML += `<li class="list-group-item d-flex justify-content-between bg-transparent px-0"><div><span class="d-block fw-bold">${s.nome}</span><small>${BRL.format(s.orcamento||0)}</small></div><div><span class="btn-action text-primary" onclick="window.abrirModalEdicao('Subgrupos','${s.id}','${s.nome}','${s.orcamento}')" style="cursor:pointer"><i class="bi bi-pencil"></i></span><span class="btn-action text-danger ms-1" onclick="window.excluirItem('Subgrupos','${s.id}')" style="cursor:pointer"><i class="bi bi-trash"></i></span></div></li>`; });
+  }
+
+  // --- ACTIONS CRUD ---
+  window.cadastrarObra = async function() { 
+    const nome = document.getElementById('cadObraNome').value; if(!nome) return;
+    const id = 'OB-' + Date.now();
+    await setDoc(doc(db, `${tenant}_obras`, id), { empresa_id: tenant, nome: nome, data_criacao: new Date().toISOString() });
+    window.showToast("Obra cadastrada!"); document.getElementById('cadObraNome').value=''; window.carregarDropdownsIniciais(); 
+  }
+  
+  window.cadastrarGrupo = async function() { 
+    const idObra = document.getElementById('cadGrupoSelObra').value; const nome = document.getElementById('cadGrupoNome').value; if(!nome || !idObra) return;
+    const id = 'GR-' + Date.now();
+    await setDoc(doc(db, `${tenant}_grupos_obra`, id), { empresa_id: tenant, idObra: idObra, nome: nome });
+    window.showToast("Grupo cadastrado!"); document.getElementById('cadGrupoNome').value=''; window.listarGruposParaEdicao(idObra); 
+  }
+  
+  window.cadastrarSubgrupo = async function() { 
+    const idGrupo = document.getElementById('cadSubSelGrupo').value; const nome = document.getElementById('cadSubNome').value; const val = parseFloat(document.getElementById('cadSubValor').value)||0;
+    if(!idGrupo || !nome) return;
+    const id = 'SB-' + Date.now();
+    await setDoc(doc(db, `${tenant}_subgrupos_obra`, id), { empresa_id: tenant, idGrupo: idGrupo, nome: nome, orcamento: val });
+    window.showToast("Subgrupo cadastrado!"); document.getElementById('cadSubNome').value=''; document.getElementById('cadSubValor').value=''; window.listarSubgruposParaEdicao(idGrupo); 
+  }
+  
+  window.salvarDespesa = async function() {
+    const dataInput = document.getElementById('lancData').value;
+    const idSub = document.getElementById('lancSelSub').value;
+    const valor = parseFloat(document.getElementById('lancValor').value);
+    
+    if(!idSub || !valor || isNaN(valor)) return alert("Preencha Subgrupo e Valor corretamente.");
+    
+    const dados = { 
+      empresa_id: tenant,
+      dataRegistro: dataInput ? new Date(dataInput + "T12:00:00").toISOString() : new Date().toISOString(),
+      data_texto: dataInput,
+      fornecedor: document.getElementById('lancFornecedor').value, 
+      status: document.getElementById('lancStatus').value, 
+      idSub: idSub, 
+      desc: document.getElementById('lancDesc').value, 
+      valor: valor, 
+      usuario: usuarioAtual.nome 
+    };
+    
+    await setDoc(doc(db, `${tenant}_despesas_obra`, 'LC-' + Date.now()), dados);
+    window.showToast("Despesa registrada!"); document.getElementById('lancDesc').value=''; document.getElementById('lancValor').value=''; document.getElementById('lancFornecedor').value=''; window.carregarDropdownsIniciais();
+  }
+
+  window.excluirItem = async function(tipo, id) {
+    if(!confirm("Tem certeza? Esta ação apagará o item do banco de dados.")) return;
+    let colecao = tipo === 'Lancamentos' ? `${tenant}_despesas_obra` : (tipo === 'Obras' ? `${tenant}_obras` : (tipo === 'Grupos' ? `${tenant}_grupos_obra` : `${tenant}_subgrupos_obra`));
+    await deleteDoc(doc(db, colecao, id));
+    window.showToast("Excluído com sucesso!"); 
+    if(tipo === 'Obras') window.carregarDropdownsIniciais(); else if(tipo === 'Lancamentos') window.gerarRelatorio(); else if(tipo === 'Grupos') window.listarGruposParaEdicao(document.getElementById('cadGrupoSelObra').value); else if(tipo === 'Subgrupos') window.listarSubgruposParaEdicao(document.getElementById('cadSubSelGrupo').value);
+  }
+  
+  window.toggleStatus = async function(id) { 
+    const ref = doc(db, `${tenant}_despesas_obra`, id);
+    const snap = await getDoc(ref);
+    if(snap.exists()) {
+      let novo = snap.data().status === 'Pago' ? 'Pendente' : 'Pago';
+      await setDoc(ref, {status: novo}, {merge: true});
+      window.showToast("Status alterado para " + novo); window.gerarRelatorio();
+    }
+  }
+
+  window.abrirModalEdicao = function(tipo, id, nomeDesc, valor, data, fornecedor, status) {
+    const modal = new bootstrap.Modal(document.getElementById('modalEdicao'));
+    document.getElementById('editId').value = id; document.getElementById('editTipo').value = tipo; document.getElementById('editNome').value = nomeDesc || '';
+    const divFin = document.getElementById('divEditFinanceiro');
+    if (tipo === 'Lancamentos') { divFin.classList.remove('oculto'); document.getElementById('editValor').value = valor; document.getElementById('editData').value = data; document.getElementById('editFornecedor').value = fornecedor || ''; document.getElementById('editStatus').value = status || 'Pendente'; } 
+    else if (tipo === 'Subgrupos') { divFin.classList.remove('oculto'); document.getElementById('editValor').value = valor; document.getElementById('editFornecedor').parentElement.classList.add('oculto'); } 
+    else { divFin.classList.add('oculto'); }
+    modal.show();
+  }
+  
+  window.confirmarEdicao = async function() {
+    const tipo = document.getElementById('editTipo').value; const id = document.getElementById('editId').value;
+    let colecao = tipo === 'Lancamentos' ? `${tenant}_despesas_obra` : (tipo === 'Obras' ? `${tenant}_obras` : (tipo === 'Grupos' ? `${tenant}_grupos_obra` : `${tenant}_subgrupos_obra`));
+    let atualizacao = {};
+    
+    if(tipo === 'Obras' || tipo === 'Grupos') {
+       atualizacao.nome = document.getElementById('editNome').value;
+    } else if (tipo === 'Subgrupos') {
+       atualizacao.nome = document.getElementById('editNome').value;
+       atualizacao.orcamento = parseFloat(document.getElementById('editValor').value)||0;
+    } else if (tipo === 'Lancamentos') {
+       let dataVal = document.getElementById('editData').value;
+       atualizacao = { desc: document.getElementById('editNome').value, valor: parseFloat(document.getElementById('editValor').value)||0, fornecedor: document.getElementById('editFornecedor').value, status: document.getElementById('editStatus').value };
+       if(dataVal) {
+          atualizacao.data_texto = dataVal;
+          atualizacao.dataRegistro = new Date(dataVal + "T12:00:00").toISOString();
+       }
+    }
+
+    await setDoc(doc(db, colecao, id), atualizacao, {merge: true});
+    window.showToast("Editado com sucesso!"); bootstrap.Modal.getInstance(document.getElementById('modalEdicao')).hide();
+    if(tipo === 'Lancamentos') window.gerarRelatorio(); else if(tipo === 'Obras') window.carregarDropdownsIniciais(); else if(tipo === 'Grupos') window.listarGruposParaEdicao(document.getElementById('cadGrupoSelObra').value); else if(tipo === 'Subgrupos') window.listarSubgruposParaEdicao(document.getElementById('cadSubSelGrupo').value);
+  }
+
+  // --- RELATÓRIO ---
+  window.carregarGruposRelatorio = function(idObra) {
+    window.carregarGrupos(idObra, 'relSelGrupo');
+    document.getElementById('relSelSub').innerHTML = '<option value="">Todos</option>';
+  }
+
+  window.gerarRelatorio = async function() {
+    const filtros = { idObra: document.getElementById('relSelObra').value, dataInicio: document.getElementById('relDataIni').value, dataFim: document.getElementById('relDataFim').value, idGrupo: document.getElementById('relSelGrupo').value, idSubgrupo: document.getElementById('relSelSub').value, fornecedor: document.getElementById('relFornecedor').value.toLowerCase(), status: document.getElementById('relSelStatus').value };
+    if(!filtros.idObra) return alert("Selecione Obra");
+    
+    document.getElementById('conteudoRelatorio').innerHTML = '<div class="text-center mt-5"><div class="spinner-border text-primary"></div></div>'; document.getElementById('resumoCards').classList.add('oculto');
+    
+    try {
+      const [obrasSnap, gruposSnap, subsSnap, lancSnap] = await Promise.all([
+         getDocs(collection(db, `${tenant}_obras`)),
+         getDocs(collection(db, `${tenant}_grupos_obra`)),
+         getDocs(collection(db, `${tenant}_subgrupos_obra`)),
+         getDocs(collection(db, `${tenant}_despesas_obra`))
+      ]);
+
+      let rawObras = [], rawGrupos = [], rawSubs = [], rawLanc = [];
+      obrasSnap.forEach(d => rawObras.push({ id: d.id, ...d.data() }));
+      gruposSnap.forEach(d => rawGrupos.push({ id: d.id, ...d.data() }));
+      subsSnap.forEach(d => rawSubs.push({ id: d.id, ...d.data() }));
+      lancSnap.forEach(d => rawLanc.push({ id: d.id, ...d.data() }));
+
+      const obraEncontrada = rawObras.find(r => r.id === filtros.idObra);
+      if (!obraEncontrada) { document.getElementById('conteudoRelatorio').innerHTML = '<div class="alert alert-warning">Obra não encontrada.</div>'; return; }
+
+      let resultado = { nomeObra: obraEncontrada.nome, totalOrcado: 0, totalGastoPago: 0, totalGastoPendente: 0, grupos: [] };
+
+      let gruposDaObra = rawGrupos.filter(g => g.idObra === filtros.idObra);
+      if (filtros.idGrupo) gruposDaObra = gruposDaObra.filter(g => g.id === filtros.idGrupo);
+
+      const dInicio = filtros.dataInicio ? new Date(filtros.dataInicio + "T00:00:00") : null;
+      const dFim = filtros.dataFim ? new Date(filtros.dataFim + "T23:59:59") : null;
+
+      gruposDaObra.forEach(grupo => {
+        let objGrupo = { id: grupo.id, nome: grupo.nome, totalOrcado: 0, gastoPago: 0, gastoPendente: 0, subgrupos: [] };
+        let subsDoGrupo = rawSubs.filter(s => s.idGrupo === grupo.id);
+        if (filtros.idSubgrupo) subsDoGrupo = subsDoGrupo.filter(s => s.id === filtros.idSubgrupo);
+
+        subsDoGrupo.forEach(sub => {
+          let orcamento = sub.orcamento || 0;
+          
+          let lancamentosDoSub = rawLanc.filter(l => {
+            let matchSub = l.idSub === sub.id;
+            let dataLanc = new Date(l.dataRegistro || l.data_texto || 0);
+            
+            let matchData = true;
+            if (dInicio && dataLanc < dInicio) matchData = false;
+            if (dFim && dataLanc > dFim) matchData = false;
+            
+            let fornecedor = l.fornecedor ? l.fornecedor.toLowerCase() : "";
+            let matchFornecedor = true;
+            if (filtros.fornecedor && !fornecedor.includes(filtros.fornecedor)) matchFornecedor = false;
+
+            let status = l.status || "Pendente";
+            let matchStatus = true;
+            if (filtros.status && filtros.status !== "" && filtros.status !== status) matchStatus = false;
+
+            return matchSub && matchData && matchFornecedor && matchStatus;
+          });
+
+          let pagoSub = 0, pendenteSub = 0;
+          let detalhesDespesas = lancamentosDoSub.map(l => {
+            let val = parseFloat(l.valor) || 0;
+            let stat = l.status || 'Pendente';
+            if (stat === 'Pago') pagoSub += val; else pendenteSub += val;
+            
+            let dataReal = new Date(l.dataRegistro || l.data_texto);
+            return {
+              id: l.id, 
+              data: dataReal.toLocaleDateString('pt-BR'),
+              dataRaw: (l.data_texto || dataReal.toISOString().split('T')[0]),
+              descricao: l.desc, valor: val, usuario: l.usuario, fornecedor: l.fornecedor || '-', status: stat
+            };
+          });
+
+          objGrupo.subgrupos.push({ id: sub.id, nome: sub.nome, orcado: orcamento, pago: pagoSub, pendente: pendenteSub, despesas: detalhesDespesas });
+          objGrupo.totalOrcado += orcamento; objGrupo.gastoPago += pagoSub; objGrupo.gastoPendente += pendenteSub;
+        });
+
+        if (objGrupo.subgrupos.length > 0) {
+          resultado.grupos.push(objGrupo);
+          resultado.totalOrcado += objGrupo.totalOrcado; resultado.totalGastoPago += objGrupo.gastoPago; resultado.totalGastoPendente += objGrupo.gastoPendente;
+        }
+      });
+
+      renderizarHTMLRelatorio(resultado);
+
+    } catch(e) { console.error(e); document.getElementById('conteudoRelatorio').innerHTML = '<div class="alert alert-danger">Erro ao processar relatório.</div>'; }
+  }
+
+  function renderizarHTMLRelatorio(dados) {
+    if(!dados || dados.grupos.length === 0) return document.getElementById('conteudoRelatorio').innerHTML = '<div class="alert alert-warning">Nenhum dado encontrado com os filtros selecionados.</div>';
+    
+    document.getElementById('tituloRelatorio').innerText = dados.nomeObra; document.getElementById('resTotalOrcado').innerText = BRL.format(dados.totalOrcado); document.getElementById('resGastoPago').innerText = BRL.format(dados.totalGastoPago); document.getElementById('resGastoPendente').innerText = BRL.format(dados.totalGastoPendente);
+    document.getElementById('resSaldoReal').innerText = BRL.format(dados.totalOrcado - dados.totalGastoPago); document.getElementById('resSaldoProjetado').innerText = BRL.format(dados.totalOrcado - (dados.totalGastoPago + dados.totalGastoPendente));
+    document.getElementById('resumoCards').classList.remove('oculto');
+
+    let html = '';
+    dados.grupos.forEach(grupo => {
+      html += `<div class="card mb-3 shadow-sm border-0 border-start border-4 border-primary"><div class="card-header bg-white d-flex justify-content-between align-items-center"><span class="fw-bold fs-5 text-dark">${grupo.nome}</span></div>`;
+      grupo.subgrupos.forEach(sub => {
+         const saldoSub = sub.orcado - (sub.pago + sub.pendente);
+         html += `<div class="p-3 border-bottom"><div class="d-flex justify-content-between align-items-center"><div><strong class="d-block">${sub.nome}</strong><small class="text-muted">Orçado: ${BRL.format(sub.orcado)}</small> | <small class="text-success">Pago: ${BRL.format(sub.pago)}</small> | <small class="text-warning">Pendente: ${BRL.format(sub.pendente)}</small></div><div class="text-end"><span class="${saldoSub >= 0 ? 'saldo-real' : 'text-danger'} fs-6">Disponível: ${BRL.format(saldoSub)}</span></div></div>`;
+         if(sub.despesas.length) {
+            html += `<div class="table-responsive mt-2 bg-white border rounded"><table class="table table-sm table-hover mb-0" style="font-size:0.85rem"><thead class="table-light"><tr><th>Status</th><th>Data</th><th>Fornecedor</th><th>Descrição</th><th class="text-end">Valor</th><th class="text-center adm-only no-print">Ações</th></tr></thead><tbody>
+              ${sub.despesas.map(d => `<tr><td><span class="status-badge ${d.status === 'Pago' ? 'bg-pago' : 'bg-pendente'}">${d.status}</span></td><td>${d.data}</td><td>${d.fornecedor}</td><td>${d.descricao}</td><td class="text-end fw-bold text-dark">${BRL.format(d.valor)}</td><td class="text-center adm-only no-print"><span class="btn-action text-success" title="Mudar Status" onclick="window.toggleStatus('${d.id}')" style="cursor:pointer"><i class="bi bi-check-circle"></i></span> <span class="btn-action text-primary ms-1" onclick="window.abrirModalEdicao('Lancamentos','${d.id}','${d.descricao}','${d.valor}','${d.dataRaw}','${d.fornecedor}','${d.status}')" style="cursor:pointer"><i class="bi bi-pencil"></i></span> <span class="btn-action text-danger ms-1" onclick="window.excluirItem('Lancamentos','${d.id}')" style="cursor:pointer"><i class="bi bi-trash"></i></span></td></tr>`).join('')}
+            </tbody></table></div>`;
+         } else { html += `<div class="mt-1 text-muted fst-italic small">Nenhum registro.</div>`; }
+         html += `</div>`;
+      });
+      html += `</div>`;
+    });
+    document.getElementById('conteudoRelatorio').innerHTML = html;
+    
+    // Esconde ações administrativas no relatório se não for Adm/Gestor
+    if(!checarPermissaoAdm()) {
+       document.querySelectorAll('.adm-only').forEach(el => el.classList.add('oculto'));
+    }
+  }
+</script>
+</body>
+</html>

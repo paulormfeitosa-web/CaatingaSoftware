@@ -1,0 +1,51 @@
+body { background-color: #f4f6f8; font-family: 'Segoe UI', sans-serif; color: #333; }
+.navbar-custom { background-color: #fce6dc !important; border-bottom: 2px solid #E06C3F; }
+.navbar-custom .navbar-brand, .navbar-custom .nav-link { color: #1A374D !important; font-weight: 500; }
+.navbar-custom .nav-link:hover, .navbar-custom .nav-link.active { color: #E06C3F !important; font-weight: bold; }
+.oculto { display: none !important; }
+.nav-link { cursor: pointer; }
+
+.card-dashboard { border-radius: 12px; border-left: 5px solid #E06C3F; transition: transform 0.2s; }
+.card-dashboard:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+
+.card-pasto { border-radius: 12px; border: 1px solid #e5e7eb; transition: transform 0.2s; cursor: pointer; position: relative; overflow: hidden; }
+.card-pasto:hover { transform: translateY(-3px); border-color: #E06C3F; box-shadow: 0 8px 15px rgba(224,108,63,0.15); }
+.progress-lota { height: 8px; border-radius: 0; }
+
+#telaLogin { height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1A374D 0%, #0d1f2d 100%); }
+.login-card { background: white; padding: 2.5rem; border-radius: 15px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 100%; max-width: 400px; text-align: center; }
+
+#loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+.spinner-custom { color: #E06C3F !important; }
+
+.animal-card { background: white; padding: 12px; border-radius: 10px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; border: 1px solid #e5e7eb; transition: 0.2s; position: relative; }
+.animal-card:hover { border-color: #E06C3F; box-shadow: 0 2px 8px rgba(224, 108, 63, 0.2); }
+.animal-card.selected { background: #fff3e0; border-color: #E06C3F; border-width: 2px; }
+.animal-card.morto { opacity: 0.6; filter: grayscale(100%); }
+.animal-card.vendido { border-color: #198754; background: #f0fdf4; }
+
+.badge-id { background: #1A374D; color: white; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 13px; }
+
+.fab { position: fixed; bottom: 30px; right: 30px; background: #E06C3F; color: white; width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 28px; box-shadow: 0 4px 12px rgba(224, 108, 63, 0.4); display: flex; align-items: center; justify-content: center; z-index: 1050; cursor: pointer; transition: 0.3s; }
+.fab:hover { background: #c85a32; transform: scale(1.05); }
+
+.tree ul { padding-top: 20px; position: relative; transition: all 0.5s; display: flex; justify-content: center; padding-left: 0; }
+.tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; }
+.tree li::before, .tree li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 1px solid #ccc; width: 50%; height: 20px; }
+.tree li::after { right: auto; left: 50%; border-left: 1px solid #ccc; }
+.tree li:only-child::after, .tree li:only-child::before { display: none; }
+.tree li:only-child { padding-top: 0; }
+.tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
+.tree li:last-child::before{ border-right: 1px solid #ccc; border-radius: 0 5px 0 0; }
+.tree li:first-child::after{ border-radius: 5px 0 0 0; }
+.tree ul ul::before{ content: ''; position: absolute; top: 0; left: 50%; border-left: 1px solid #ccc; width: 0; height: 20px; }
+.tree-box { border: 1px solid #E06C3F; padding: 5px 10px; border-radius: 5px; display: inline-block; font-size: 11px; background: white; min-width: 60px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+#mass-bar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1A374D; color: white; padding: 12px 25px; border-radius: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: none; z-index: 1100; align-items: center; gap: 10px; width: 95%; max-width: 700px; justify-content: center; flex-wrap: wrap; }
+
+@media print {
+  body { background-color: white; font-size: 12px; }
+  nav, .fab, #mass-bar, .no-print { display: none !important; }
+  .card { border: none !important; box-shadow: none !important; }
+  #sistemaPrincipal { margin: 0; padding: 0; }
+}

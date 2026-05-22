@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>Arquivo Digital - Caatinga Software</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  
+  <style>
+    :root { --p: #198754; --s: #212529; --bg: #f8f9fa; --card-bg: #ffffff; }
+    body { background-color: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; margin: 0; padding: 0; }
+    .oculto { display: none !important; }
+    
+    .navbar-custom { background-color: var(--card-bg) !important; border-bottom: 2px solid var(--p); box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .navbar-brand, .nav-link { color: var(--s) !important; font-weight: 500; cursor: pointer; transition: 0.3s; }
+    .nav-link:hover, .nav-link.active { color: var(--p) !important; font-weight: bold; border-bottom: 2px solid var(--p); }
+    
+    .card-kpi { border-radius: 15px; border-left: 5px solid var(--p); background: white; transition: 0.2s ease; border: 1px solid #e9ecef; }
+    .card-kpi:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
+    
+    #telaLogin { height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--s) 0%, #198754 100%); }
+    .login-card { background: white; padding: 3rem; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 100%; max-width: 420px; text-align: center; border-top: 5px solid var(--p); }
+    
+    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    
+    .btn-primary-custom { background-color: var(--p); color: white; border: none; font-weight: 600; transition: 0.3s; }
+    .btn-primary-custom:hover { background-color: #157347; color: white; transform: translateY(-2px); }
+    .table-custom th { background-color: #f8f9fa; color: var(--s); font-weight: 600; text-transform: uppercase; font-size: 0.85rem; }
+    
+    /* Folder Icons */
+    .folder-card { cursor: pointer; border: 1px solid #dee2e6; border-radius: 10px; transition: 0.3s; }
+    .folder-card:hover { border-color: var(--p); background-color: #f8f9fa; }
+    .folder-icon { font-size: 3rem; color: #ffc107; }
+  </style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="oculto">
+  <div class="spinner-border" style="color: var(--p); width: 3rem; height: 3rem;" role="status"></div>
+  <div class="mt-3 fw-bold text-dark fs-5" id="loading-msg">Carregando...</div>
+</div>
+
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
+  <div id="liveToast" class="toast align-items-center text-white bg-success border-0 shadow-lg" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fs-6 fw-bold" id="toastMsg">Operação realizada!</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<div id="telaLogin" class="oculto">
+  <div class="login-card mx-3">
+    <h2 class="mb-1 fw-bold" style="color: var(--p);">Arquivo<span style="color: var(--s);">Digital</span></h2>
+    <p class="text-muted mb-4 small fw-bold text-uppercase">GED Prefeitura</p>
+    <div id="msgLogin" class="alert alert-danger oculto py-2 small fw-bold"></div>
+    <form onsubmit="event.preventDefault(); window.logar();">
+      <div class="form-floating mb-3"><input type="text" id="loginCpf" class="form-control" placeholder="CPF" required><label>CPF do Servidor</label></div>
+      <div class="form-floating mb-4"><input type="password" id="loginSenha" class="form-control" placeholder="Senha" required><label>Senha</label></div>
+      <button type="submit" class="btn btn-primary-custom w-100 py-3 fs-5 rounded-3">ENTRAR NO GED</button>
+    </form>
+  </div>
+</div>
+
+<div id="sistemaPrincipal" class="oculto">
+  <nav class="navbar navbar-expand-lg navbar-custom px-4 sticky-top">
+    <span class="navbar-brand fw-bold fs-4 d-flex align-items-center gap-2"><i class="bi bi-folder-check" style="color: var(--p);"></i> <span>Arquivo<span style="color: var(--p);">Digital</span></span></span>
+    
+    <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#menuTopo">
+        <i class="bi bi-list" style="font-size: 2.5rem; color: var(--p);"></i>
+    </button>
+    
+    <div class="collapse navbar-collapse" id="menuTopo">
+      <ul class="navbar-nav me-auto mt-2 mt-lg-0 ms-lg-4 gap-1">
+        <li class="nav-item"><a class="nav-link active px-2" onclick="window.navegar('viewDash', this)"><i class="bi bi-grid-1x2"></i> Painel</a></li>
+        <li class="nav-item"><a class="nav-link px-2" onclick="window.navegar('viewPastas', this)"><i class="bi bi-folder2-open"></i> Explorador de Arquivos</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-3 mt-4 mt-lg-0 pt-3 pt-lg-0 border-top border-lg-0">
+        <span class="small fw-bold text-dark d-none d-lg-block" id="usuarioLogado"></span>
+        <button class="btn btn-sm btn-outline-danger px-3 rounded-pill" onclick="window.sairSistema()"><i class="bi bi-box-arrow-right"></i> Sair</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid mt-4 pb-5 px-3 px-md-4">
+    <div id="viewDash" class="view-section">
+      <div class="d-flex justify-content-between mb-4"><h4 class="fw-bold m-0">Visão Geral do Armazenamento</h4><button class="btn btn-sm btn-outline-secondary" onclick="window.sincronizarBD()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button></div>
+      <div class="row g-4 mb-4">
+        <div class="col-md-4"><div class="card-kpi p-4 h-100 d-flex justify-content-between align-items-center"><div><h6 class="text-muted fw-bold mb-1">Total Documentos</h6><h3 id="kpi-docs" class="m-0 fw-bold">0</h3></div><i class="bi bi-file-earmark-text fs-1 text-success opacity-50"></i></div></div>
+        <div class="col-md-4"><div class="card-kpi p-4 h-100 d-flex justify-content-between align-items-center" style="border-left-color: #ffc107;"><div><h6 class="text-muted fw-bold mb-1">Total Pastas</h6><h3 id="kpi-pastas" class="m-0 fw-bold">0</h3></div><i class="bi bi-folder-fill fs-1 text-warning opacity-50"></i></div></div>
+        <div class="col-md-4"><div class="card-kpi p-4 h-100 d-flex justify-content-between align-items-center" style="border-left-color: var(--s);"><div><h6 class="text-muted fw-bold mb-1">Espaço Otimizado (Cloud)</h6><h3 id="kpi-size" class="m-0 fw-bold">0 MB</h3></div><i class="bi bi-server fs-1 text-secondary opacity-50"></i></div></div>
+      </div>
+      <div class="card border-0 shadow-sm rounded-4 p-4">
+          <h5 class="fw-bold mb-4">Últimos Documentos Inseridos</h5>
+          <div class="table-responsive">
+              <table class="table table-hover align-middle"><thead class="table-light"><tr><th>Documento</th><th>Data Upload</th><th>Uploader</th><th>Ação</th></tr></thead><tbody id="tbUltimosDocs"></tbody></table>
+          </div>
+      </div>
+    </div>
+
+    <div id="viewPastas" class="view-section oculto">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold m-0" id="tituloExplorador">Diretório Raiz</h4>
+        <div>
+            <button class="btn btn-outline-secondary rounded-pill me-2 fw-bold" onclick="window.abrirModalPasta()"><i class="bi bi-folder-plus"></i> Nova Pasta</button>
+            <button class="btn btn-primary-custom rounded-pill fw-bold" onclick="window.abrirModalUpload()"><i class="bi bi-cloud-upload"></i> Novo Documento</button>
+        </div>
+      </div>
+      
+      <div class="row g-3 mb-4" id="containerPastas"></div>
+
+      <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+          <div class="card-header bg-white p-3 border-bottom-0"><h6 class="fw-bold m-0">Arquivos nesta pasta</h6></div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-custom">
+                <thead><tr><th class="ps-4">Nome do Arquivo</th><th>Tamanho (Otimizado)</th><th>Data</th><th>Autor</th><th class="text-center">Ações</th></tr></thead>
+                <tbody id="tbArquivos"></tbody>
+            </table>
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalPasta" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow-lg">
+      <div class="modal-header border-bottom-0"><h5 class="modal-title fw-bold">Criar Pasta</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body p-4 pt-2">
+        <form onsubmit="event.preventDefault(); window.salvarPasta();">
+            <label class="small fw-bold text-muted">Nome da Secretaria/Setor</label>
+            <input type="text" id="pastaNome" class="form-control mb-4" placeholder="Ex: Recursos Humanos" required>
+            <button type="submit" class="btn btn-primary-custom w-100 py-2 rounded-pill fw-bold">Criar Pasta</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalUpload" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow-lg">
+      <div class="modal-header border-bottom-0">
+          <h5 class="modal-title fw-bold">Digitalizar/Anexar Documento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 pt-2">
+        <form onsubmit="event.preventDefault(); window.salvarArquivo();">
+            <label class="small fw-bold text-muted mb-1">Pasta de Destino</label>
+            <select id="arqPasta" class="form-select mb-3" required></select>
+            
+            <label class="small fw-bold text-muted mb-1">Título do Documento</label>
+            <input type="text" id="arqTitulo" class="form-control mb-3" placeholder="Ex: Portaria 001/2026" required>
+            
+            <label class="small fw-bold text-muted mb-1">Selecione o Ficheiro</label>
+            <input type="file" id="arqFile" class="form-control mb-2" accept=".pdf, image/jpeg, image/png" required>
+            <div class="form-text text-success small mb-4"><i class="bi bi-info-circle"></i> Imagens serão automaticamente comprimidas para economizar espaço. PDFs limitados a 1.5MB.</div>
+            
+            <button type="submit" class="btn btn-primary-custom w-100 py-3 rounded-pill fw-bold shadow-sm"><i class="bi bi-cloud-arrow-up"></i> Iniciar Upload Otimizado</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  // ⚠️ onSnapshot ADICIONADO AQUI
+  import { getFirestore, collection, getDoc, getDocs, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBOEgd1WCElKtngAcQ-ygnx0_2lpHLUAyM", authDomain: "caatingasoftware.firebaseapp.com",
+    projectId: "caatingasoftware", storageBucket: "caatingasoftware.firebasestorage.app",
+    messagingSenderId: "357801806903", appId: "1:357801806903:web:7b03d8f9f0189bf32943b2"
+  };
+  
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app); 
+  
+  let usuarioAtual = null; let tenant = ""; 
+  let listenerUsuario = null; // ⚠️ VARIÁVEL DO VIGIA
+  window.BD_PASTAS = []; window.BD_ARQUIVOS = [];
+  let pastaAtual = "RAIZ";
+  let mPasta, mUpload;
+
+  function loading(show, msg="Carregando...") { document.getElementById('loading-msg').innerText = msg; document.getElementById('loadingOverlay').classList.toggle('oculto', !show); }
+  window.showToast = function(msg) { document.getElementById('toastMsg').innerText = msg; new bootstrap.Toast(document.getElementById('liveToast')).show(); };
+  
+  window.navegar = function(id, el) { 
+      document.querySelectorAll('.view-section').forEach(v=>v.classList.add('oculto')); 
+      document.getElementById(id).classList.remove('oculto'); 
+      document.querySelectorAll('.nav-link').forEach(n=>n.classList.remove('active')); 
+      if(el) el.classList.add('active'); 
+      if(id === 'viewPastas') window.renderizarExplorador(); 
+
+      const menuMobile = document.getElementById('menuTopo');
+      if(menuMobile.classList.contains('show')) {
+          const bsCollapse = bootstrap.Collapse.getInstance(menuMobile);
+          if (bsCollapse) bsCollapse.hide();
+      }
+  }
+
+  window.onload = function() {
+    mPasta = new bootstrap.Modal(document.getElementById('modalPasta')); mUpload = new bootstrap.Modal(document.getElementById('modalUpload'));
+    
+    // ⚠️ ATENÇÃO: onAuthStateChanged AJUSTADO COM AS TRAVAS DE SEGURANÇA
+    onAuthStateChanged(auth, async (userAuth) => {
+        const cracha = localStorage.getItem("caatinga_user");
+        if(userAuth && cracha){ 
+            usuarioAtual = JSON.parse(cracha); 
+
+            // 🚨 TRAVA DE SEGURANÇA NA INICIALIZAÇÃO
+            if (usuarioAtual.cpf !== "01305663306") {
+                try {
+                    const docVerifica = await getDoc(doc(db, "usuarios", usuarioAtual.cpf));
+                    if (!docVerifica.exists() || docVerifica.data().ativo === false) {
+                        window.sairSistema(true); // Expulsão silenciosa
+                        return;
+                    }
+                } catch(e) { console.log("Aviso de rede na verificação inicial."); }
+            }
+
+            iniciarSistema(); 
+        } else { 
+            document.getElementById('sistemaPrincipal').classList.add('oculto');
+            document.getElementById('telaLogin').classList.remove('oculto'); 
+        }
+    });
+  };
+
+  window.logar = async function() {
+    const cpf = document.getElementById('loginCpf').value.replace(/\D/g, ''); 
+    const senha = document.getElementById('loginSenha').value;
+    const msgErr = document.getElementById('msgLogin');
+    msgErr.classList.add('oculto');
+    
+    loading(true, "Autenticando...");
+    try {
+        const emailFicticio = cpf + "@feitosa.app";
+
+        if(cpf === "01305663306" && senha === "pr10mf86") { 
+            try {
+                await signInWithEmailAndPassword(auth, emailFicticio, senha);
+            } catch(e) {
+                await createUserWithEmailAndPassword(auth, emailFicticio, senha);
+            }
+            usuarioAtual = { cpf: cpf, nome: "Master", empresa_id: "pref_teste", funcao: "SUPER_ADM" }; 
+        } 
+        else {
+            await signInWithEmailAndPassword(auth, emailFicticio, senha);
+            
+            const uSnap = await getDoc(doc(db, "usuarios", cpf));
+            if (uSnap.exists()) { 
+                if (uSnap.data().ativo === false) throw new Error("Usuário bloqueado.");
+                usuarioAtual = uSnap.data(); 
+                usuarioAtual.cpf = cpf; // Garante que o CPF está no objeto
+            } else { 
+                throw new Error("Usuário não encontrado."); 
+            }
+        }
+        
+        localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual)); 
+        iniciarSistema();
+    } catch(e) { 
+        msgErr.innerText = "Credenciais inválidas ou sem permissão."; 
+        msgErr.classList.remove('oculto'); 
+    }
+    loading(false);
+  };
+
+  window.sairSistema = function(silencioso = false) { 
+      localStorage.removeItem("caatinga_user"); 
+      if(listenerUsuario) { listenerUsuario(); listenerUsuario = null; } // Desliga o vigia
+      
+      signOut(auth).then(() => {
+          if(!silencioso) {
+              location.reload(); 
+          } else {
+              document.getElementById('sistemaPrincipal').classList.add('oculto');
+              document.getElementById('telaLogin').classList.remove('oculto'); 
+              const msgErr = document.getElementById('msgLogin');
+              msgErr.innerText = "Acesso revogado pelo Administrador."; 
+              msgErr.classList.remove('oculto');
+          }
+      });
+  }
+
+  function iniciarSistema() {
+    document.getElementById('telaLogin').classList.add('oculto'); 
+    document.getElementById('sistemaPrincipal').classList.remove('oculto');
+    tenant = String(usuarioAtual.empresa_id || "pref_teste").toLowerCase().trim();
+    document.getElementById('usuarioLogado').innerText = usuarioAtual.nome;
+    
+    // 🚨 VIGIA DE TEMPO REAL: Chuta o usuário se o status dele mudar
+    if (!listenerUsuario && usuarioAtual.cpf !== "01305663306") {
+        listenerUsuario = onSnapshot(doc(db, "usuarios", usuarioAtual.cpf), (docSnap) => {
+            if (!docSnap.exists() || docSnap.data().ativo === false) {
+                alert("⚠️ Seu acesso ao GED foi suspenso.");
+                window.sairSistema(true);
+            }
+        });
+    }
+
+    window.sincronizarBD();
+  }
+
+  window.sincronizarBD = async function() {
+    loading(true, "Sincronizando Ficheiros Otimizados...");
+    try {
+        const [pst, arq] = await Promise.all([ getDocs(collection(db, `${tenant}_pastas`)), getDocs(collection(db, `${tenant}_arquivos`)) ]);
+        window.BD_PASTAS = pst.docs.map(d=>({id:d.id, ...d.data()}));
+        window.BD_ARQUIVOS = arq.docs.map(d=>({id:d.id, ...d.data()}));
+        
+        document.getElementById('kpi-pastas').innerText = window.BD_PASTAS.length;
+        document.getElementById('kpi-docs').innerText = window.BD_ARQUIVOS.length;
+        
+        let sizeKb = window.BD_ARQUIVOS.reduce((acc, f) => acc + (f.tamanho || 0), 0) / 1024;
+        document.getElementById('kpi-size').innerText = (sizeKb / 1024).toFixed(2) + " MB";
+
+        let ultimos = [...window.BD_ARQUIVOS].sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0, 5);
+        document.getElementById('tbUltimosDocs').innerHTML = ultimos.map(f=>`<tr><td><i class="bi bi-file-earmark-check text-success"></i> ${f.titulo}</td><td>${new Date(f.data).toLocaleDateString()}</td><td>${f.autor}</td><td><button class="btn btn-sm btn-outline-primary" onclick="window.downloadArquivo('${f.id}')">Download</button></td></tr>`).join('');
+
+        window.renderizarExplorador();
+        document.getElementById('arqPasta').innerHTML = '<option value="RAIZ">Diretório Raiz</option>' + window.BD_PASTAS.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+    } catch(e) { console.error(e); }
+    loading(false);
+  }
+
+  // --- PASTAS E EXPLORADOR ---
+  window.abrirModalPasta = function() { mPasta.show(); }
+  window.salvarPasta = async function() {
+      loading(true);
+      await setDoc(doc(db, `${tenant}_pastas`, "PST_"+Date.now()), { nome: document.getElementById('pastaNome').value, dataCriacao: new Date().toISOString() });
+      mPasta.hide(); document.getElementById('pastaNome').value = ""; window.showToast("Pasta criada!"); window.sincronizarBD();
+  }
+
+  window.abrirPasta = function(idPasta, nome) {
+      pastaAtual = idPasta;
+      document.getElementById('tituloExplorador').innerText = idPasta === 'RAIZ' ? 'Diretório Raiz' : 'Pasta: ' + nome;
+      window.renderizarExplorador();
+  }
+
+  window.renderizarExplorador = function() {
+      const containerPastas = document.getElementById('containerPastas');
+      if(pastaAtual === 'RAIZ') {
+          containerPastas.innerHTML = window.BD_PASTAS.map(p=>`
+              <div class="col-6 col-md-3 col-lg-2">
+                  <div class="p-3 text-center folder-card" onclick="window.abrirPasta('${p.id}', '${p.nome}')">
+                      <i class="bi bi-folder-fill folder-icon"></i>
+                      <div class="fw-bold mt-2 text-truncate small" title="${p.nome}">${p.nome}</div>
+                  </div>
+              </div>`).join('');
+      } else {
+          containerPastas.innerHTML = `<div class="col-12"><button class="btn btn-sm btn-outline-secondary mb-3" onclick="window.abrirPasta('RAIZ', '')"><i class="bi bi-arrow-left"></i> Voltar à Raiz</button></div>`;
+      }
+
+      const filtrados = window.BD_ARQUIVOS.filter(a => a.pastaId === pastaAtual);
+      const tb = document.getElementById('tbArquivos');
+      if(filtrados.length === 0) { tb.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">Pasta vazia.</td></tr>`; }
+      else {
+          tb.innerHTML = filtrados.map(f=>`
+              <tr>
+                  <td class="ps-4 fw-bold"><i class="bi ${f.tipo.includes('pdf') ? 'bi-file-earmark-pdf text-danger' : 'bi-image text-primary'}"></i> ${f.titulo}</td>
+                  <td class="small text-muted fw-bold">${(f.tamanho / 1024).toFixed(1)} KB</td>
+                  <td class="small">${new Date(f.data).toLocaleDateString()}</td>
+                  <td class="small">${f.autor}</td>
+                  <td class="text-center">
+                      <button class="btn btn-sm btn-success rounded-pill px-3 shadow-sm" onclick="window.downloadArquivo('${f.id}')"><i class="bi bi-download"></i> Baixar</button>
+                      <button class="btn btn-sm btn-link text-danger" onclick="window.excluirArquivo('${f.id}')"><i class="bi bi-trash"></i></button>
+                  </td>
+              </tr>`).join('');
+      }
+  }
+
+  // --- UPLOAD COM COMPRESSÃO INTELIGENTE ---
+  window.abrirModalUpload = function() { document.getElementById('arqPasta').value = pastaAtual; mUpload.show(); }
+  
+  window.salvarArquivo = async function() {
+      const input = document.getElementById('arqFile');
+      if(input.files.length === 0) return;
+      const file = input.files[0];
+      
+      loading(true, "Otimizando Arquivo...");
+      
+      // Se for Imagem, aplica compressão rigorosa via Canvas
+      if(file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = (e) => {
+              const img = new Image();
+              img.src = e.target.result;
+              img.onload = async () => {
+                  const canvas = document.createElement('canvas');
+                  const MAX_WIDTH = 1024; // Resolução máxima
+                  let scaleSize = 1;
+                  
+                  if(img.width > MAX_WIDTH) { scaleSize = MAX_WIDTH / img.width; }
+                  
+                  canvas.width = img.width * scaleSize;
+                  canvas.height = img.height * scaleSize;
+                  
+                  const ctx = canvas.getContext('2d');
+                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  
+                  // Comprime para JPEG com 60% de qualidade
+                  const dataUrlCompressed = canvas.toDataURL('image/jpeg', 0.6);
+                  
+                  // Estima o novo tamanho em bytes baseado no base64
+                  const novoTamanho = Math.round((dataUrlCompressed.length * 3) / 4);
+                  
+                  await despacharProFirebase(dataUrlCompressed, novoTamanho, 'image/jpeg');
+              }
+          }
+      } 
+      // Se for PDF, verifica limite de segurança (1.5MB)
+      else if(file.type === 'application/pdf') {
+          if(file.size > 1500000) {
+              loading(false);
+              return alert("Erro: PDF excede 1.5MB. Reduza o PDF antes de subir para poupar armazenamento na Nuvem.");
+          }
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = async (e) => {
+              await despacharProFirebase(e.target.result, file.size, file.type);
+          }
+      } else {
+          loading(false);
+          alert("Formato não suportado.");
+      }
+  }
+
+  async function despacharProFirebase(base64Data, tamanhoEstimado, mimeType) {
+      try {
+          await setDoc(doc(db, `${tenant}_arquivos`, "ARQ_"+Date.now()), {
+              titulo: document.getElementById('arqTitulo').value, 
+              pastaId: document.getElementById('arqPasta').value,
+              base64: base64Data, 
+              tamanho: tamanhoEstimado, 
+              tipo: mimeType, 
+              autor: usuarioAtual.nome, 
+              data: new Date().toISOString()
+          });
+          mUpload.hide(); 
+          document.getElementById('arqTitulo').value = ""; 
+          document.getElementById('arqFile').value = "";
+          window.showToast("Arquivo otimizado e salvo na nuvem!"); 
+          await window.sincronizarBD();
+      } catch(err) { alert("Falha ao salvar no banco."); }
+      loading(false);
+  }
+
+  window.downloadArquivo = function(id) {
+      const file = window.BD_ARQUIVOS.find(a=>a.id === id);
+      if(!file || !file.base64) return;
+      
+      const link = document.createElement("a");
+      link.href = file.base64;
+      let ext = file.tipo.includes('pdf') ? '.pdf' : '.jpg';
+      link.download = `${file.titulo}${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  }
+
+  window.excluirArquivo = async function(id) {
+      if(confirm("Eliminar documento permanentemente do sistema?")) {
+          loading(true); await deleteDoc(doc(db, `${tenant}_arquivos`, id)); window.sincronizarBD();
+      }
+  }
+</script>
+</body>
+</html>
