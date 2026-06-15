@@ -4,47 +4,13 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sistema Frota - Auditoria e Mapa</title>
+  <title>Sistema Integrado - Frota+ & Abastecimento</title>
   
   <link rel="icon" href="/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <style>
-    body { background-color: #f0f2f5; font-size: 0.9rem; font-family: 'Segoe UI', sans-serif; }
-    .hidden { display: none !important; }
-    .modal { display: none; }
-    .modal.show { display: block; }
-    
-    .card { border: none; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
-    .nav-tabs .nav-link { font-weight: 600; color: #666; cursor: pointer; border: none; border-bottom: 3px solid transparent; }
-    .nav-tabs .nav-link.active { color: #0d6efd; border-bottom: 3px solid #0d6efd; background: transparent; }
-    #loaderOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; color: #333; }
-    .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #0d6efd; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 10px; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    
-    @media print { 
-      .no-print { display: none !important; } 
-      body { background-color: white; }
-      #areaImpressao { display: block !important; position: absolute; top:0; left:0; width:100%; } 
-      .table { font-size: 11px !important; }
-      .table th { background-color: #eee !important; color: #000 !important; }
-      .kpi-card { border: 1px solid #ccc !important; box-shadow: none !important; }
-    }
-    .kpi-card { transition: 0.3s; }
-    .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.1) !important; }
-    .contract-box { border-left: 5px solid #0d6efd; background: #fff; }
-    .linha-comb { font-size: 0.8rem; border-bottom: 1px dashed #ccc; padding-bottom: 4px; margin-bottom: 4px; }
-    .linha-comb:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    
-    .card-alerta { border-left: 5px solid; transition: 0.3s; }
-    .card-alerta.critico { background-color: #fff3f3; border-color: #dc3545; }
-    .card-alerta.atencao { background-color: #fff8e6; border-color: #ffc107; }
-    .linha-critica { background-color: #ffeeee !important; font-weight: bold; }
-    .linha-atencao { background-color: #fffdf2 !important; }
-    .linha-ok { background-color: #f0fff0 !important; }
-    .linha-fechada { background-color: #f8f9fa !important; color: #6c757d; }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -55,8 +21,8 @@
 
   <div id="viewLogin" class="container mt-5 hidden" style="max-width: 400px;">
     <div class="card p-4 text-center shadow">
-      <h3 class="text-primary fw-bold mb-4">CAATINGA FROTA</h3>
-      <p class="text-muted small mb-3">Auditoria e Abastecimento</p>
+      <h3 class="text-primary fw-bold mb-4">SISTEMA INTEGRADO</h3>
+      <p class="text-muted small mb-3">Frotas+ & Abastecimento</p>
       <input type="text" id="userCpf" class="form-control mb-3" placeholder="CPF do Usuário">
       <input type="password" id="userPass" class="form-control mb-3" placeholder="Senha">
       <button onclick="window.fazerLogin()" id="btnLogin" class="btn btn-primary w-100 fw-bold py-2">ENTRAR</button>
@@ -87,17 +53,140 @@
       <div class="card p-3 shadow-sm border-0 bg-white">
         <div class="d-flex justify-content-between align-items-center mb-3 no-print border-bottom pb-2">
             <ul class="nav nav-tabs border-0 w-100">
-              <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" data-bs-target="#admRelat"><i class="fas fa-map"></i> Mapa Consolidado</a></li>
-              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admAnalise"><i class="fas fa-search-dollar"></i> Auditoria Operacional</a></li>
-              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admContratos"><i class="fas fa-file-contract"></i> Contratos e Saldos</a></li>
+              <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" data-bs-target="#admDashboard"><i class="fas fa-chart-pie"></i> Dashboard</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admRDV"><i class="fas fa-clipboard-list"></i> RDV</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admRelat"><i class="fas fa-map"></i> Mapa Consolidado</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admAnalise"><i class="fas fa-search-dollar"></i> Auditoria</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admContratos"><i class="fas fa-file-contract"></i> Contratos</a></li>
               <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admVeic"><i class="fas fa-car"></i> Frota & Máquinas</a></li>
-              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admMotoristas"><i class="fas fa-id-card"></i> Motoristas</a></li>
-              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admPostos"><i class="fas fa-gas-pump"></i> Postos & Preços</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admMotoristas"><i class="fas fa-users"></i> Equipe</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admPostos"><i class="fas fa-gas-pump"></i> Postos</a></li>
+              <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admConfig"><i class="fas fa-cog"></i> Prefeitura</a></li>
             </ul>
-        </div>
-        
-        <div class="tab-content">
-          <div class="tab-pane fade show active" id="admRelat">
+        </div><div class="tab-content">
+          <div class="tab-pane fade show active" id="admDashboard">
+            <div class="row mb-3"><div class="col-md-12"><h4 class="fw-bold text-dark"><i class="fas fa-chart-line me-2 text-primary"></i>Painel Consolidado de Operações</h4></div></div>
+            <div class="row g-3 mb-4">
+              <div class="col-md-4"><div class="card p-3 border-start border-4 border-primary h-100"><div class="text-muted small fw-bold">VEÍCULOS ATIVOS</div><h2 class="fw-bold text-dark my-1" id="dash-tot-veiculos">0</h2><div class="small text-success"><i class="fas fa-check"></i> Monitorados no sistema</div></div></div>
+              <div class="col-md-4"><div class="card p-3 border-start border-4 border-warning h-100"><div class="text-muted small fw-bold">VEÍCULOS NA OFICINA</div><h2 class="fw-bold text-dark my-1" id="dash-tot-oficina">0</h2><div class="small text-warning"><i class="fas fa-exclamation-triangle"></i> Bloqueados para rota</div></div></div>
+              <div class="col-md-4"><div class="card p-3 border-start border-4 border-info h-100"><div class="text-muted small fw-bold">TOTAL DE RDVs HOMOLOGADOS</div><h2 class="fw-bold text-dark my-1" id="dash-tot-rdv">0</h2><div class="small text-info"><i class="fas fa-file-pdf"></i> Arquivados historicamente</div></div></div>
+            </div>
+            <div class="row">
+              <div class="col-md-12">
+                <div class="card border-0 shadow-sm">
+                  <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center p-3">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-calendar-check me-2"></i>Controle de Relatórios Pendentes</h5>
+                    <div class="d-flex align-items-center"><label class="me-2 fw-bold small">Data:</label><input type="date" id="dash-data-pendencia" class="form-control form-control-sm font-monospace" onchange="window.VerificarPendenciasRDV(this.value)"></div>
+                  </div>
+                  <div class="card-body bg-light">
+                    <div class="row g-4">
+                      <div class="col-md-6"><h6 class="text-success fw-bold border-bottom pb-2"><i class="fas fa-check-circle me-1"></i> RDVs Gerados (<span id="qtd-gerados">0</span>)</h6><ul class="list-group list-group-flush border rounded bg-white" id="lista-rdvs-gerados" style="max-height: 250px; overflow-y:auto;"></ul></div>
+                      <div class="col-md-6"><h6 class="text-danger fw-bold border-bottom pb-2"><i class="fas fa-exclamation-circle me-1"></i> Veículos Pendentes (<span id="qtd-pendentes">0</span>)</h6><ul class="list-group list-group-flush border rounded bg-white" id="lista-rdvs-pendentes" style="max-height: 250px; overflow-y:auto;"></ul></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="admRDV">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h4 class="fw-bold text-dark"><i class="fas fa-clipboard-list me-2 text-primary"></i>Gerenciador de RDV</h4>
+              <button class="btn btn-dark fw-bold" onclick="window.LimparFormularioRDV()"><i class="fas fa-file me-2"></i>Novo RDV do Dia</button>
+            </div>
+            <div class="row">
+              <div class="col-lg-8">
+                <div class="card shadow-sm">
+                  <div class="card-header card-header-navy p-3"><i class="fas fa-edit me-2"></i>Dados Gerais e Parâmetros Técnicos</div>
+                  <div class="card-body p-4">
+                    <form id="form-master-rdv" onsubmit="event.preventDefault();">
+                      <div class="row g-3 mb-4">
+                        <div class="col-md-4 position-relative" id="rdv-veiculo-busca-container"></div>
+                        <div class="col-md-4"><label class="form-label fw-bold">Data de Referência</label><input type="date" id="rdv-data" class="form-control" required></div>
+                        <div class="col-md-4 position-relative" id="rdv-rota-busca-container"></div>
+                      </div>
+                      <div class="row g-3 p-3 bg-light border rounded mb-4">
+                        <div class="col-md-12 d-flex justify-content-between align-items-center">
+                          <span class="fw-bold text-navy"><i class="fas fa-anchor me-2"></i>Odômetro / Horímetro</span>
+                          <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="rdv-medidor-defeito" onchange="window.TratarMedidorDefeito(this.checked)"><label class="form-check-label fw-bold text-danger" for="rdv-medidor-defeito">Medidor com Defeito</label></div>
+                        </div>
+                        <div class="col-md-6"><label class="form-label small">Inicial</label><input type="number" id="rdv-odo-inicial" class="form-control" placeholder="KM ou Horas"></div>
+                        <div class="col-md-6"><label class="form-label small">Final</label><input type="number" id="rdv-odo-final" class="form-control" placeholder="KM ou Horas"></div>
+                      </div>
+                      <div class="card border mb-4 shadow-none">
+                        <div class="card-header bg-secondary text-white p-2 fw-bold"><i class="fas fa-user-steering me-2"></i>Condutores (Lista Inteligente)</div>
+                        <div class="card-body p-3">
+                          <div class="row g-2 mb-2">
+                            <div class="col-md-9 position-relative"><input type="text" id="rdv-motorista-busca" class="form-control" placeholder="Pesquisar motorista..." onkeyup="window.BuscarMotoristaListaInteligente(this.value)"><div id="lista-inteligente-dropdown" class="list-group position-absolute w-100 hidden" style="z-index:1050; max-height:200px; overflow-y:auto; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div></div>
+                            <div class="col-md-3"><button type="button" class="btn btn-primary w-100 fw-bold" onclick="window.AbrirModalMembroEquipe()"><i class="fas fa-plus"></i> Novo</button></div>
+                          </div>
+                          <div id="container-motoristas-tags" class="p-2 border rounded bg-white min-height: 50px;"></div>
+                        </div>
+                      </div>
+                      <div class="card border mb-4 shadow-none">
+                        <div class="card-header bg-success text-white p-2 fw-bold d-flex justify-content-between align-items-center">
+                          <span><i class="fas fa-gas-pump me-2"></i>Abastecimentos (Sincronizado)</span>
+                          <button type="button" class="btn btn-xs btn-light fw-bold py-0 px-2" onclick="window.AdicionarLinhaAbastecimento()"><i class="fas fa-plus"></i> Manual</button>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                          <table class="table table-bordered table-sm align-middle text-center m-0" id="tabela-rdv-abastecimentos">
+                            <thead class="table-light"><tr><th>Posto / Local</th><th>Combustível</th><th>Quantidade</th><th>Odômetro BD</th><th>R$ Total</th><th style="width:50px;">-</th></tr></thead>
+                            <tbody id="corpo-rdv-abastecimentos"></tbody>
+                          </table>
+                        </div>
+                      </div>
+                      <div class="card border mb-4 shadow-none">
+                        <div class="card-header bg-warning text-dark p-2 fw-bold d-flex justify-content-between align-items-center">
+                          <span><i class="fas fa-hammer me-2"></i>Manutenção e Oficina</span>
+                          <div class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="rdv-veiculo-oficina" onchange="window.AlternarCamposOficina(this.checked)"><label class="form-check-label fw-bold text-dark" for="rdv-veiculo-oficina">Veículo na Oficina Hoje</label></div>
+                        </div>
+                        <div class="card-body p-3">
+                          <textarea id="rdv-oficina-descricao" class="form-control" rows="2" placeholder="Descreva manutenções ou ocorrências..."></textarea>
+                        </div>
+                      </div>
+                      <div class="card border mb-4 shadow-none">
+                        <div class="card-header bg-dark text-white p-2 fw-bold"><i class="fas fa-images me-2"></i>Evidências Fotográficas (Galeria Múltipla)</div>
+                        <div class="card-body p-3">
+                          <div class="row g-4">
+                            <div class="col-md-5">
+                              <div class="row g-2">
+                                <div class="col-6"><label class="small fw-bold">Odo. Inicial</label><input type="file" id="img-input-odo-ini" class="form-control form-control-sm mb-1" accept="image/*" onchange="window.ProcessarImagemUnica(this, 'preview-odo-ini')"><img id="preview-odo-ini" src="" class="img-preview"></div>
+                                <div class="col-6"><label class="small fw-bold">Odo. Final</label><input type="file" id="img-input-odo-fim" class="form-control form-control-sm mb-1" accept="image/*" onchange="window.ProcessarImagemUnica(this, 'preview-odo-fim')"><img id="preview-odo-fim" src="" class="img-preview"></div>
+                              </div>
+                            </div>
+                            <div class="col-md-7 border-start">
+                              <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-end mb-1"><label class="small fw-bold text-primary"><i class="fas fa-wrench me-1"></i>Fotos do Serviço ou Trajeto</label><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="window.LimparGaleria('galeria-servicos', 'servicos')">Limpar Fotos</button></div>
+                                <input type="file" class="form-control form-control-sm" accept="image/*" multiple onchange="window.ProcessarImagensMultiplas(this, 'galeria-servicos', 'servicos')">
+                                <div id="galeria-servicos" class="d-flex flex-wrap gap-2 mt-2 p-2 bg-light border rounded min-vh-25"></div>
+                              </div>
+                              <div>
+                                <div class="d-flex justify-content-between align-items-end mb-1"><label class="small fw-bold text-success"><i class="fas fa-receipt me-1"></i>Vales, Recibos ou Cupons</label><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="window.LimparGaleria('galeria-vales', 'vales')">Limpar Vales</button></div>
+                                <input type="file" class="form-control form-control-sm" accept="image/*" multiple onchange="window.ProcessarImagensMultiplas(this, 'galeria-vales', 'vales')">
+                                <div id="galeria-vales" class="d-flex flex-wrap gap-2 mt-2 p-2 bg-light border rounded min-vh-25"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="d-flex justify-content-between">
+                        <button type="button" class="btn btn-outline-primary btn-lg fw-bold px-4" onclick="window.CompilarERenderizarPDF_Prefeitura()"><i class="fas fa-print me-2"></i>Gerar Relatório PDF</button>
+                        <button type="button" class="btn btn-success btn-lg fw-bold px-4 shadow" onclick="window.FinalizarRDVEPurgarMidia()"><i class="fas fa-check-double me-2"></i>Salvar e Finalizar RDV</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              <div class="col-lg-4">
+                <div class="card shadow-sm">
+                  <div class="card-header bg-secondary text-white p-3 fw-bold"><i class="fas fa-history me-2"></i>Últimos RDVs</div>
+                  <div class="card-body p-2"><div class="list-group list-group-flush" id="lista-rdvs-recentes" style="max-height: 600px; overflow-y: auto;"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="admRelat">
              <div class="d-flex justify-content-between mb-3 no-print">
                  <h5 class="fw-bold text-secondary">Mapa Consolidado</h5>
                  <button class="btn btn-primary btn-sm fw-bold shadow-sm" onclick="window.abrirModalLancamentoAdm()"><i class="fas fa-plus"></i> Lançamento Retroativo</button>
@@ -167,10 +256,7 @@
                  </table>
                </div>
              </div>
-          </div>
-
-          <div class="tab-pane fade" id="admAnalise">
-            
+          </div><div class="tab-pane fade" id="admAnalise">
             <div class="card p-3 mb-4 border-0 shadow-sm border-start border-dark border-4 bg-light">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
@@ -396,20 +482,21 @@
           <div class="tab-pane fade" id="admMotoristas">
             <div class="row g-2 mb-4 bg-light p-3 rounded border shadow-sm">
                 <input type="hidden" id="hdnIdMotorista">
-                <div class="col-md-3"><label class="small fw-bold">Nome do Motorista / Operador</label><input id="cadMotNome" class="form-control text-uppercase" placeholder="Ex: JOÃO DA SILVA"></div>
-                <div class="col-md-3"><label class="small fw-bold">CPF</label><input id="cadMotCPF" class="form-control" placeholder="Apenas números"></div>
-                <div class="col-md-2"><label class="small fw-bold">Nº CNH</label><input id="cadMotCNH" class="form-control" placeholder="Opcional"></div>
-                <div class="col-md-2"><label class="small fw-bold">Categoria</label><input id="cadMotCat" class="form-control text-uppercase" placeholder="Ex: AB, AC, D"></div>
+                <div class="col-md-3"><label class="small fw-bold">Nome do Colaborador</label><input id="cadMotNome" class="form-control text-uppercase" placeholder="Ex: JOÃO DA SILVA"></div>
+                <div class="col-md-2"><label class="small fw-bold">CPF</label><input id="cadMotCPF" class="form-control" placeholder="Apenas números"></div>
+                <div class="col-md-2"><label class="small fw-bold">Nº CNH / Reg.</label><input id="cadMotCNH" class="form-control" placeholder="Opcional"></div>
+                <div class="col-md-1"><label class="small fw-bold">Cat.</label><input id="cadMotCat" class="form-control text-uppercase" placeholder="AB"></div>
+                <div class="col-md-2"><label class="small fw-bold">Cargo/Papel</label><select id="cadMotCargo" class="form-select"><option value="MOTORISTA">Motorista</option><option value="GESTOR">Gestor de Frota</option></select></div>
                 <div class="col-md-2 d-flex align-items-end gap-1"><button onclick="window.salvarMotorista()" id="btnSaveMot" class="btn btn-success w-100 fw-bold"><i class="fas fa-save"></i> SALVAR</button><button onclick="window.cancelarEdicaoMot()" id="btnCancelMot" class="btn btn-secondary hidden" title="Cancelar Edição"><i class="fas fa-times"></i></button></div>
             </div>
             
             <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
-                <h6 class="fw-bold text-secondary m-0">Lista de Motoristas e Operadores</h6>
+                <h6 class="fw-bold text-secondary m-0">Lista de Motoristas e Gestores</h6>
                 <button onclick="window.imprimirLista('listaMotoristasBox', 'RELAÇÃO DE MOTORISTAS E OPERADORES')" class="btn btn-dark btn-sm fw-bold shadow-sm"><i class="fas fa-print"></i> Imprimir Lista</button>
             </div>
             <div class="table-responsive shadow-sm bg-white rounded border" id="listaMotoristasBox">
                 <table class="table table-hover mb-0 align-middle text-center">
-                    <thead class="table-dark"><tr><th>Nome do Motorista / Operador</th><th>CPF</th><th>CNH</th><th>Categoria</th><th class="text-end">Ações</th></tr></thead>
+                    <thead class="table-dark"><tr><th>Nome do Colaborador</th><th>CPF</th><th>CNH</th><th>Categoria</th><th>Cargo</th><th class="text-end">Ações</th></tr></thead>
                     <tbody id="listaMotoristasTabela"></tbody>
                 </table>
             </div>
@@ -454,10 +541,38 @@
             </div>
           </div>
 
-        </div>
-      </div>
-    </div>
-    
+          <div class="tab-pane fade" id="admConfig">
+            <h4 class="fw-bold text-dark mb-3"><i class="fas fa-sliders-h me-2 text-primary"></i>Configurações do Sistema</h4>
+            <div class="row">
+              <div class="col-lg-6">
+                <div class="card shadow-sm">
+                  <div class="card-body p-4">
+                    <form id="form-config-prefeitura" onsubmit="event.preventDefault();">
+                      <div class="mb-3"><label class="form-label fw-bold">Nome da Instituição/Prefeitura</label><input type="text" id="cfg-prefeitura-nome" class="form-control"></div>
+                      <div class="row g-3 mb-3">
+                        <div class="col-md-6"><label class="form-label fw-bold">Secretaria Gestora</label><input type="text" id="cfg-prefeitura-secretaria" class="form-control"></div>
+                        <div class="col-md-6"><label class="form-label fw-bold">Setor Padrão</label><input type="text" id="cfg-prefeitura-setor" class="form-control"></div>
+                      </div>
+                      <div class="mb-4">
+                        <label class="form-label fw-bold">Logotipo Oficial (Impressão)</label><input type="file" id="cfg-prefeitura-logo-input" class="form-control mb-2" onchange="window.ProcessarLogoPrefeituraFixa(this)">
+                        <div class="p-3 border rounded text-center bg-light"><img id="cfg-prefeitura-logo-preview" src="" style="max-height: 100px;"></div>
+                      </div>
+                      <button type="button" class="btn btn-success fw-bold w-100" onclick="window.SalvarConfiguracoesGovernamentais()">Gravar Configurações</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div> </div> </div> ```
+
+---
+
+### BLOCO 5: `index.html` (Vistas Adicionais e Início dos Modais)
+Cole exatamente abaixo do Bloco 4.
+
+```html
     <div id="viewGestorTransp" class="hidden">
       <div class="card p-4 shadow-sm border-0 border-top border-5 border-primary">
         <h5 class="fw-bold text-primary mb-4"><i class="fas fa-route"></i> Despacho de Frota</h5>
@@ -608,8 +723,14 @@
       </div>
     </div>
 
-  </div>
+  </div> ```
 
+---
+
+### BLOCO 6: `index.html` (Conclusão: Modais, Áreas de Impressão e Scripts)
+Cole exatamente abaixo do Bloco 5 para finalizar o seu HTML.
+
+```html
   <div class="modal fade" id="modalAutorizarGestor" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content border-0 shadow">
@@ -695,7 +816,6 @@
         </div>
         <div class="modal-body bg-light">
           <input type="hidden" id="admIdAbast">
-          
           <div class="mb-3">
               <label class="fw-bold small">Placa / ID do Equipamento da Frota</label>
               <select id="admPlaca" class="form-select fw-bold border-dark"></select>
@@ -760,9 +880,6 @@
           <div class="mb-3">
               <label class="fw-bold small">Filtrar por Secretaria</label>
               <select id="pSec" class="form-select border-dark"></select>
-          </div>
-          <div class="alert alert-info small py-2 mb-0 border mt-3">
-             <i class="fas fa-info-circle"></i> O texto da busca rápida da tabela (Placa/Modelo) também será aplicado na impressão.
           </div>
         </div>
         <div class="modal-footer border-0 bg-light">
@@ -835,17 +952,9 @@
         <div class="modal-body bg-light">
           <input type="hidden" id="liqContratoId">
           <h5 id="lblSecLiq" class="text-center text-success fw-bold mb-3">---</h5>
-          <div class="alert alert-light border small text-muted">
-              Lançando os valores que foram efetivamente **pagos** para controle de saldo devedor.
-          </div>
-          <div class="mb-3">
-              <label class="fw-bold small">Mês / Ano de Referência</label>
-              <input type="month" id="liqMesAno" class="form-control border-dark" required>
-          </div>
-          <div class="mb-3">
-              <label class="fw-bold text-success small">Valor Pago (R$)</label>
-              <input type="text" id="liqValor" class="form-control fw-bold border-success" placeholder="0,00" oninput="window.maskMoeda(event)">
-          </div>
+          <div class="alert alert-light border small text-muted">Lançando os valores que foram efetivamente **pagos** para controle de saldo devedor.</div>
+          <div class="mb-3"><label class="fw-bold small">Mês / Ano de Referência</label><input type="month" id="liqMesAno" class="form-control border-dark" required></div>
+          <div class="mb-3"><label class="fw-bold text-success small">Valor Pago (R$)</label><input type="text" id="liqValor" class="form-control fw-bold border-success" placeholder="0,00" oninput="window.maskMoeda(event)"></div>
         </div>
         <div class="modal-footer border-0 bg-light">
             <button onclick="window.salvarLiquidacao()" class="btn btn-success w-100 fw-bold py-2 shadow">REGISTRAR PAGAMENTO</button>
@@ -886,6 +995,21 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div id="print-section" class="d-none print-only bg-white p-2">
+    <table class="w-100 border border-dark align-middle mb-3" style="border-collapse:collapse;"><tr><td class="p-2 border-end border-dark text-center" style="width:100px;"><img id="print-pdf-logo" src="" style="max-height:60px; max-width:80px; object-fit:contain;"></td><td class="p-2 text-center"><h5 class="m-0 fw-bold text-uppercase" id="print-pdf-pref-nome">PREFEITURA</h5><h6 class="m-0 text-uppercase text-secondary small" id="print-pdf-sec-nome">SECRETARIA</h6><p class="m-0 small" style="font-size:8pt;" id="print-pdf-setor-nome">Setor</p><strong style="font-size:10pt;" class="text-dark d-block mt-1">RELATÓRIO DIÁRIO DE VEÍCULO (RDV)</strong></td><td class="p-2 border-start border-dark small" style="width:220px;"><strong>Data:</strong> <span id="print-pdf-data"></span><br><strong>Placa:</strong> <span id="print-pdf-placa"></span><br><strong>Rota:</strong> <span id="print-pdf-itinerario"></span></td></tr></table>
+    <table class="table table-bordered table-sm mb-3 border-dark text-center" style="font-size:9pt;"><thead class="table-light border-dark"><tr><th colspan="4" class="text-uppercase fw-bold text-start">1. Parâmetros de Rodagem</th></tr></thead><tbody><tr><td style="width:25%;"><strong>Odo. Inicial:</strong></td><td style="width:25%;" id="print-pdf-odo-ini"></td><td style="width:25%;"><strong>Odo. Final:</strong></td><td style="width:25%;" id="print-pdf-odo-fim"></td></tr></tbody></table>
+    <table class="table table-bordered table-sm mb-3 border-dark text-center" style="font-size:9pt;"><thead class="table-light border-dark"><tr><th class="text-uppercase fw-bold text-start">2. Condutores Homologados</th></tr></thead><tbody id="print-pdf-corpo-motoristas"></tbody></table>
+    <table class="table table-bordered table-sm mb-3 border-dark text-center" style="font-size:9pt;"><thead class="table-light border-dark"><tr><th colspan="5" class="text-uppercase fw-bold text-start">3. Movimentação de Abastecimento</th></tr><tr class="small fw-bold bg-light"><td>Local / Posto</td><td>Combustível</td><td>Volume</td><td>Odômetro</td><td>Valor</td></tr></thead><tbody id="print-pdf-corpo-abastecimentos"></tbody></table>
+    <div class="mb-3"><table class="table table-bordered table-sm border-dark" style="font-size:9pt;"><thead class="table-light border-dark"><tr><th class="text-uppercase fw-bold text-start">4. Ocorrências e Oficina</th></tr></thead><tbody><tr><td id="print-pdf-oficina-txt" class="p-2"></td></tr></tbody></table></div>
+    <div class="mb-3 border border-dark p-2" style="page-break-inside: avoid;"><div class="fw-bold text-uppercase mb-2 text-decoration-underline" style="font-size:9pt;">5. Registo Fotográfico</div><div id="print-pdf-galeria-dinamica" class="d-flex flex-wrap gap-2 justify-content-center"></div></div>
+    <div style="margin-top:30px; page-break-inside: avoid;"><div class="text-center fw-bold text-uppercase mb-4" style="font-size:9pt; border-bottom:1px solid black; padding-bottom:4px;">6. Assinaturas e Validações</div><div class="row text-center" id="print-pdf-container-assinaturas" style="font-size:8pt;"></div></div>
+  </div>
+
+  <div id="print-section-relatorio-frota" class="d-none print-only bg-white p-2">
+    <div class="text-center mb-4 pb-2 border-bottom border-2 border-dark"><h3 class="fw-bold mb-1">RELATÓRIO GERENCIAL DE FROTA</h3><div id="print-filtros-aplicados" class="small text-muted text-uppercase fw-bold"></div></div>
+    <table class="table table-bordered table-sm border-dark w-100 text-center" style="font-size:9pt; border-collapse:collapse;"><thead class="table-light align-middle border-dark"><tr><th>Placa</th><th>Veículo / Modelo</th><th>Secretaria Alocada</th><th>Tipo de Frota</th><th>Propriedade</th><th>Combustível</th><th>Status</th></tr></thead><tbody id="print-corpo-relatorio-frota" class="align-middle"></tbody></table>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>

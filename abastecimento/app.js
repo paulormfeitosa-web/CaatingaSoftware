@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
 const firebaseConfig = {
@@ -46,6 +46,19 @@ function loading(mostrar, msg="Carregando...") {
     document.getElementById('loading-msg').innerText = msg;
     if(mostrar) document.getElementById('loaderOverlay').classList.remove('hidden');
     else document.getElementById('loaderOverlay').classList.add('hidden');
+}
+
+// Helper para travar botões e evitar duplo clique
+function toggleButtonLoading(btn, isProcessing, customText = "Processando...") {
+    if(!btn) return;
+    if(isProcessing) {
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${customText}`;
+    } else {
+        btn.disabled = false;
+        if(btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
+    }
 }
 
 window.maskMoeda = function(e) {
@@ -128,10 +141,11 @@ window.fazerLogin = async function() {
     const c = document.getElementById('userCpf').value.replace(/\D/g, '');
     const p = document.getElementById('userPass').value;
     const erro = document.getElementById('msgLogin'); erro.classList.add('hidden');
+    let btnLogin = document.getElementById('btnLogin');
     
     if(!c || !p) return;
-    loading(true, "Autenticando...");
-
+    
+    toggleButtonLoading(btnLogin, true, "Autenticando...");
     try {
         const emailFicticio = c + "@feitosa.app";
         await signInWithEmailAndPassword(auth, emailFicticio, p);
@@ -140,8 +154,12 @@ window.fazerLogin = async function() {
             let u = userSnap.data(); u.cpf = c;
             USUARIO = u; localStorage.setItem("caatinga_user", JSON.stringify(USUARIO)); iniciarApp();
         } else { throw new Error("Usuário inativo."); }
-    } catch(e) { erro.innerText = "Acesso negado: " + e.message; erro.classList.remove('hidden'); }
-    loading(false);
+    } catch(e) { 
+        erro.innerText = "Acesso negado: " + e.message; 
+        erro.classList.remove('hidden'); 
+    } finally {
+        toggleButtonLoading(btnLogin, false);
+    }
 };
 
 function iniciarApp() {
@@ -196,6 +214,147 @@ function rotearTelas() {
         document.getElementById('viewRetroativo').classList.remove('hidden'); window.renderPainelRetroativo();
     }
 }
+
+// --- GUARDA-COSTAS: BLOQUEIO DE MÊS ---
+window.isMesTrancado = async function(dataIsoCompleta) {
+    let mesAno = dataIsoCompleta.substring(0, 7); 
+    const docSnap = await getDoc(doc(db, `${tenant}_mesesFechados`, mesAno));
+    return (docSnap.exists() && docSnap.data().fechado === true);
+};
+
+window.verificarStatusMes = async function() {
+    let mesSelecionado = document.getElementById('fMesFechamento').value;
+    if (!mesSelecionado) return;
+
+    let btn = document.getElementById('btnTravarMes');
+    if(!btn) return;
+    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checando...';
+
+    const docSnap = await getDoc(doc(db, `${tenant}_mesesFechados`, mesSelecionado));
+    if (docSnap.exists() && docSnap.data().fechado === true) {
+        btn.className = "btn btn-danger fw-bold shadow-sm text-nowrap";
+        btn.innerHTML = '<i class="fas fa-lock"></i> Mês Fechado (Clique p/ Reabrir)';
+        btn.dataset.status = "fechado";
+    } else {
+        btn.className = "btn btn-success fw-bold shadow-sm text-nowrap";
+        btn.innerHTML = '<i class="fas fa-lock-open"></i> Mês Aberto (Clique p/ Trancar)';
+        btn.dataset.status = "aberto";
+    }
+};
+
+window.alternarTravaMes = async function() {
+    let mesSelecionado = document.getElementById('fMesFechamento').value;
+    if (!mesSelecionado) {
+        alert("Selecione um mês no campo ao lado primeiro!");
+        return;
+    }
+
+    let btn = document.getElementById('btnTravarMes');
+    let isFechado = btn.dataset.status === "fechado";
+    const docRef = doc(db, `${tenant}_mesesFechados`, mesSelecionado);
+
+    toggleButtonLoading(btn, true);
+    try {
+        if (isFechado) {
+            if (confirm(`Atenção: Deseja REABRIR o mês ${mesSelecionado} para edições?`)) {
+                await setDoc(docRef, { fechado: false }, { merge: true });
+                alert("Mês reaberto com sucesso.");
+            }
+        } else {
+            if (confirm(`Deseja TRANCAR o mês ${mesSelecionado}? Nenhum lançamento retroativo ou alteração poderá ser feita.`)) {
+                await setDoc(docRef, { fechado: true, dataFechamento: new Date().toISOString() }, { merge: true });
+                alert("Mês trancado e protegido com sucesso!");
+            }
+        }
+        await window.verificarStatusMes(); 
+    } catch (e) {
+        alert("Erro ao alterar status do mês.");
+        console.error(e);
+    } finally {
+        toggleButtonLoading(btn, false);
+    }
+};
+
+// --- MOTOR DE RECÁLCULO CRONOLÓGICO (VIAGEM NO TEMPO) ---
+window.reprocessarHistoricoVeiculo = async function(placa) {
+    try {
+        const veicRef = doc(db, `${tenant}_veiculos`, placa);
+        const veicSnap = await getDoc(veicRef);
+        if (!veicSnap.exists()) return;
+
+        let veicData = veicSnap.data();
+        let mediaV = safeCurrency(veicData.media) > 0 ? safeCurrency(veicData.media) : 1;
+        let odoAtualTimeline = safeCurrency(veicData.odometroInicial) || 0;
+
+        // Traz os meses trancados para a memória para evitar muitas consultas
+        const lockedSnap = await getDocs(collection(db, `${tenant}_mesesFechados`));
+        let lockedMonths = new Set();
+        lockedSnap.forEach(d => { if(d.data().fechado) lockedMonths.add(d.id); });
+
+        // Traz TODOS os abastecimentos da placa, do MAIS ANTIGO para o MAIS NOVO
+        const qAbast = query(collection(db, `${tenant}_abastecimentos`), where('placa', '==', placa), orderBy('dataAbastecimento', 'asc'));
+        const abastSnap = await getDocs(qAbast);
+        const batch = writeBatch(db);
+        let alteracoes = 0;
+
+        abastSnap.forEach((docSnap) => {
+            let abast = docSnap.data();
+            if(abast.status !== 'Concluído') return;
+
+            let lts = safeCurrency(abast.quantidade);
+            let mesAno = abast.dataAbastecimento.slice(0, 7);
+            let avanco = (veicData.tipoFrota === 'Máquina') ? (lts / mediaV) : (lts * mediaV);
+
+            if (lockedMonths.has(mesAno)) {
+                // Se o mês está fechado, ignoramos a matemática e pegamos o valor do banco como a âncora imutável
+                odoAtualTimeline = safeCurrency(abast.odometroPainel);
+            } else {
+                // Mês Aberto: Aplica regra de negócio
+                if (abast.odometroCalculado === true) {
+                    // Hodômetro Fantasma / Branco: Baseia na âncora atual + avanço projetado
+                    odoAtualTimeline += avanco;
+                    odoAtualTimeline = Math.round(odoAtualTimeline * 10) / 10;
+                    
+                    batch.update(docSnap.ref, { 
+                        odometroPainel: odoAtualTimeline,
+                        odometroSistemaAnterior: odoAtualTimeline - avanco,
+                        odometroSistema: odoAtualTimeline,
+                        saldoOdometro: 0 // Se for calculado via média, o desvio é zero.
+                    });
+                    alteracoes++;
+                } else {
+                    // Valor REAL. Ele vira a nova âncora (se não for erro de dedo)
+                    let odoReal = safeCurrency(abast.odometroPainel);
+                    
+                    if (odoReal >= odoAtualTimeline || odoAtualTimeline === 0) {
+                        let odoAnteriorSist = odoAtualTimeline;
+                        odoAtualTimeline = odoReal; // Atualiza âncora global
+                        
+                        let odoProjSist = odoAnteriorSist + avanco;
+                        let novoSaldo = (odoReal - odoAnteriorSist) - avanco;
+
+                        batch.update(docSnap.ref, {
+                            odometroSistemaAnterior: odoAnteriorSist,
+                            odometroSistema: odoProjSist,
+                            saldoOdometro: novoSaldo
+                        });
+                        alteracoes++;
+                    }
+                }
+            }
+        });
+
+        // Atualiza a ficha do veículo com o hodômetro final corrigido
+        batch.update(veicRef, { odometro: odoAtualTimeline });
+        
+        if (alteracoes > 0 || abastSnap.size > 0) {
+            await batch.commit();
+        }
+    } catch (error) {
+        console.error("Erro no recálculo cronológico:", error);
+    }
+};
 
 window.obterPrecoVigente = function(nomePosto, dataIsoBase) {
     let p = DADOS_POSTOS.find(x => x.nome === nomePosto);
@@ -434,10 +593,12 @@ window.salvarContratoLote = async function() {
     const posto = document.getElementById('cadContratoPosto').value;
     const validade = document.getElementById('cadContratoValidade').value;
     const editId = document.getElementById('hdnIdContrato').value; 
+    let btnSalvar = document.getElementById('btnSaveContrato');
 
     if(!sec) return alert("A Secretaria Macro é obrigatória no cabeçalho.");
     if(!validade) return alert("A Data de Validade é obrigatória.");
 
+    toggleButtonLoading(btnSalvar, true);
     loading(true, "Gravando Banco...");
     try {
         if(editId) {
@@ -454,7 +615,7 @@ window.salvarContratoLote = async function() {
             };
             await setDoc(doc(db, `${tenant}_contratos`, editId), payload, {merge: true});
         } else {
-            if(window.tempDestinacoes.length === 0) { loading(false); return alert("Adicione pelo menos uma Divisão/Destinação na lista antes de salvar."); }
+            if(window.tempDestinacoes.length === 0) { loading(false); toggleButtonLoading(btnSalvar, false); return alert("Adicione pelo menos uma Divisão/Destinação na lista antes de salvar."); }
             
             for (let item of window.tempDestinacoes) {
                 let payload = {
@@ -468,7 +629,12 @@ window.salvarContratoLote = async function() {
 
         window.cancelarEdicaoContrato();
         await window.buscarTudo();
-    } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally {
+        toggleButtonLoading(btnSalvar, false);
+        loading(false);
+    }
 }
 
 window.cancelarEdicaoContrato = function() {
@@ -540,8 +706,11 @@ window.salvarAditivo = async function() {
     const litros = safeCurrency(document.getElementById('aditLitros').value);
     const valor = safeCurrency(document.getElementById('aditValor').value);
     const obs = document.getElementById('aditObs').value.trim();
+    let btn = document.querySelector('#modalAditivoContrato .btn-primary');
     
     if(!id || (litros === 0 && valor === 0)) return alert("Preencha litros ou valor para a operação.");
+    
+    toggleButtonLoading(btn, true);
     loading(true, "Registrando Operação...");
     try {
         let c = DADOS_CONTRATOS.find(x => x.id === id);
@@ -549,7 +718,12 @@ window.salvarAditivo = async function() {
         ads.push({ id: Date.now().toString(), data: dt, tipo: tipo, combustivel: comb, litros: litros, valor: valor, justificativa: obs });
         await setDoc(doc(db, `${tenant}_contratos`, id), { aditivos: ads }, {merge:true});
         modalAditivoObj.hide(); await window.buscarTudo();
-    } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally {
+        toggleButtonLoading(btn, false);
+        loading(false);
+    }
 }
 
 window.abrirModalLiquidar = function(id) {
@@ -565,8 +739,11 @@ window.salvarLiquidacao = async function() {
     const id = document.getElementById('liqContratoId').value;
     const mes = document.getElementById('liqMesAno').value;
     const valor = safeCurrency(document.getElementById('liqValor').value);
+    let btn = document.querySelector('#modalLiquidarContrato .btn-success');
     
     if(!id || !mes || valor <= 0) return alert("Preencha o Mês e o Valor pago corretamente.");
+    
+    toggleButtonLoading(btn, true);
     loading(true, "Registrando Pagamento...");
     try {
         let c = DADOS_CONTRATOS.find(x => x.id === id);
@@ -574,7 +751,12 @@ window.salvarLiquidacao = async function() {
         liqs.push({ id: Date.now().toString(), mes: mes, valor: valor });
         await setDoc(doc(db, `${tenant}_contratos`, id), { liquidados: liqs }, {merge:true});
         modalLiquidarObj.hide(); await window.buscarTudo();
-    } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally {
+        toggleButtonLoading(btn, false);
+        loading(false);
+    }
 }
 
 window.abrirModalExtrato = function(id) {
@@ -1007,10 +1189,12 @@ window.salvarVeic = async function() {
   const placa = document.getElementById('vPlaca').value.toUpperCase().trim();
   const dest = document.getElementById('vDest').value;
   const odoIniStr = document.getElementById('vOdoInicial').value;
+  let btnSalvar = document.getElementById('btnSaveVeic');
 
   if(!placa) return alert("Placa/ID é obrigatório.");
   if(!dest) return alert("Por favor, selecione uma Destinação (Centro de Custo).");
 
+  toggleButtonLoading(btnSalvar, true);
   loading(true, "Salvando...");
   try {
     const dados = { 
@@ -1036,7 +1220,12 @@ window.salvarVeic = async function() {
     
     window.cancelarEdicaoVeic(); 
     await window.buscarTudo();
-  } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
+  } catch(e) { 
+      console.error(e); alert("Erro: " + e.message); 
+  } finally {
+      toggleButtonLoading(btnSalvar, false);
+      loading(false);
+  }
 }
 
 window.excluirVeic = async function(placa) {
@@ -1152,7 +1341,7 @@ window.renderAuditoria = function() {
             let saldo = safeCurrency(a.saldoOdometro);
             
             let alertaKm = false;
-            if(odoPainel > 0 && (saldo < -10 || saldo > 200)) alertaKm = true; 
+            if(odoPainel > 0 && (saldo < -10 || saldo > 200) && !a.odometroCalculado) alertaKm = true; 
 
             listaAuditoria.push({
                 a: a, tempoUltimo, alertaTempo, odoSist, odoPainel, saldo, alertaKm, dataObj: new Date(a.dataAbastecimento)
@@ -1167,8 +1356,8 @@ window.renderAuditoria = function() {
         let v = DADOS_VEICULOS.find(x => x.id === a.placa);
         let dFmt = item.dataObj.toLocaleString('pt-BR').slice(0, 16);
         
-        let txtPainel = item.odoPainel > 0 ? item.odoPainel.toFixed(1) : '<span class="text-muted">-</span>';
-        let txtSaldo = item.odoPainel === 0 ? '<span class="text-muted">-</span>' : (item.saldo > 0 ? '+'+item.saldo.toFixed(1) : item.saldo.toFixed(1));
+        let txtPainel = item.a.odometroCalculado ? `<span class="text-primary" title="Calculado via Média Sistema">${item.odoPainel.toFixed(1)}*</span>` : (item.odoPainel > 0 ? item.odoPainel.toFixed(1) : '<span class="text-muted">-</span>');
+        let txtSaldo = (item.odoPainel === 0 && !item.a.odometroCalculado) ? '<span class="text-muted">-</span>' : (item.saldo > 0 ? '+'+item.saldo.toFixed(1) : item.saldo.toFixed(1));
         
         let corTempo = item.alertaTempo ? 'text-danger fw-bold' : 'text-dark';
         let iconeTempo = item.alertaTempo ? '<i class="fas fa-exclamation-triangle" title="Menos de 3h entre abastecimentos"></i> ' : '';
@@ -1254,7 +1443,6 @@ window.imprimirAuditoria = function() {
     `);
     win.document.close();
 }
-
 // --- RELATÓRIOS E TABELAS ADM ---
 window.filtrarRelatorio = function() {
     const fIni = document.getElementById('fIni') ? document.getElementById('fIni').value : '';
@@ -1404,11 +1592,12 @@ window.imprimirDiario = function() {
 }
 
 window.excluirAbastecimento = async function(idAbast, placa) {
-    if(!confirm(`Tem certeza que deseja EXCLUIR este abastecimento da placa ${placa}?`)) return;
+    if(!confirm(`Tem certeza que deseja EXCLUIR este abastecimento da placa ${placa}? O saldo global dessa placa será recalculado na próxima operação.`)) return;
     
-    loading(true, "Excluindo...");
+    loading(true, "Excluindo e realinhando...");
     try {
         await deleteDoc(doc(db, `${tenant}_abastecimentos`, idAbast));
+        await window.reprocessarHistoricoVeiculo(placa); 
         await window.buscarTudo(); 
     } catch(e) { console.error(e); alert("Erro ao excluir: " + e.message); loading(false); }
 }
@@ -1441,15 +1630,23 @@ window.salvarMotorista = async function() {
     const cnh = document.getElementById('cadMotCNH').value.trim();
     const cat = document.getElementById('cadMotCat').value.toUpperCase().trim();
     const editId = document.getElementById('hdnIdMotorista').value;
+    let btnSalvar = document.getElementById('btnSaveMot');
 
     if(!nome) return alert("O nome do motorista é obrigatório.");
+    
+    toggleButtonLoading(btnSalvar, true);
     loading(true, "Salvando Motorista...");
     try {
         let id = editId || "MOT-" + Date.now();
         await setDoc(doc(db, `${tenant}_motoristas`, id), { nome: nome, cpf: cpf, cnh: cnh, categoria: cat }, {merge: true});
         window.cancelarEdicaoMot();
         await window.buscarTudo();
-    } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally {
+        toggleButtonLoading(btnSalvar, false);
+        loading(false);
+    }
 }
 
 window.excluirMotorista = async function(id) {
@@ -1506,7 +1703,6 @@ window.imprimirLista = function(idElemento, titulo) {
     `);
     win.document.close();
 }
-
 window.prepararEdicaoPosto = function(id) {
     let p = DADOS_POSTOS.find(x => x.id === id);
     if(!p) return;
@@ -1600,10 +1796,12 @@ window.salvarPosto = async function() {
     const gas = safeCurrency(document.getElementById('cadPostoGas').value);
     const die = safeCurrency(document.getElementById('cadPostoDie').value);
     const eta = safeCurrency(document.getElementById('cadPostoEta').value);
+    let btnSalvar = document.getElementById('btnSavePosto');
 
     if(!nome || !cod) return alert("O Nome do Posto e o Cód. Identificador são obrigatórios.");
     if(!vigData) return alert("A Data de Início de Vigência é obrigatória.");
     
+    toggleButtonLoading(btnSalvar, true);
     loading(true, "Salvando Posto e Vigência...");
     try {
         let id = idEdicao ? idEdicao : "POS-" + Date.now();
@@ -1626,7 +1824,12 @@ window.salvarPosto = async function() {
         
         window.cancelarEdicaoPosto();
         await window.buscarTudo();
-    } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally {
+        toggleButtonLoading(btnSalvar, false);
+        loading(false);
+    }
 }
 
 window.excluirPosto = async function(id) {
@@ -1662,7 +1865,7 @@ function renderPostos() {
     }
 }
 
-// --- GESTORES DE ROTAS ---
+// --- GESTORES DE ROTAS E FILA ---
 function renderPainelTransporte() {
   const userSecs = USUARIO.secretarias || []; 
   const podeVerTudo = userSecs.includes('TODAS');
@@ -1710,6 +1913,11 @@ function renderPainelTransporte() {
 window.criarViagem = async function() {
   const p = document.getElementById('selVeiculoTransp').value;
   if(!p) return alert("Selecione um equipamento");
+  
+  // Pegamos o botão que disparou a ação (presumindo que o usuário vai usar a classe btn-primary)
+  let btn = document.querySelector('#viewGestorTransp .btn-primary');
+  
+  toggleButtonLoading(btn, true);
   loading(true, "Despachando...");
   try {
     let vId = "V-" + Date.now();
@@ -1724,7 +1932,12 @@ window.criarViagem = async function() {
     await setDoc(doc(db, `${tenant}_veiculos`, p), {status: 'Em Uso'}, {merge:true});
     document.getElementById('txtPercurso').value = '';
     await window.buscarTudo();
-  } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
+  } catch(e) { 
+      console.error(e); alert("Erro: " + e.message); 
+  } finally {
+      toggleButtonLoading(btn, false);
+      loading(false);
+  }
 }
 
 window.encerrarViagem = async function(idViagem, placa) {
@@ -1811,6 +2024,8 @@ window.autorizarPlacaAvulsa = async function() {
 
     if(!confirm(`Liberar abastecimento para ${placaBomba} no posto ${postoSelecionado}?`)) return;
     
+    let btn = document.querySelector('#painelAvulso .btn-primary');
+    toggleButtonLoading(btn, true);
     loading(true, "Enviando para a fila do posto...");
     try {
         await setDoc(doc(db, `${tenant}_abastecimentos`, "ABAST-" + Date.now()), { 
@@ -1830,7 +2045,12 @@ window.autorizarPlacaAvulsa = async function() {
         document.getElementById('txtObsAvulso').value = '';
         document.getElementById('painelAvulso').classList.add('hidden');
         await window.buscarTudo();
-    } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally {
+        toggleButtonLoading(btn, false);
+        loading(false);
+    }
 }
 
 window.abrirModalAutorizarGestor = function(viagemId) {
@@ -1854,6 +2074,7 @@ window.confirmarAutorizacao = async function() {
   const motorista = document.getElementById('authGestorMotorista').value;
   const obs = document.getElementById('authGestorObs').value;
   const postoSelecionado = document.getElementById('authGestorPosto').value;
+  let btn = document.querySelector('#modalAutorizarGestor .btn-primary');
   
   if(!postoSelecionado) return alert("Por favor, selecione para qual Posto você deseja liberar o abastecimento.");
 
@@ -1863,6 +2084,7 @@ window.confirmarAutorizacao = async function() {
   let erroC = window.validarContratoRigido(veic.secretaria, dest, veic.combustivel, postoSelecionado);
   if(erroC) return alert(erroC);
 
+  toggleButtonLoading(btn, true);
   loading(true, "Enviando para o Posto...");
   try {
       await setDoc(doc(db, `${tenant}_abastecimentos`, "ABAST-" + Date.now()), { 
@@ -1876,7 +2098,12 @@ window.confirmarAutorizacao = async function() {
       });
       modalAutorizarGestorObj.hide();
       await window.buscarTudo();
-  } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
+  } catch(e) { 
+      console.error(e); alert("Erro: " + e.message); 
+  } finally {
+      toggleButtonLoading(btn, false);
+      loading(false);
+  }
 }
 
 window.cancelarVale = async function(id) {
@@ -1888,281 +2115,6 @@ window.cancelarVale = async function(id) {
   } catch(e) { console.error(e); alert("Erro: " + e.message); loading(false); }
 }
 
-// --- CÁLCULO DIRETO E HODÔMETRO (SALVAMENTO) ---
-window.abrirModalLancamentoAdm = function(id = null) {
-    document.getElementById('admIdAbast').value = id || '';
-    let optV = '<option value="">-- Selecione a Frota --</option>';
-    DADOS_VEICULOS.forEach(v => {
-        if(v.status === 'Em Oficina' || v.status === 'Inservível') return;
-        optV += `<option value="${v.id}">${v.id} - ${v.modelo}</option>`;
-    });
-    document.getElementById('admPlaca').innerHTML = optV;
-    
-    if (id) {
-        let a = DADOS_ABASTECIMENTOS.find(x => x.id === id);
-        document.getElementById('admPlaca').value = a.placa; 
-        document.getElementById('admPlaca').disabled = true; 
-        let d = new Date(a.dataAbastecimento); 
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-        document.getElementById('admData').value = d.toISOString().slice(0,16);
-        document.getElementById('admOdo').value = a.odometroPainel || a.odometroSistema || ''; 
-        
-        let lStr = parseFloat(a.quantidade).toFixed(3).replace('.', ',');
-        let intPart = lStr.split(',')[0].replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
-        let decPart = lStr.split(',')[1];
-        document.getElementById('admLitros').value = intPart + ',' + decPart;
-        
-        document.getElementById('admMotorista').value = a.motorista || ''; 
-        document.getElementById('admPostoNome').value = a.nomePosto || '';
-    } else {
-        document.getElementById('admPlaca').disabled = false; 
-        document.getElementById('admData').value = ''; 
-        document.getElementById('admOdo').value = '';
-        document.getElementById('admLitros').value = ''; 
-        document.getElementById('admMotorista').value = ''; 
-        document.getElementById('admPostoNome').value = '';
-    }
-    modalLancaAdmObj.show();
-}
-
-window.salvarLancamentoAdm = async function() {
-    const id = document.getElementById('admIdAbast').value || "ADM-" + Date.now();
-    const placa = document.getElementById('admPlaca').value; 
-    const dt = document.getElementById('admData').value;
-    let odoInformado = safeCurrency(document.getElementById('admOdo').value); 
-    const litros = safeCurrency(document.getElementById('admLitros').value);
-    const motorista = document.getElementById('admMotorista').value; 
-    const postoSelecionado = document.getElementById('admPostoNome').value;
-
-    if(!placa || !dt || !litros) return alert("Preencha Placa/ID, Data e Litros.");
-    if(!postoSelecionado) return alert("Selecione em qual posto está abastecendo.");
-    
-    let veic = DADOS_VEICULOS.find(x => x.id === placa);
-    let sec = veic ? veic.secretaria : '';
-    let dest = veic ? (veic.destinacao || 'GERAL') : 'GERAL';
-    let combFixo = veic ? veic.combustivel : 'Gasolina';
-    
-    let erroC = window.validarContratoRigido(sec, dest, combFixo, postoSelecionado);
-    if(erroC) return alert(erroC);
-
-    loading(true, "Gravando Lançamento...");
-    
-    let dtIso = new Date(dt).toISOString();
-    let precosNaData = window.obterPrecoVigente(postoSelecionado, dtIso);
-    let precoLitro = precosNaData[combFixo] || 0;
-    let totalReais = litros * precoLitro;
-    
-    let tagLancador = "";
-    if (USUARIO.moduloRole === 'GerentePosto') tagLancador = " (Posto Extra)";
-    else if (USUARIO.moduloRole === 'LancadorRetroativo') tagLancador = " (Colab. Retroativo)";
-    else tagLancador = " (ADM)";
-
-    // CÁLCULO DIRETO E GATILHO (Sem reprocessamento global)
-    let odoAnterior = veic.odometro || veic.odometroInicial || 0;
-    let mediaBase = safeCurrency(veic.media) > 0 ? safeCurrency(veic.media) : 1;
-    let avancoTeorico = (veic.tipoFrota === 'Máquina') ? (litros / mediaBase) : (litros * mediaBase);
-    let odoProjetado = odoAnterior + avancoTeorico;
-
-    if(odoInformado <= 0) odoInformado = odoProjetado;
-
-    let saldoOdometro = (odoInformado - odoAnterior) - avancoTeorico;
-
-    try {
-        await setDoc(doc(db, `${tenant}_abastecimentos`, id), {
-            status: 'Concluído', 
-            dataAbastecimento: dtIso, 
-            tipoCombustivel: combFixo, 
-            placa: placa,
-            secretaria: sec,
-            destinacao: dest,
-            odometroPainel: odoInformado, 
-            odometroSistemaAnterior: odoAnterior,
-            odometroSistema: odoProjetado,
-            saldoOdometro: saldoOdometro,
-            quantidade: litros, 
-            precoUnitario: precoLitro, 
-            valorTotal: totalReais, 
-            motorista: motorista,
-            frentistaCpf: USUARIO.cpf, 
-            nomeFrentista: USUARIO.nome + tagLancador, 
-            nomePosto: postoSelecionado,
-            lancamentoManual: true
-        }, {merge:true});
-        
-        // Gatilho: Atualiza quilometragem e banco do veículo
-        await setDoc(doc(db, `${tenant}_veiculos`, veic.id), {
-            odometro: odoInformado
-        }, {merge: true});
-        
-        modalLancaAdmObj.hide(); 
-        await window.buscarTudo(); 
-        alert("Salvo com sucesso!");
-    } catch(e) { console.error(e); alert("Erro ao salvar: " + e.message); loading(false); }
-}
-
-window.salvarAbastecimento = async function() {
-  const id = document.getElementById('hdnIdAbast').value;
-  let odoInformado = safeCurrency(document.getElementById('inpOdoFrentista').value);
-  const litros = safeCurrency(document.getElementById('inpLitrosFrentista').value);
-  const combFixo = document.getElementById('inpCombFrentista').value;
-  const postoSelecionado = document.getElementById('inpPostoFrentista').value;
-
-  if(litros <= 0) return alert("Preencha a quantidade de Litros!");
-  if(!postoSelecionado) return alert("Selecione em qual posto está abastecendo!");
-  
-  let a = DADOS_ABASTECIMENTOS.find(x => x.id === id);
-  let veic = DADOS_VEICULOS.find(x => x.id === a.placa);
-  
-  let sec = veic ? veic.secretaria : ''; 
-  let dest = veic ? (veic.destinacao || 'GERAL') : 'GERAL';
-
-  let erroC = window.validarContratoRigido(sec, dest, combFixo, postoSelecionado);
-  if(erroC) return alert(erroC);
-
-  loading(true, "Gravando Abastecimento...");
-  
-  let dtIso = new Date().toISOString();
-  let precoLitro = window.obterPrecoVigente(postoSelecionado, dtIso)[combFixo] || 0;
-  let totalReais = litros * precoLitro;
-
-  // CÁLCULO DIRETO E GATILHO (Sem reprocessamento global)
-  let odoAnterior = veic.odometro || veic.odometroInicial || 0;
-  let mediaBase = safeCurrency(veic.media) > 0 ? safeCurrency(veic.media) : 1;
-  let avancoTeorico = (veic.tipoFrota === 'Máquina') ? (litros / mediaBase) : (litros * mediaBase);
-  let odoProjetado = odoAnterior + avancoTeorico;
-
-  if(odoInformado <= 0) odoInformado = odoProjetado;
-
-  let saldoOdometro = (odoInformado - odoAnterior) - avancoTeorico;
-
-  try {
-    await setDoc(doc(db, `${tenant}_abastecimentos`, id), {
-        status: 'Concluído',
-        dataAbastecimento: dtIso,
-        tipoCombustivel: combFixo,
-        secretaria: sec, 
-        destinacao: dest,
-        odometroPainel: odoInformado, 
-        odometroSistemaAnterior: odoAnterior,
-        odometroSistema: odoProjetado,
-        saldoOdometro: saldoOdometro,
-        quantidade: litros, 
-        precoUnitario: precoLitro, 
-        valorTotal: totalReais,
-        frentistaCpf: USUARIO.cpf, 
-        nomeFrentista: USUARIO.nome,
-        nomePosto: postoSelecionado
-    }, {merge:true});
-
-    if(veic) {
-        await setDoc(doc(db, `${tenant}_veiculos`, veic.id), {
-            odometro: odoInformado
-        }, {merge: true});
-    }
-
-    modalFrentistaObj.hide(); 
-    await window.buscarTudo();
-    alert("Salvo com Sucesso!");
-  } catch(e) { console.error(e); alert("Erro ao salvar: " + e.message); loading(false); }
-}
-
-// --- IMPRESSÃO PARA VEÍCULOS ---
-window.abrirModalPrintVeic = function() {
-    document.getElementById('pSec').innerHTML = document.getElementById('fSec').innerHTML;
-    document.getElementById('pTipo').value = '';
-    document.getElementById('pOrigem').value = '';
-    modalPrintVeicObj.show();
-}
-
-window.gerarImpressaoVeic = function() {
-    let t = document.getElementById('pTipo').value;
-    let o = document.getElementById('pOrigem').value;
-    let s = document.getElementById('pSec').value.toUpperCase();
-    let buscaTxt = document.getElementById('fBuscaVeic') ? document.getElementById('fBuscaVeic').value.toUpperCase() : '';
-
-    let filtrados = DADOS_VEICULOS.filter(v => {
-        let origemReal = v.origem || 'Próprio';
-        if(t && v.tipoFrota !== t) return false;
-        if(o && origemReal !== o) return false;
-        if(s && v.secretaria !== s) return false;
-
-        if(buscaTxt) {
-            let tV = `${v.id} ${v.modelo || ''} ${v.secretaria || ''} ${v.destinacao || ''}`.toUpperCase();
-            if(!tV.includes(buscaTxt)) return false;
-        }
-        return true;
-    });
-
-    let htmlTable = `<table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; margin-top: 15px;" border="1">
-        <thead style="background-color: #f2f2f2;">
-            <tr>
-                <th style="padding: 8px;">Identificação</th>
-                <th style="padding: 8px;">Origem</th>
-                <th style="padding: 8px;">Tipo</th>
-                <th style="padding: 8px;">Modelo</th>
-                <th style="padding: 8px;">Sec / Destinação</th>
-                <th style="padding: 8px;">Média Base</th>
-                <th style="padding: 8px;">Odo/Hor Atual</th>
-            </tr>
-        </thead>
-        <tbody>`;
-
-    if(filtrados.length === 0) {
-        htmlTable += `<tr><td colspan="7" style="padding: 15px; color: #666;">Nenhum veículo encontrado.</td></tr>`;
-    } else {
-        filtrados.forEach(v => {
-            let undMedia = v.tipoFrota === 'Máquina' ? 'L/h' : 'Km/L';
-            let odoAtual = v.odometro ? v.odometro.toFixed(1) : 0;
-            let origemTexto = v.origem || 'Próprio';
-            let secCompleta = v.secretaria;
-            if(v.destinacao && v.destinacao !== 'GERAL') secCompleta += " / " + v.destinacao;
-            
-            htmlTable += `<tr>
-                <td style="padding: 8px; font-weight: bold;">${v.id}</td>
-                <td style="padding: 8px;">${origemTexto}</td>
-                <td style="padding: 8px;">${v.tipoFrota || 'Veículo'}</td>
-                <td style="padding: 8px;">${v.modelo || '-'}</td>
-                <td style="padding: 8px;">${secCompleta}</td>
-                <td style="padding: 8px;">${v.media || 0} ${undMedia}</td>
-                <td style="padding: 8px; font-weight: bold;">${odoAtual}</td>
-            </tr>`;
-        });
-    }
-    htmlTable += `</tbody></table>`;
-
-    let txtTipo = t ? t : 'Todos'; let txtOrigem = o ? o : 'Todas'; let txtSec = s ? s : 'Todas';
-
-    let win = window.open('', '_blank', 'width=900,height=600');
-    win.document.write(`
-        <html>
-            <head>
-                <title>Relatório de Frota</title>
-                <style>
-                    body { padding: 30px; font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #000; }
-                    h3 { font-weight: bold; text-align: center; margin-bottom: 5px; text-transform: uppercase; }
-                    .info-filtros { text-align: right; font-size: 11px; color: #555; margin-bottom: 10px; }
-                </style>
-            </head>
-            <body>
-                <h3>RELAÇÃO DE FROTA E MÁQUINAS</h3>
-                <div class="info-filtros">
-                    <b>Filtros aplicados:</b> Tipo: ${txtTipo} | Origem: ${txtOrigem} | Secretaria: ${txtSec} <br>
-                    <b>Busca Rápida:</b> ${buscaTxt ? buscaTxt : 'Nenhuma'}<br>
-                    <b>Total Listado:</b> ${filtrados.length} equipamento(s)
-                </div>
-                ${htmlTable}
-                ${BLOCO_ASSINATURA}
-                <script>
-                    window.onload = function() { setTimeout(function() { window.print(); window.close(); }, 500); }
-                <\/script>
-            </body>
-        </html>
-    `);
-    win.document.close();
-    modalPrintVeicObj.hide();
-}
-
-// --- RENDERIZADORES FRENTISTA ---
 function renderFilaPosto() {
   let setorUser = String(USUARIO.setor || '').toUpperCase();
   let postoDoFrentista = null;
@@ -2171,9 +2123,7 @@ function renderFilaPosto() {
       let codPosto = String(p.codigoVinculo || '').toUpperCase().trim();
       if(codPosto) {
           let regex = new RegExp(`\\b${codPosto}\\b`, 'i');
-          if(regex.test(setorUser)) {
-              postoDoFrentista = p.nome;
-          }
+          if(regex.test(setorUser)) { postoDoFrentista = p.nome; }
       }
   });
 
@@ -2183,7 +2133,7 @@ function renderFilaPosto() {
           lblPainel.innerHTML = `<i class="fas fa-store"></i> ${postoDoFrentista}`;
           lblPainel.className = "text-dark mb-4 fw-bold text-center border p-2 bg-light rounded border-success shadow-sm";
       } else {
-          lblPainel.innerHTML = `<i class="fas fa-exclamation-triangle text-danger"></i> Seu usuário não possui o código de nenhum posto no campo Setor. Exibindo toda a fila.`;
+          lblPainel.innerHTML = `<i class="fas fa-exclamation-triangle text-danger"></i> Seu usuário não possui o código de nenhum posto.`;
           lblPainel.className = "text-danger mb-4 fw-bold text-center border p-2 bg-warning rounded border-danger shadow-sm";
       }
   }
@@ -2333,4 +2283,323 @@ window.abrirModalFrentista = function(id) {
     document.getElementById('inpLitrosFrentista').value = '';
 
     modalFrentistaObj.show();
+}
+
+window.abrirModalPrintVeic = function() {
+    document.getElementById('pSec').innerHTML = document.getElementById('fSec').innerHTML;
+    document.getElementById('pTipo').value = '';
+    document.getElementById('pOrigem').value = '';
+    modalPrintVeicObj.show();
+}
+
+window.gerarImpressaoVeic = function() {
+    let t = document.getElementById('pTipo').value;
+    let o = document.getElementById('pOrigem').value;
+    let s = document.getElementById('pSec').value.toUpperCase();
+    let buscaTxt = document.getElementById('fBuscaVeic') ? document.getElementById('fBuscaVeic').value.toUpperCase() : '';
+
+    let filtrados = DADOS_VEICULOS.filter(v => {
+        let origemReal = v.origem || 'Próprio';
+        if(t && v.tipoFrota !== t) return false;
+        if(o && origemReal !== o) return false;
+        if(s && v.secretaria !== s) return false;
+
+        if(buscaTxt) {
+            let tV = `${v.id} ${v.modelo || ''} ${v.secretaria || ''} ${v.destinacao || ''}`.toUpperCase();
+            if(!tV.includes(buscaTxt)) return false;
+        }
+        return true;
+    });
+
+    let htmlTable = `<table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; margin-top: 15px;" border="1">
+        <thead style="background-color: #f2f2f2;">
+            <tr>
+                <th style="padding: 8px;">Identificação</th>
+                <th style="padding: 8px;">Origem</th>
+                <th style="padding: 8px;">Tipo</th>
+                <th style="padding: 8px;">Modelo</th>
+                <th style="padding: 8px;">Sec / Destinação</th>
+                <th style="padding: 8px;">Média Base</th>
+                <th style="padding: 8px;">Odo/Hor Atual</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    if(filtrados.length === 0) {
+        htmlTable += `<tr><td colspan="7" style="padding: 15px; color: #666;">Nenhum veículo encontrado.</td></tr>`;
+    } else {
+        filtrados.forEach(v => {
+            let undMedia = v.tipoFrota === 'Máquina' ? 'L/h' : 'Km/L';
+            let odoAtual = v.odometro ? v.odometro.toFixed(1) : 0;
+            let origemTexto = v.origem || 'Próprio';
+            let secCompleta = v.secretaria;
+            if(v.destinacao && v.destinacao !== 'GERAL') secCompleta += " / " + v.destinacao;
+            
+            htmlTable += `<tr>
+                <td style="padding: 8px; font-weight: bold;">${v.id}</td>
+                <td style="padding: 8px;">${origemTexto}</td>
+                <td style="padding: 8px;">${v.tipoFrota || 'Veículo'}</td>
+                <td style="padding: 8px;">${v.modelo || '-'}</td>
+                <td style="padding: 8px;">${secCompleta}</td>
+                <td style="padding: 8px;">${v.media || 0} ${undMedia}</td>
+                <td style="padding: 8px; font-weight: bold;">${odoAtual}</td>
+            </tr>`;
+        });
+    }
+    htmlTable += `</tbody></table>`;
+
+    let txtTipo = t ? t : 'Todos'; let txtOrigem = o ? o : 'Todas'; let txtSec = s ? s : 'Todas';
+
+    let win = window.open('', '_blank', 'width=900,height=600');
+    win.document.write(`
+        <html>
+            <head>
+                <title>Relatório de Frota</title>
+                <style>
+                    body { padding: 30px; font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #000; }
+                    h3 { font-weight: bold; text-align: center; margin-bottom: 5px; text-transform: uppercase; }
+                    .info-filtros { text-align: right; font-size: 11px; color: #555; margin-bottom: 10px; }
+                </style>
+            </head>
+            <body>
+                <h3>RELAÇÃO DE FROTA E MÁQUINAS</h3>
+                <div class="info-filtros">
+                    <b>Filtros aplicados:</b> Tipo: ${txtTipo} | Origem: ${txtOrigem} | Secretaria: ${txtSec} <br>
+                    <b>Busca Rápida:</b> ${buscaTxt ? buscaTxt : 'Nenhuma'}<br>
+                    <b>Total Listado:</b> ${filtrados.length} equipamento(s)
+                </div>
+                ${htmlTable}
+                ${BLOCO_ASSINATURA}
+                <script>
+                    window.onload = function() { setTimeout(function() { window.print(); window.close(); }, 500); }
+                <\/script>
+            </body>
+        </html>
+    `);
+    win.document.close();
+    modalPrintVeicObj.hide();
+}
+
+// --- RECÁLCULO GLOBAL PROTEGIDO (Respeita meses trancados) ---
+window.reprocessarFrotaMes = async function(mesIso) {
+    if(!mesIso) return alert("Selecione um mês na Auditoria.");
+    if(!confirm(`RECALCULAR FROTA GLOBAL: O sistema irá varrer a linha do tempo de todos os veículos. Se houverem meses TRANCADOS antes de ${mesIso}, a matemática será protegida e a última âncora servirá de base. Confirmar?`)) return;
+    
+    let btn = document.querySelector('.ferramentas-auditoria .btn-warning');
+    toggleButtonLoading(btn, true, "Recalculando Cadeia...");
+    loading(true, "Recalculando Cadeia de Frota Global...");
+    
+    try {
+        let placas = [...new Set(DADOS_ABASTECIMENTOS.map(a => a.placa))];
+        
+        for (let placa of placas) {
+            await window.reprocessarHistoricoVeiculo(placa);
+        }
+        
+        await window.buscarTudo(); 
+        alert("Todos os hodômetros da frota foram reprocessados com sucesso respeitando a auditoria!");
+    } catch(e) { 
+        alert("Erro no reprocessamento: " + e.message); 
+    } finally {
+        toggleButtonLoading(btn, false);
+        loading(false);
+    }
+}
+
+// --- CÁLCULO DIRETO E HODÔMETRO (SALVAMENTO FRENTISTA E ADM) ---
+window.abrirModalLancamentoAdm = function(id = null) {
+    document.getElementById('admIdAbast').value = id || '';
+    let optV = '<option value="">-- Selecione a Frota --</option>';
+    DADOS_VEICULOS.forEach(v => {
+        if(v.status === 'Em Oficina' || v.status === 'Inservível') return;
+        optV += `<option value="${v.id}">${v.id} - ${v.modelo}</option>`;
+    });
+    document.getElementById('admPlaca').innerHTML = optV;
+    
+    if (id) {
+        let a = DADOS_ABASTECIMENTOS.find(x => x.id === id);
+        document.getElementById('admPlaca').value = a.placa; 
+        document.getElementById('admPlaca').disabled = true; 
+        let d = new Date(a.dataAbastecimento); 
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        document.getElementById('admData').value = d.toISOString().slice(0,16);
+        document.getElementById('admOdo').value = (a.odometroPainel === 0 && a.odometroCalculado === false) ? '' : (a.odometroPainel || ''); 
+        
+        let lStr = parseFloat(a.quantidade).toFixed(3).replace('.', ',');
+        let intPart = lStr.split(',')[0].replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+        let decPart = lStr.split(',')[1];
+        document.getElementById('admLitros').value = intPart + ',' + decPart;
+        
+        document.getElementById('admMotorista').value = a.motorista || ''; 
+        document.getElementById('admPostoNome').value = a.nomePosto || '';
+    } else {
+        document.getElementById('admPlaca').disabled = false; 
+        document.getElementById('admData').value = ''; 
+        document.getElementById('admOdo').value = '';
+        document.getElementById('admLitros').value = ''; 
+        document.getElementById('admMotorista').value = ''; 
+        document.getElementById('admPostoNome').value = '';
+    }
+    modalLancaAdmObj.show();
+}
+
+window.salvarLancamentoAdm = async function() {
+    const id = document.getElementById('admIdAbast').value || "ADM-" + Date.now();
+    const placa = document.getElementById('admPlaca').value; 
+    const dt = document.getElementById('admData').value;
+    
+    let odoRaw = document.getElementById('admOdo').value.trim(); 
+    const litros = safeCurrency(document.getElementById('admLitros').value);
+    const motorista = document.getElementById('admMotorista').value; 
+    const postoSelecionado = document.getElementById('admPostoNome').value;
+    let btnSalvar = document.querySelector('#modalLancaAdm .btn-dark');
+
+    if(!placa || !dt || !litros) return alert("Preencha Placa/ID, Data e Litros.");
+    if(!postoSelecionado) return alert("Selecione em qual posto está abastecendo.");
+    
+    let dtIso = new Date(dt).toISOString();
+
+    // TRAVA: MÊS FECHADO
+    let bloqueado = await window.isMesTrancado(dtIso);
+    if (bloqueado) {
+        return alert(`⛔ AÇÃO BLOQUEADA: A data informada pertence a um mês que já foi fechado na auditoria e não pode receber novos lançamentos ou sofrer edições.`);
+    }
+
+    let veic = DADOS_VEICULOS.find(x => x.id === placa);
+    let sec = veic ? veic.secretaria : '';
+    let dest = veic ? (veic.destinacao || 'GERAL') : 'GERAL';
+    let combFixo = veic ? veic.combustivel : 'Gasolina';
+    
+    let erroC = window.validarContratoRigido(sec, dest, combFixo, postoSelecionado);
+    if(erroC) return alert(erroC);
+
+    toggleButtonLoading(btnSalvar, true);
+    loading(true, "Gravando e Alinhando Timeline...");
+    
+    let precosNaData = window.obterPrecoVigente(postoSelecionado, dtIso);
+    let precoLitro = precosNaData[combFixo] || 0;
+    let totalReais = litros * precoLitro;
+    
+    let tagLancador = "";
+    if (USUARIO.moduloRole === 'GerentePosto') tagLancador = " (Posto Extra)";
+    else if (USUARIO.moduloRole === 'LancadorRetroativo') tagLancador = " (Retroativo)";
+    else tagLancador = " (ADM)";
+
+    let isAuto = false;
+    let odoInformado = 0;
+    if (odoRaw === "") {
+        isAuto = true;
+    } else {
+        odoInformado = safeCurrency(odoRaw);
+    }
+
+    try {
+        await setDoc(doc(db, `${tenant}_abastecimentos`, id), {
+            status: 'Concluído', 
+            dataAbastecimento: dtIso, 
+            tipoCombustivel: combFixo, 
+            placa: placa,
+            secretaria: sec,
+            destinacao: dest,
+            odometroPainel: odoInformado, 
+            odometroSistemaAnterior: 0, // Provisório. O Recálculo vai assumir a correção.
+            odometroSistema: 0, // Provisório.
+            saldoOdometro: 0, // Provisório.
+            odometroCalculado: isAuto, 
+            quantidade: litros, 
+            precoUnitario: precoLitro, 
+            valorTotal: totalReais, 
+            motorista: motorista,
+            frentistaCpf: USUARIO.cpf, 
+            nomeFrentista: USUARIO.nome + tagLancador, 
+            nomePosto: postoSelecionado,
+            lancamentoManual: true
+        }, {merge:true});
+        
+        // Magia da linha do tempo: Recalcula a cronologia deste veículo
+        await window.reprocessarHistoricoVeiculo(placa);
+
+        modalLancaAdmObj.hide(); 
+        await window.buscarTudo(); 
+        alert("Lançamento salvo e linha do tempo realinhada com sucesso!");
+    } catch(e) { 
+        console.error(e); alert("Erro ao salvar: " + e.message); 
+    } finally {
+        toggleButtonLoading(btnSalvar, false);
+        loading(false);
+    }
+}
+
+window.salvarAbastecimento = async function() {
+  const id = document.getElementById('hdnIdAbast').value;
+  let odoRaw = document.getElementById('inpOdoFrentista').value.trim();
+  const litros = safeCurrency(document.getElementById('inpLitrosFrentista').value);
+  const combFixo = document.getElementById('inpCombFrentista').value;
+  const postoSelecionado = document.getElementById('inpPostoFrentista').value;
+  let btnSalvar = document.querySelector('#modalFrentista .btn-success');
+
+  if(litros <= 0) return alert("Preencha a quantidade de Litros!");
+  if(!postoSelecionado) return alert("Selecione em qual posto está abastecendo!");
+  
+  let a = DADOS_ABASTECIMENTOS.find(x => x.id === id);
+  let veic = DADOS_VEICULOS.find(x => x.id === a.placa);
+  
+  let sec = veic ? veic.secretaria : ''; 
+  let dest = veic ? (veic.destinacao || 'GERAL') : 'GERAL';
+
+  let erroC = window.validarContratoRigido(sec, dest, combFixo, postoSelecionado);
+  if(erroC) return alert(erroC);
+
+  let dtIso = new Date().toISOString();
+  
+  // TRAVA: MÊS FECHADO
+  let bloqueado = await window.isMesTrancado(dtIso);
+  if (bloqueado) return alert(`⛔ AÇÃO BLOQUEADA: Mês da operação protegido pelo fechamento do Gestor.`);
+
+  toggleButtonLoading(btnSalvar, true);
+  loading(true, "Gravando e Alinhando Abastecimento...");
+  
+  let precoLitro = window.obterPrecoVigente(postoSelecionado, dtIso)[combFixo] || 0;
+  let totalReais = litros * precoLitro;
+
+  let isAuto = false;
+  let odoInformado = 0;
+  if (odoRaw === "") {
+      isAuto = true;
+  } else {
+      odoInformado = safeCurrency(odoRaw);
+  }
+
+  try {
+    await setDoc(doc(db, `${tenant}_abastecimentos`, id), {
+        status: 'Concluído',
+        dataAbastecimento: dtIso,
+        tipoCombustivel: combFixo,
+        secretaria: sec, 
+        destinacao: dest,
+        odometroPainel: odoInformado, 
+        odometroSistemaAnterior: 0, // Será recalculado
+        odometroSistema: 0, // Será recalculado
+        saldoOdometro: 0, // Será recalculado
+        odometroCalculado: isAuto, 
+        quantidade: litros, 
+        precoUnitario: precoLitro, 
+        valorTotal: totalReais,
+        frentistaCpf: USUARIO.cpf, 
+        nomeFrentista: USUARIO.nome,
+        nomePosto: postoSelecionado
+    }, {merge:true});
+
+    // Mágica da correção de linha do tempo
+    await window.reprocessarHistoricoVeiculo(a.placa);
+
+    modalFrentistaObj.hide(); 
+    await window.buscarTudo();
+    alert("Salvo com Sucesso!");
+  } catch(e) { 
+      console.error(e); alert("Erro ao salvar: " + e.message); 
+  } finally {
+      toggleButtonLoading(btnSalvar, false);
+      loading(false);
+  }
 }
