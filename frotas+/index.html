@@ -63,7 +63,9 @@
               <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admPostos"><i class="fas fa-gas-pump"></i> Postos</a></li>
               <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admConfig"><i class="fas fa-cog"></i> Prefeitura</a></li>
             </ul>
-        </div><div class="tab-content">
+        </div>
+        
+        <div class="tab-content">
           <div class="tab-pane fade show active" id="admDashboard">
             <div class="row mb-3"><div class="col-md-12"><h4 class="fw-bold text-dark"><i class="fas fa-chart-line me-2 text-primary"></i>Painel Consolidado de Operações</h4></div></div>
             <div class="row g-3 mb-4">
@@ -256,7 +258,9 @@
                  </table>
                </div>
              </div>
-          </div><div class="tab-pane fade" id="admAnalise">
+          </div>
+          
+          <div class="tab-pane fade" id="admAnalise">
             <div class="card p-3 mb-4 border-0 shadow-sm border-start border-dark border-4 bg-light">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
@@ -565,14 +569,10 @@
             </div>
           </div>
 
-        </div> </div> </div> ```
+        </div> 
+      </div> 
+    </div>
 
----
-
-### BLOCO 5: `index.html` (Vistas Adicionais e Início dos Modais)
-Cole exatamente abaixo do Bloco 4.
-
-```html
     <div id="viewGestorTransp" class="hidden">
       <div class="card p-4 shadow-sm border-0 border-top border-5 border-primary">
         <h5 class="fw-bold text-primary mb-4"><i class="fas fa-route"></i> Despacho de Frota</h5>
@@ -723,15 +723,7 @@ Cole exatamente abaixo do Bloco 4.
       </div>
     </div>
 
-  </div> ```
-
----
-
-### BLOCO 6: `index.html` (Conclusão: Modais, Áreas de Impressão e Scripts)
-Cole exatamente abaixo do Bloco 5 para finalizar o seu HTML.
-
-```html
-  <div class="modal fade" id="modalAutorizarGestor" tabindex="-1">
+  </div> <div class="modal fade" id="modalAutorizarGestor" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content border-0 shadow">
         <div class="modal-header bg-primary text-white">
@@ -963,7 +955,7 @@ Cole exatamente abaixo do Bloco 5 para finalizar o seu HTML.
     </div>
   </div>
 
-  <div class="modal fade" id="modalExtratoContrato" tabindex="-1">
+  <div class="modal fade" id="modalExtrato" tabindex="-1">
     <div class="modal-dialog modal-lg">
       <div class="modal-content border-0 shadow">
         <div class="modal-header bg-dark text-white">

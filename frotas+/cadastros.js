@@ -1,0 +1,710 @@
+import { db } from './firebase-env.js';
+import { doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+// === FROTA ===
+window.atualizarDestinacoesVeiculo = function(valorAtual = '') {
+    let elSec = document.getElementById('vSec');
+    let sel = document.getElementById('vDest');
+    if (!elSec || !sel) return;
+
+    let secEscolhida = elSec.value.toUpperCase();
+    let destsDaSec = window.DADOS_CONTRATOS.filter(c => c.secretaria && c.secretaria.toUpperCase() === secEscolhida).map(c => c.destinacao || 'GERAL');
+    let unicos = [...new Set(destsDaSec)];
+    
+    let html = '<option value="">-- Selecione a Divisão --</option>';
+    if(unicos.length === 0) { 
+        html += '<option value="GERAL">GERAL</option>'; 
+    } else { 
+        unicos.forEach(d => html += `<option value="${d}">${d}</option>`); 
+    }
+    
+    sel.innerHTML = html;
+    
+    if(valorAtual && unicos.includes(valorAtual)) sel.value = valorAtual;
+    else if (unicos.length === 1) sel.value = unicos[0];
+};
+
+window.renderTabVeiculos = function() {
+  let h = '';
+  let elBusca = document.getElementById('fBuscaVeic');
+  let fBusca = elBusca ? elBusca.value.toUpperCase() : '';
+  
+  let elTotVeic = document.getElementById("dash-tot-veiculos");
+  let elTotOficina = document.getElementById("dash-tot-oficina");
+
+  if(elTotVeic && elTotOficina) {
+      elTotVeic.innerText = window.DADOS_VEICULOS.filter(v => v.status !== "Oficina" && v.status !== "Manutenção" && v.status !== "Inativo").length;
+      elTotOficina.innerText = window.DADOS_VEICULOS.filter(v => v.status === "Oficina" || v.status === "Manutenção").length;
+  }
+
+  window.DADOS_VEICULOS.forEach(v => {
+     let textoBusca = `${v.id} ${v.placa||''} ${v.modelo || ''} ${v.secretaria || ''} ${v.destinacao || ''}`.toUpperCase();
+     if (fBusca && !textoBusca.includes(fBusca)) return; 
+     
+     let jV = encodeURIComponent(JSON.stringify(v));
+     let tipoStr = v.tipoFrota === 'Máquina' ? '<i class="fas fa-tractor text-warning"></i> Máquina' : '<i class="fas fa-car text-primary"></i> Veículo';
+     let origemStr = v.origem || 'Próprio';
+     let badgeOrigem = origemStr === 'Locado' ? '<span class="badge bg-info text-dark"><i class="fas fa-handshake"></i> Locado</span>' : '<span class="badge bg-secondary">Próprio</span>';
+     let destStr = v.destinacao ? ` / ${v.destinacao}` : '';
+     let idShow = v.placa ? v.placa.toUpperCase() : v.id;
+
+     h += `<tr>
+        <td class="fw-bold text-uppercase">${idShow}</td>
+        <td>${badgeOrigem}</td>
+        <td>${tipoStr}<br><small class="text-muted">${v.modelo || 'S/ Modelo'}</small></td>
+        <td><span class="fw-bold">${v.secretaria || 'NÃO INFORMADA'}</span><br><small class="text-primary fw-bold">${destStr}</small></td>
+        <td class="fw-bold text-success">${v.odometro ? v.odometro.toFixed(1) : 0}</td>
+        <td class="text-end text-nowrap">
+            <button class="btn btn-sm btn-outline-info" title="Gerar RDV" onclick="window.IrParaRDV('${idShow}')"><i class="fas fa-file-pdf"></i></button>
+            <button class="btn btn-sm btn-outline-primary ms-1" onclick="window.prepararEdicaoVeic('${jV}')"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-sm btn-outline-danger ms-1" onclick="window.excluirVeic('${v.id}')"><i class="fas fa-trash"></i></button>
+        </td>
+     </tr>`;
+  });
+  
+  let elLista = document.getElementById('listaVeic');
+  if(elLista) elLista.innerHTML = h || '<tr><td colspan="6" class="text-muted py-4 text-center">Nenhum equipamento encontrado.</td></tr>';
+};
+
+window.prepararEdicaoVeic = function(str) {
+  const v = JSON.parse(decodeURIComponent(str)); 
+  
+  let ids = ['hdnOldPlaca', 'vTipo', 'vOrigem', 'vPlaca', 'vModelo', 'vSec', 'vComb', 'vMedia', 'vOdoInicial', 'vOdoAtual', 'btnSaveVeic', 'btnCancelVeic'];
+  let els = {};
+  ids.forEach(id => els[id] = document.getElementById(id));
+
+  if(els.hdnOldPlaca) els.hdnOldPlaca.value = v.id; 
+  if(els.vTipo) els.vTipo.value = v.tipoFrota || 'Veículo';
+  if(els.vOrigem) els.vOrigem.value = v.origem || 'Próprio';
+  if(els.vPlaca) { els.vPlaca.value = v.placa || v.id; els.vPlaca.readOnly = true; }
+  if(els.vModelo) els.vModelo.value = v.modelo || ''; 
+  if(els.vSec) els.vSec.value = v.secretaria || '';
+  
+  window.atualizarDestinacoesVeiculo(v.destinacao || 'GERAL');
+
+  if(els.vComb) els.vComb.value = v.combustivel || 'Gasolina';
+  if(els.vMedia) els.vMedia.value = window.formatarNumeroInput(v.media, 2);
+  if(els.vOdoInicial) els.vOdoInicial.value = v.odometroInicial !== undefined ? window.formatarNumeroInput(v.odometroInicial, 1) : '';
+  if(els.vOdoAtual) els.vOdoAtual.value = v.odometro ? v.odometro.toFixed(1) : 0;
+  
+  if(els.btnSaveVeic) els.btnSaveVeic.innerHTML = '<i class="fas fa-save"></i> SALVAR ALTERAÇÃO';
+  if(els.btnCancelVeic) els.btnCancelVeic.classList.remove('hidden'); 
+  
+  window.scrollTo(0, 0);
+};
+
+window.cancelarEdicaoVeic = function() {
+  let ids = ['hdnOldPlaca', 'vTipo', 'vOrigem', 'vPlaca', 'vModelo', 'vSec', 'vDest', 'vComb', 'vMedia', 'vOdoInicial', 'vOdoAtual', 'btnSaveVeic', 'btnCancelVeic'];
+  let els = {};
+  ids.forEach(id => els[id] = document.getElementById(id));
+
+  if(els.hdnOldPlaca) els.hdnOldPlaca.value = ''; 
+  if(els.vTipo) els.vTipo.value = 'Veículo'; 
+  if(els.vOrigem) els.vOrigem.value = 'Próprio';
+  if(els.vPlaca) { els.vPlaca.value = ''; els.vPlaca.readOnly = false; }
+  if(els.vModelo) els.vModelo.value = ''; 
+  if(els.vSec) els.vSec.value = '';
+  if(els.vDest) { els.vDest.innerHTML = '<option value="GERAL">GERAL</option>'; els.vDest.value = 'GERAL'; }
+  if(els.vComb) els.vComb.value = 'Gasolina';
+  if(els.vMedia) els.vMedia.value = ''; 
+  if(els.vOdoInicial) els.vOdoInicial.value = '';
+  if(els.vOdoAtual) els.vOdoAtual.value = '';
+  
+  if(els.btnSaveVeic) els.btnSaveVeic.innerHTML = '<i class="fas fa-save"></i> GRAVAR';
+  if(els.btnCancelVeic) els.btnCancelVeic.classList.add('hidden');
+};
+
+window.salvarVeic = async function() {
+  let elPlaca = document.getElementById('vPlaca');
+  let elDest = document.getElementById('vDest');
+  let elOdoIni = document.getElementById('vOdoInicial');
+  let btnSalvar = document.getElementById('btnSaveVeic');
+
+  if (!elPlaca || !elDest) return;
+
+  const placa = elPlaca.value.toUpperCase().trim();
+  const dest = elDest.value;
+  const odoIniStr = elOdoIni ? elOdoIni.value : '';
+
+  if(!placa) return alert("Placa/ID é obrigatório.");
+  if(!dest) return alert("Por favor, selecione uma Destinação (Centro de Custo).");
+
+  window.toggleButtonLoading(btnSalvar, true);
+  window.loading(true, "Salvando...");
+  
+  try {
+    const dados = { 
+        placa: placa,
+        tipoFrota: document.getElementById('vTipo') ? document.getElementById('vTipo').value : 'Veículo', 
+        tipo_veiculo: document.getElementById('vTipo') ? document.getElementById('vTipo').value : 'Veículo',
+        origem: document.getElementById('vOrigem') ? document.getElementById('vOrigem').value : 'Próprio',
+        modelo: document.getElementById('vModelo') ? document.getElementById('vModelo').value.trim() : '', 
+        secretaria: document.getElementById('vSec') ? document.getElementById('vSec').value.toUpperCase().trim() : '', 
+        destinacao: dest,
+        combustivel: document.getElementById('vComb') ? document.getElementById('vComb').value : 'Gasolina', 
+        media: document.getElementById('vMedia') ? window.safeCurrency(document.getElementById('vMedia').value) : 0
+    };
+    
+    if(odoIniStr !== '') dados.odometroInicial = window.safeCurrency(odoIniStr);
+
+    let elHdnOld = document.getElementById('hdnOldPlaca');
+    if(!elHdnOld || !elHdnOld.value) { 
+        dados.status = 'Disponível'; 
+        dados.odometro = dados.odometroInicial || 0; 
+    }
+    
+    await setDoc(doc(db, `${window.tenant}_veiculos`, placa), dados, {merge:true});
+    window.cancelarEdicaoVeic(); 
+    await window.buscarTudo();
+  } catch(e) { 
+      console.error(e); alert("Erro: " + e.message); 
+  } finally { 
+      window.toggleButtonLoading(btnSalvar, false); window.loading(false); 
+  }
+};
+
+window.excluirVeic = async function(placa) {
+  if(!confirm(`Excluir ${placa}?`)) return;
+  window.loading(true); 
+  try { 
+      await deleteDoc(doc(db, `${window.tenant}_veiculos`, placa)); 
+      await window.buscarTudo(); 
+  } catch(e) { 
+      console.error(e); alert("Erro: " + e.message); window.loading(false); 
+  }
+};
+
+window.IrParaRDV = function(placa) {
+    if(window.alternarModulo) window.alternarModulo('rdv');
+    setTimeout(() => {
+        let elRdv = document.getElementById('rdv-veiculo-input');
+        let elData = document.getElementById('rdv-data');
+        if(elRdv) elRdv.value = placa;
+        if(window.SincronizarEventosDoDia && elData) window.SincronizarEventosDoDia(placa, elData.value);
+    }, 300);
+};
+
+// === EQUIPE / MOTORISTAS ===
+window.renderMotoristas = function() {
+    let h = '';
+    window.DADOS_MOTORISTAS.forEach(m => {
+        h += `<tr>
+            <td class="fw-bold">${m.nome}</td>
+            <td>${m.cpf || '-'}</td>
+            <td>${m.cnh || '-'}</td>
+            <td><span class="badge bg-secondary">${m.categoria || '-'}</span></td>
+            <td class="text-end text-nowrap">
+                <button class="btn btn-sm btn-outline-primary" onclick="window.prepararEdicaoMot('${m.id}')"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-outline-danger ms-1" onclick="window.excluirMotorista('${m.id}')"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
+    });
+    
+    let elTabela = document.getElementById('listaMotoristasTabela');
+    if(elTabela) elTabela.innerHTML = h || '<tr><td colspan="5" class="text-muted py-3">Nenhum motorista cadastrado.</td></tr>';
+};
+
+window.prepararEdicaoMot = function(id) {
+    const m = window.DADOS_MOTORISTAS.find(x => x.id === id);
+    if(!m) return;
+    
+    let els = {
+        hdn: document.getElementById('hdnIdMotorista'),
+        nome: document.getElementById('cadMotNome'),
+        cpf: document.getElementById('cadMotCPF'),
+        cnh: document.getElementById('cadMotCNH'),
+        cat: document.getElementById('cadMotCat'),
+        btnSave: document.getElementById('btnSaveMot'),
+        btnCancel: document.getElementById('btnCancelMot')
+    };
+
+    if(els.hdn) els.hdn.value = m.id;
+    if(els.nome) els.nome.value = m.nome || '';
+    if(els.cpf) els.cpf.value = m.cpf || '';
+    if(els.cnh) els.cnh.value = m.cnh || '';
+    if(els.cat) els.cat.value = m.categoria || '';
+    if(els.btnSave) els.btnSave.innerHTML = '<i class="fas fa-save"></i> ATUALIZAR';
+    if(els.btnCancel) els.btnCancel.classList.remove('hidden');
+};
+
+window.cancelarEdicaoMot = function() {
+    let els = {
+        hdn: document.getElementById('hdnIdMotorista'),
+        nome: document.getElementById('cadMotNome'),
+        cpf: document.getElementById('cadMotCPF'),
+        cnh: document.getElementById('cadMotCNH'),
+        cat: document.getElementById('cadMotCat'),
+        btnSave: document.getElementById('btnSaveMot'),
+        btnCancel: document.getElementById('btnCancelMot')
+    };
+
+    if(els.hdn) els.hdn.value = '';
+    if(els.nome) els.nome.value = '';
+    if(els.cpf) els.cpf.value = '';
+    if(els.cnh) els.cnh.value = '';
+    if(els.cat) els.cat.value = '';
+    if(els.btnSave) els.btnSave.innerHTML = '<i class="fas fa-save"></i> SALVAR';
+    if(els.btnCancel) els.btnCancel.classList.add('hidden');
+};
+
+window.salvarMotorista = async function() {
+    let els = {
+        nome: document.getElementById('cadMotNome'),
+        cpf: document.getElementById('cadMotCPF'),
+        cnh: document.getElementById('cadMotCNH'),
+        cat: document.getElementById('cadMotCat'),
+        hdn: document.getElementById('hdnIdMotorista'),
+        btnSave: document.getElementById('btnSaveMot')
+    };
+
+    if(!els.nome) return;
+
+    const nome = els.nome.value.toUpperCase().trim();
+    const cpf = els.cpf ? els.cpf.value.trim() : '';
+    const cnh = els.cnh ? els.cnh.value.trim() : '';
+    const cat = els.cat ? els.cat.value.toUpperCase().trim() : '';
+    const editId = els.hdn ? els.hdn.value : '';
+
+    if(!nome) return alert("O nome do motorista é obrigatório.");
+    
+    window.toggleButtonLoading(els.btnSave, true);
+    window.loading(true, "Salvando Motorista...");
+    
+    try {
+        let id = editId || "MOT-" + Date.now();
+        await setDoc(doc(db, `${window.tenant}_motoristas`, id), { nome: nome, cpf: cpf, cnh: cnh, categoria: cat, cargo: "Motorista", status: "Ativo" }, {merge: true});
+        await setDoc(doc(db, `${window.tenant}_equipe`, id), { nome: nome, doc: cpf, cargo: "Motorista", status: "Ativo" }, {merge: true}); 
+        window.cancelarEdicaoMot(); 
+        await window.buscarTudo();
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally { 
+        window.toggleButtonLoading(els.btnSave, false); window.loading(false); 
+    }
+};
+
+window.excluirMotorista = async function(id) {
+    if(!confirm("Tem certeza que deseja excluir este motorista?")) return;
+    window.loading(true);
+    try { 
+        await deleteDoc(doc(db, `${window.tenant}_motoristas`, id)); 
+        await deleteDoc(doc(db, `${window.tenant}_equipe`, id)); 
+        await window.buscarTudo(); 
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); window.loading(false); 
+    }
+};
+
+// === POSTOS ===
+window.renderPostos = function() {
+    let h = '';
+    let dHoje = new Date().toISOString().slice(0, 10);
+    window.DADOS_POSTOS.forEach(p => {
+        let badgeCod = p.codigoVinculo ? `<span class="badge bg-primary px-2">${p.codigoVinculo}</span>` : '<span class="text-muted">-</span>';
+        let precosAtuais = window.obterPrecoVigente(p.nome, dHoje);
+        h += `<tr>
+            <td class="fw-bold">${badgeCod}</td>
+            <td class="fw-bold text-dark">${p.nome}</td>
+            <td class="text-danger fw-bold">${precosAtuais.Gasolina ? precosAtuais.Gasolina.toFixed(2) : '0.00'}</td>
+            <td class="text-dark fw-bold">${precosAtuais.Diesel ? precosAtuais.Diesel.toFixed(2) : '0.00'}</td>
+            <td class="text-success fw-bold">${precosAtuais.Etanol ? precosAtuais.Etanol.toFixed(2) : '0.00'}</td>
+            <td class="text-end text-nowrap">
+                <button class="btn btn-sm btn-outline-primary" onclick="window.prepararEdicaoPosto('${p.id}')"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-outline-danger ms-1" onclick="window.excluirPosto('${p.id}')"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
+    });
+    
+    let elTabela = document.getElementById('listaPostosTabela');
+    if(elTabela) elTabela.innerHTML = h || '<tr><td colspan="6" class="text-muted py-3">Nenhum posto cadastrado.</td></tr>';
+};
+
+window.prepararEdicaoPosto = function(id) {
+    let p = window.DADOS_POSTOS.find(x => x.id === id);
+    if(!p) return;
+    
+    let els = {
+        hdn: document.getElementById('hdnIdPosto'),
+        nome: document.getElementById('cadPostoNome'),
+        codigo: document.getElementById('cadPostoCodigo'),
+        vigencia: document.getElementById('cadPostoVigencia'),
+        gas: document.getElementById('cadPostoGas'),
+        die: document.getElementById('cadPostoDie'),
+        eta: document.getElementById('cadPostoEta'),
+        btnSave: document.getElementById('btnSavePosto'),
+        btnCancel: document.getElementById('btnCancelPosto')
+    };
+
+    if(els.hdn) els.hdn.value = p.id;
+    if(els.nome) els.nome.value = p.nome || '';
+    if(els.codigo) els.codigo.value = p.codigoVinculo || '';
+    
+    let dHoje = new Date().toISOString().slice(0, 10);
+    if(els.vigencia) els.vigencia.value = dHoje;
+    
+    let precosAtuais = window.obterPrecoVigente(p.nome, dHoje);
+    if(els.gas) els.gas.value = precosAtuais.Gasolina ? precosAtuais.Gasolina.toFixed(2).replace('.',',') : '';
+    if(els.die) els.die.value = precosAtuais.Diesel ? precosAtuais.Diesel.toFixed(2).replace('.',',') : '';
+    if(els.eta) els.eta.value = precosAtuais.Etanol ? precosAtuais.Etanol.toFixed(2).replace('.',',') : '';
+    
+    window.renderHistoricoPrecos(p);
+    
+    if(els.btnSave) els.btnSave.innerHTML = '<i class="fas fa-save"></i> SALVAR NOVO PREÇO';
+    if(els.btnCancel) els.btnCancel.classList.remove('hidden');
+    
+    window.scrollTo(0, 0);
+};
+
+window.renderHistoricoPrecos = function(p) {
+    let box = document.getElementById('boxHistoricoPrecos');
+    let tb = document.getElementById('tbHistoricoPrecos');
+    
+    if(!box || !tb) return;
+    
+    box.classList.remove('hidden');
+    
+    if(!p.vigencias || p.vigencias.length === 0) {
+        tb.innerHTML = '<tr><td colspan="5" class="text-muted">Nenhum histórico registrado ainda.</td></tr>'; 
+        return;
+    }
+    
+    let h = '';
+    p.vigencias.forEach((v) => {
+        let dFmt = v.data.split('-').reverse().join('/');
+        h += `<tr>
+            <td class="fw-bold">${dFmt}</td>
+            <td class="text-danger fw-bold">R$ ${v.Gasolina.toFixed(2).replace('.',',')}</td>
+            <td class="text-dark fw-bold">R$ ${v.Diesel.toFixed(2).replace('.',',')}</td>
+            <td class="text-success fw-bold">R$ ${v.Etanol.toFixed(2).replace('.',',')}</td>
+            <td><button type="button" class="btn btn-sm text-danger" title="Excluir Vigência" onclick="window.excluirVigenciaPosto('${p.id}', '${v.data}')"><i class="fas fa-trash"></i></button></td>
+        </tr>`;
+    });
+    tb.innerHTML = h;
+};
+
+window.excluirVigenciaPosto = async function(idPosto, dataVig) {
+    if(!confirm(`Remover os preços do dia ${dataVig.split('-').reverse().join('/')}?`)) return;
+    window.loading(true, "Apagando vigência...");
+    try {
+        let p = window.DADOS_POSTOS.find(x => x.id === idPosto);
+        if(!p) throw new Error("Posto não encontrado.");
+        let novasVig = p.vigencias.filter(v => v.data !== dataVig);
+        let gas = 0, die = 0, eta = 0;
+        if(novasVig.length > 0) { gas = novasVig[0].Gasolina; die = novasVig[0].Diesel; eta = novasVig[0].Etanol; }
+        await setDoc(doc(db, `${window.tenant}_postos`, idPosto), { vigencias: novasVig, Gasolina: gas, Diesel: die, Etanol: eta }, {merge: true});
+        await window.buscarTudo(); 
+        window.prepararEdicaoPosto(idPosto);
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally { 
+        window.loading(false); 
+    }
+};
+
+window.cancelarEdicaoPosto = function() {
+    let els = {
+        hdn: document.getElementById('hdnIdPosto'),
+        nome: document.getElementById('cadPostoNome'),
+        codigo: document.getElementById('cadPostoCodigo'),
+        vigencia: document.getElementById('cadPostoVigencia'),
+        gas: document.getElementById('cadPostoGas'),
+        die: document.getElementById('cadPostoDie'),
+        eta: document.getElementById('cadPostoEta'),
+        box: document.getElementById('boxHistoricoPrecos'),
+        btnSave: document.getElementById('btnSavePosto'),
+        btnCancel: document.getElementById('btnCancelPosto')
+    };
+
+    if(els.hdn) els.hdn.value = '';
+    if(els.nome) els.nome.value = ''; 
+    if(els.codigo) els.codigo.value = '';
+    if(els.vigencia) els.vigencia.value = new Date().toISOString().slice(0, 10);
+    if(els.gas) els.gas.value = ''; 
+    if(els.die) els.die.value = ''; 
+    if(els.eta) els.eta.value = '';
+    if(els.box) els.box.classList.add('hidden');
+    if(els.btnSave) els.btnSave.innerHTML = '<i class="fas fa-save"></i> SALVAR POSTO';
+    if(els.btnCancel) els.btnCancel.classList.add('hidden');
+};
+
+window.salvarPosto = async function() {
+    let els = {
+        hdn: document.getElementById('hdnIdPosto'),
+        nome: document.getElementById('cadPostoNome'),
+        codigo: document.getElementById('cadPostoCodigo'),
+        vigencia: document.getElementById('cadPostoVigencia'),
+        gas: document.getElementById('cadPostoGas'),
+        die: document.getElementById('cadPostoDie'),
+        eta: document.getElementById('cadPostoEta'),
+        btnSave: document.getElementById('btnSavePosto')
+    };
+
+    if(!els.nome || !els.codigo || !els.vigencia) return;
+
+    const idEdicao = els.hdn ? els.hdn.value : '';
+    const nome = els.nome.value.toUpperCase().trim();
+    const cod = els.codigo.value.toUpperCase().trim();
+    const vigData = els.vigencia.value;
+    const gas = els.gas ? window.safeCurrency(els.gas.value) : 0;
+    const die = els.die ? window.safeCurrency(els.die.value) : 0;
+    const eta = els.eta ? window.safeCurrency(els.eta.value) : 0;
+
+    if(!nome || !cod) return alert("O Nome do Posto e o Cód. Identificador são obrigatórios.");
+    if(!vigData) return alert("A Data de Início de Vigência é obrigatória.");
+    
+    window.toggleButtonLoading(els.btnSave, true);
+    window.loading(true, "Salvando Posto e Vigência...");
+    
+    try {
+        let id = idEdicao ? idEdicao : "POS-" + Date.now();
+        let pExistente = window.DADOS_POSTOS.find(x => x.id === id);
+        let vigs = (pExistente && pExistente.vigencias) ? [...pExistente.vigencias] : [];
+        
+        vigs = vigs.filter(v => v.data !== vigData);
+        vigs.push({ data: vigData, Gasolina: gas, Diesel: die, Etanol: eta });
+        vigs.sort((a,b) => (a.data > b.data) ? -1 : 1); 
+
+        await setDoc(doc(db, `${window.tenant}_postos`, id), { nome: nome, codigoVinculo: cod, Gasolina: gas, Diesel: die, Etanol: eta, vigencias: vigs }, {merge: true});
+        window.cancelarEdicaoPosto(); 
+        await window.buscarTudo();
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally { 
+        window.toggleButtonLoading(els.btnSave, false); window.loading(false); 
+    }
+};
+
+window.excluirPosto = async function(id) {
+    if(!confirm("Excluir este posto e os preços dele?")) return;
+    window.loading(true);
+    try { 
+        await deleteDoc(doc(db, `${window.tenant}_postos`, id)); 
+        await window.buscarTudo(); 
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); window.loading(false); 
+    }
+};
+
+// === CONTRATOS ===
+window.atualizarFiltroDestContrato = function() {
+    let elSec = document.getElementById('filtroContratoSec');
+    let elDest = document.getElementById('filtroContratoDest');
+    if(!elSec || !elDest) return;
+
+    let sec = elSec.value.toUpperCase();
+    let dests = window.DADOS_CONTRATOS.filter(c => !sec || (c.secretaria && c.secretaria.toUpperCase() === sec)).map(c => c.destinacao || 'GERAL');
+    let unicos = [...new Set(dests)].sort();
+    
+    let html = '<option value="">TODAS AS DESTINAÇÕES</option>';
+    unicos.forEach(d => html += `<option value="${d}">${d}</option>`);
+    elDest.innerHTML = html;
+};
+
+window.adicionarDestinacaoTemp = function() {
+    let els = {
+        dest: document.getElementById('cadContratoDest'),
+        gL: document.getElementById('cadGasL'), gV: document.getElementById('cadGasV'),
+        dL: document.getElementById('cadDieL'), dV: document.getElementById('cadDieV'),
+        eL: document.getElementById('cadEtaL'), eV: document.getElementById('cadEtaV')
+    };
+
+    if(!els.dest) return;
+
+    let dest = els.dest.value.toUpperCase().trim() || 'GERAL';
+    let gL = els.gL ? window.safeCurrency(els.gL.value) : 0; let gV = els.gV ? window.safeCurrency(els.gV.value) : 0;
+    let dL = els.dL ? window.safeCurrency(els.dL.value) : 0; let dV = els.dV ? window.safeCurrency(els.dV.value) : 0;
+    let eL = els.eL ? window.safeCurrency(els.eL.value) : 0; let eV = els.eV ? window.safeCurrency(els.eV.value) : 0;
+    
+    let subtotal = (gL * gV) + (dL * dV) + (eL * eV);
+    
+    if(subtotal === 0) return alert("A divisão precisa ter pelo menos um combustível com quantidade e preço.");
+    
+    let idx = window.tempDestinacoes.findIndex(x => x.destinacao === dest);
+    if(idx >= 0) return alert(`A divisão "${dest}" já está na lista. Remova-a antes.`);
+    
+    window.tempDestinacoes.push({ 
+        idDoc: "CONT-" + Date.now() + Math.floor(Math.random()*100000), 
+        destinacao: dest, 
+        gasolina: { litros: gL, precoLicitado: gV }, 
+        diesel: { litros: dL, precoLicitado: dV }, 
+        etanol: { litros: eL, precoLicitado: eV }, 
+        valorInicial: subtotal 
+    });
+    
+    els.dest.value = ''; 
+    if(els.gL) els.gL.value = ''; if(els.gV) els.gV.value = '';
+    if(els.dL) els.dL.value = ''; if(els.dV) els.dV.value = ''; 
+    if(els.eL) els.eL.value = ''; if(els.eV) els.eV.value = '';
+    
+    window.renderTempDest();
+};
+
+window.removerDestTemp = function(index) { 
+    window.tempDestinacoes.splice(index, 1); 
+    window.renderTempDest(); 
+};
+
+window.renderTempDest = function() {
+    let h = ''; let totalGeral = 0;
+    if(window.tempDestinacoes.length === 0) { 
+        h = '<tr><td colspan="6" class="text-muted small py-3">Nenhuma divisão adicionada.</td></tr>'; 
+    } else {
+        window.tempDestinacoes.forEach((item, idx) => {
+            totalGeral += item.valorInicial;
+            let txtG = item.gasolina.litros > 0 ? `${item.gasolina.litros} L (R$ ${item.gasolina.precoLicitado})` : '-';
+            let txtD = item.diesel.litros > 0 ? `${item.diesel.litros} L (R$ ${item.diesel.precoLicitado})` : '-';
+            let txtE = item.etanol.litros > 0 ? `${item.etanol.litros} L (R$ ${item.etanol.precoLicitado})` : '-';
+            h += `<tr><td class="fw-bold text-primary">${item.destinacao}</td><td class="small text-danger">${txtG}</td><td class="small text-dark">${txtD}</td><td class="small text-success">${txtE}</td><td class="fw-bold text-dark">R$ ${item.valorInicial.toLocaleString('pt-BR', {minimumFractionDigits:2})}</td><td><button class="btn btn-sm text-danger" title="Remover da lista" onclick="window.removerDestTemp(${idx})"><i class="fas fa-times"></i></button></td></tr>`;
+        });
+    }
+    
+    let elTb = document.getElementById('tbTempDestinacoes');
+    let elTotal = document.getElementById('lblTotalCont');
+    
+    if(elTb) elTb.innerHTML = h;
+    if(elTotal) elTotal.innerText = "R$ " + totalGeral.toLocaleString('pt-BR', {minimumFractionDigits:2});
+};
+
+window.salvarContratoLote = async function() {
+    let els = {
+        sec: document.getElementById('cadContratoSec'),
+        num: document.getElementById('cadContratoNum'),
+        posto: document.getElementById('cadContratoPosto'),
+        validade: document.getElementById('cadContratoValidade'),
+        hdn: document.getElementById('hdnIdContrato'),
+        btnSave: document.getElementById('btnSaveContrato')
+    };
+
+    if(!els.sec || !els.validade) return;
+
+    const sec = els.sec.value.toUpperCase().trim();
+    const num = els.num ? els.num.value.trim() : '';
+    const posto = els.posto ? els.posto.value : 'TODOS';
+    const validade = els.validade.value;
+    const editId = els.hdn ? els.hdn.value : ''; 
+
+    if(!sec) return alert("A Secretaria Macro é obrigatória.");
+    if(!validade) return alert("A Data de Validade é obrigatória.");
+
+    window.toggleButtonLoading(els.btnSave, true); 
+    window.loading(true, "Gravando Banco...");
+    
+    try {
+        if(editId) {
+            let elDest = document.getElementById('cadContratoDest');
+            let dest = elDest ? elDest.value.toUpperCase().trim() || 'GERAL' : 'GERAL';
+            
+            let gL = document.getElementById('cadGasL') ? window.safeCurrency(document.getElementById('cadGasL').value) : 0;
+            let gV = document.getElementById('cadGasV') ? window.safeCurrency(document.getElementById('cadGasV').value) : 0;
+            let dL = document.getElementById('cadDieL') ? window.safeCurrency(document.getElementById('cadDieL').value) : 0;
+            let dV = document.getElementById('cadDieV') ? window.safeCurrency(document.getElementById('cadDieV').value) : 0;
+            let eL = document.getElementById('cadEtaL') ? window.safeCurrency(document.getElementById('cadEtaL').value) : 0;
+            let eV = document.getElementById('cadEtaV') ? window.safeCurrency(document.getElementById('cadEtaV').value) : 0;
+            
+            let subtotal = (gL * gV) + (dL * dV) + (eL * eV);
+            let payload = { secretaria: sec, destinacao: dest, numero: num, posto: posto, validade: validade, gasolina: { litros: gL, precoLicitado: gV }, diesel: { litros: dL, precoLicitado: dV }, etanol: { litros: eL, precoLicitado: eV }, valorInicial: subtotal };
+            
+            await setDoc(doc(db, `${window.tenant}_contratos`, editId), payload, {merge: true});
+        } else {
+            if(window.tempDestinacoes.length === 0) { 
+                window.loading(false); 
+                window.toggleButtonLoading(els.btnSave, false); 
+                return alert("Adicione pelo menos uma Divisão/Destinação."); 
+            }
+            for (let item of window.tempDestinacoes) {
+                let payload = { secretaria: sec, destinacao: item.destinacao, numero: num, posto: posto, validade: validade, gasolina: item.gasolina, diesel: item.diesel, etanol: item.etanol, valorInicial: item.valorInicial, aditivos: [], liquidados: [] };
+                await setDoc(doc(db, `${window.tenant}_contratos`, item.idDoc), payload, {merge: true});
+            }
+        }
+        window.cancelarEdicaoContrato(); 
+        await window.buscarTudo();
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); 
+    } finally { 
+        window.toggleButtonLoading(els.btnSave, false); window.loading(false); 
+    }
+};
+
+window.cancelarEdicaoContrato = function() {
+    let ids = [
+        'cadContratoSec', 'cadContratoNum', 'cadContratoValidade', 'hdnIdContrato',
+        'cadContratoDest', 'cadGasL', 'cadGasV', 'cadDieL', 'cadDieV', 'cadEtaL', 'cadEtaV'
+    ];
+    
+    ids.forEach(id => {
+        let el = document.getElementById(id);
+        if(el) el.value = '';
+    });
+
+    let elPosto = document.getElementById('cadContratoPosto');
+    if(elPosto) elPosto.value = 'TODOS';
+    
+    let elBoxLista = document.getElementById('boxAddListaContrato');
+    if(elBoxLista) elBoxLista.classList.remove('hidden');
+    
+    let elBoxTabela = document.getElementById('boxTabelaContratoTemp');
+    if(elBoxTabela) elBoxTabela.classList.remove('hidden');
+    
+    window.tempDestinacoes = []; 
+    window.renderTempDest();
+    
+    let btnSave = document.getElementById('btnSaveContrato');
+    if(btnSave) btnSave.innerHTML = '<i class="fas fa-save"></i> SALVAR CONTRATO COMPLETO'; 
+    
+    let btnCancel = document.getElementById('btnCancelContrato');
+    if(btnCancel) btnCancel.classList.add('hidden');
+};
+
+window.editarContrato = function(id) {
+    let c = window.DADOS_CONTRATOS.find(x => x.id === id); 
+    if(!c) return;
+    
+    let els = {
+        sec: document.getElementById('cadContratoSec'),
+        num: document.getElementById('cadContratoNum'),
+        posto: document.getElementById('cadContratoPosto'),
+        validade: document.getElementById('cadContratoValidade'),
+        hdn: document.getElementById('hdnIdContrato'),
+        dest: document.getElementById('cadContratoDest'),
+        gL: document.getElementById('cadGasL'), gV: document.getElementById('cadGasV'),
+        dL: document.getElementById('cadDieL'), dV: document.getElementById('cadDieV'),
+        eL: document.getElementById('cadEtaL'), eV: document.getElementById('cadEtaV'),
+        boxLista: document.getElementById('boxAddListaContrato'),
+        boxTabela: document.getElementById('boxTabelaContratoTemp'),
+        btnSave: document.getElementById('btnSaveContrato'),
+        btnCancel: document.getElementById('btnCancelContrato')
+    };
+
+    if(els.sec) els.sec.value = c.secretaria || ''; 
+    if(els.num) els.num.value = c.numero || ''; 
+    if(els.posto) els.posto.value = c.posto || 'TODOS'; 
+    if(els.validade) els.validade.value = c.validade || ''; 
+    if(els.hdn) els.hdn.value = c.id;
+    if(els.dest) els.dest.value = c.destinacao || 'GERAL';
+    
+    if(els.gL) els.gL.value = window.formatarNumeroInput(c.gasolina?.litros, 3); 
+    if(els.gV) els.gV.value = window.formatarNumeroInput(c.gasolina?.precoLicitado, 2);
+    if(els.dL) els.dL.value = window.formatarNumeroInput(c.diesel?.litros, 3); 
+    if(els.dV) els.dV.value = window.formatarNumeroInput(c.diesel?.precoLicitado, 2);
+    if(els.eL) els.eL.value = window.formatarNumeroInput(c.etanol?.litros, 3); 
+    if(els.eV) els.eV.value = window.formatarNumeroInput(c.etanol?.precoLicitado, 2);
+    
+    if(els.boxLista) els.boxLista.classList.add('hidden'); 
+    if(els.boxTabela) els.boxTabela.classList.add('hidden');
+    
+    if(els.btnSave) els.btnSave.innerHTML = '<i class="fas fa-save"></i> SALVAR ALTERAÇÃO DO LOTE'; 
+    if(els.btnCancel) els.btnCancel.classList.remove('hidden'); 
+    
+    window.scrollTo(0, 0);
+};
+
+window.excluirContrato = async function(id) {
+    if(!confirm("Excluir este centro de custo permanentemente? (Não apaga abastecimentos).")) return;
+    window.loading(true);
+    try { 
+        await deleteDoc(doc(db, `${window.tenant}_contratos`, id)); 
+        await window.buscarTudo(); 
+    } catch(e) { 
+        console.error(e); alert("Erro: " + e.message); window.loading(false); 
+    }
+};
