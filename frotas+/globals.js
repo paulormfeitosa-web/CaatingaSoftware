@@ -141,3 +141,60 @@ window.alternarModulo = function(idModulo) {
     if(viewEl) viewEl.classList.remove("hidden");
     if(navEl) navEl.classList.add("active");
 };
+// =========================================================
+// UTILITÁRIOS E IMPRESSÃO (IMPORTADOS DA MANUTENÇÃO)
+// =========================================================
+
+const formatadorMoeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+window.formatarMoeda = function(valor) { 
+    return formatadorMoeda.format(Number(valor || 0)); 
+};
+
+window.aplicarMascaraMonetaria = function(elemento) {
+    let valor = elemento.value.replace(/\D/g, ""); 
+    if (valor === "") { 
+        elemento.value = ""; 
+        return; 
+    }
+    valor = (parseInt(valor, 10) / 100).toFixed(2); 
+    elemento.value = valor.replace(".", ",").replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1."); 
+};
+
+window.imprimirDocumento = function(htmlConteudo, titulo) {
+    let win = window.open('', '_blank');
+    win.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${titulo}</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+            <style>
+                body { padding: 30px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #fff; color: #000; }
+                table { page-break-inside: auto; }
+                tr { page-break-inside: avoid; page-break-after: auto; }
+                thead { display: table-header-group; }
+                tfoot { display: table-footer-group; }
+                .card-azul { background: #2980b9 !important; color: white !important; }
+                .card-laranja { background: #e67e22 !important; color: white !important; }
+                .card-verde { background: #27ae60 !important; color: white !important; }
+                .progress-bar-fundo { width: 100%; background: #e9ecef; border-radius: 6px; overflow: hidden; margin-top: 5px; height: 18px; }
+                .progress-bar-preenchimento { height: 100%; color: white; text-align: center; font-size: 11px; line-height: 18px; font-weight: bold; }
+                @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            </style>
+        </head>
+        <body>
+            ${htmlConteudo}
+            <script>
+                window.onload = function() {
+                    setTimeout(function() {
+                        window.print();
+                        window.close();
+                    }, 500);
+                };
+            </script>
+        </body>
+        </html>
+    `);
+    win.document.close();
+    win.focus();
+};
