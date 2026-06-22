@@ -82,7 +82,7 @@ window.SincronizarEventosDoDia = async function(placaBusca, dataBusca) {
         window.CalcularMetricasRDV();
     } catch (e) { 
         console.error("Erro na Sincronização:", e); 
-        if (!achouAbast) window.AdicionarLinhaAbastecimento();
+        if (!achouAbast && typeof window.AdicionarLinhaAbastecimento === 'function') window.AdicionarLinhaAbastecimento();
     }
 };
 
@@ -176,20 +176,33 @@ window.FinalizarRDVEPurgarMidia = async function() {
     if(!placa) return alert("Selecione um veículo válido");
     
     if(confirm("Deseja gravar o Relatório Diário?")) {
+        window.loading(true, "Finalizando RDV e atualizando o hodômetro central...");
         const idRdv = `RDV-${Date.now()}`;
+        let odoFinal = parseFloat(document.getElementById("rdv-odo-final")?.value) || 0;
+
         try {
             await setDoc(doc(db, `${window.tenant}_rdvs`, idRdv), { 
                 id: idRdv, veiculo: placa, 
                 data: document.getElementById("rdv-data")?.value || new Date().toISOString().split('T')[0], 
                 rota: document.getElementById("rdv-rota-input")?.value || '', 
                 odo_inicial: document.getElementById("rdv-odo-inicial")?.value || '', 
-                odo_final: document.getElementById("rdv-odo-final")?.value || '', 
+                odo_final: odoFinal, 
                 status: "Homologado", autor: window.USUARIO.cpf 
-            });
+            }, { merge: true });
+            
+            // INTEGRAÇÃO DE ODÔMETRO: Informa ao Motor Central o KM final da viagem
+            if (odoFinal > 0 && window.sincronizarOdometroCentral) {
+                await window.sincronizarOdometroCentral(placa, odoFinal);
+            }
+
             alert("RDV gravado com sucesso!"); 
             window.LimparFormularioRDV(); 
             if(window.buscarTudo) await window.buscarTudo();
-        } catch(e) { alert("Erro ao salvar: " + e.message); }
+        } catch(e) { 
+            alert("Erro ao salvar: " + e.message); 
+        } finally {
+            window.loading(false);
+        }
     }
 };
 
@@ -237,6 +250,7 @@ window.SalvarMotoristaRapido = async function() {
     let idMotorista = cpf && cpf.length > 5 ? cpf : `MOT-${Date.now()}`;
     let novoMotorista = { id: idMotorista, cpf: idMotorista, nome: nome, cargo: cargo, status: "Ativo" };
     
+    window.loading(true, "Salvando motorista...");
     try {
         await setDoc(doc(db, `${window.tenant}_equipe`, idMotorista), novoMotorista);
         window.AdicionarMotoristaAoRDV(novoMotorista);
@@ -247,7 +261,12 @@ window.SalvarMotoristaRapido = async function() {
         let modalObj = bootstrap.Modal.getInstance(modalEl);
         if(modalObj) modalObj.hide();
         alert(`Motorista salvo!`);
-    } catch(e) { console.error(e); alert("Erro ao salvar."); }
+    } catch(e) { 
+        console.error(e); 
+        alert("Erro ao salvar."); 
+    } finally {
+        window.loading(false);
+    }
 };
 
 window.AlternarCamposOficina = function(status) {
@@ -326,10 +345,10 @@ document.addEventListener('input', function(e) {
 
 window.CompilarERenderizarPDF_Prefeitura = function() {
     // 1. Dados Governamentais (Salvos no app.js)
-    let logoGov = localStorage.getItem("caatinga_logo_gov") || ""; 
+    let logoGov = localStorage.getItem("caatinga_logo_gov") || window.LOGO_PREFEITURA_FIXA || ""; 
     let nomeGov = localStorage.getItem("caatinga_nome_gov") || "SISTEMA DE GESTÃO DE FROTA";
     
-    // Configura o cabeçalho (Se tem logo, põe a logo. Se não, centraliza o texto)
+    // Configura o cabeçalho
     let logoHTML = logoGov ? `<img src="${logoGov}" style="max-height: 80px; max-width: 150px; object-fit: contain;">` : '';
     let headerHTML = logoGov 
         ? `<table style="width: 100%; border:none; margin-bottom: 20px;">

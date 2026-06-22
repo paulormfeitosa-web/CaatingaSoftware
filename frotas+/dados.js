@@ -31,7 +31,10 @@ window.buscarTudo = async function() {
         });
 
         // Processa Coleções Diretas
-        window.DADOS_ABASTECIMENTOS = []; snapA.forEach(d => window.DADOS_ABASTECIMENTOS.push({ id: d.id, ...d.data() }));
+        window.DADOS_ABASTECIMENTOS = []; 
+        snapA.forEach(d => window.DADOS_ABASTECIMENTOS.push({ id: d.id, ...d.data() }));
+        window.DADOS_ABASTECIMENTOS.sort((a,b) => new Date(b.dataAbastecimento) - new Date(a.dataAbastecimento));
+
         window.DADOS_VIAGENS = []; snapVi.forEach(d => window.DADOS_VIAGENS.push({ id: d.id, ...d.data() }));
         window.DADOS_MOTORISTAS = []; snapMot.forEach(d => window.DADOS_MOTORISTAS.push({ id: d.id, ...d.data() }));
         window.ColecaoEquipe = []; snapEq.forEach(d => window.ColecaoEquipe.push({ id: d.id, ...d.data() }));
@@ -107,11 +110,12 @@ window.buscarTudo = async function() {
         window.DADOS_MOTORISTAS.forEach(m => listMots += `<option value="${m.nome}">`);
         let elNomesMot = document.getElementById('listaNomesMotoristas'); if(elNomesMot) elNomesMot.innerHTML = listMots;
 
-        // Montagem combo Veículos (Avulso)
+        // Montagem combo Veículos (Avulso / Painel Gestor)
         let optVAvulso = '<option value="">-- Escolha o Carro Oficial --</option>';
         window.DADOS_VEICULOS.forEach(v => {
-            if(v.status !== 'Em Oficina' && v.status !== 'Inservível') {
-                optVAvulso += `<option value="${v.id}">${v.placa} - ${v.modelo}</option>`;
+            // INTEGRADO COM A OFICINA: Impede lançamentos em veículos inservíveis ou em manutenção
+            if(v.status_operacional !== 'Em Oficina' && v.status_operacional !== 'Inservível') {
+                optVAvulso += `<option value="${v.id}">${v.placa} - ${v.modelo || v.veiculo}</option>`;
             }
         });
         let elVeicReal = document.getElementById('selVeiculoRealAvulso'); if(elVeicReal) elVeicReal.innerHTML = optVAvulso;

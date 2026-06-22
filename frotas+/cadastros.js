@@ -1,14 +1,16 @@
 import { db } from './firebase-env.js';
 import { doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-// === FROTA ===
+// =========================================================================
+// 1. GESTÃO DE VEÍCULOS E FROTA
+// =========================================================================
 window.atualizarDestinacoesVeiculo = function(valorAtual = '') {
     let elSec = document.getElementById('vSec');
     let sel = document.getElementById('vDest');
     if (!elSec || !sel) return;
 
     let secEscolhida = elSec.value.toUpperCase();
-    let destsDaSec = window.DADOS_CONTRATOS.filter(c => c.secretaria && c.secretaria.toUpperCase() === secEscolhida).map(c => c.destinacao || 'GERAL');
+    let destsDaSec = (window.DADOS_CONTRATOS || []).filter(c => c.secretaria && c.secretaria.toUpperCase() === secEscolhida).map(c => c.destinacao || 'GERAL');
     let unicos = [...new Set(destsDaSec)];
     
     let html = '<option value="">-- Selecione a Divisão --</option>';
@@ -32,35 +34,39 @@ window.renderTabVeiculos = function() {
   let elTotVeic = document.getElementById("dash-tot-veiculos");
   let elTotOficina = document.getElementById("dash-tot-oficina");
 
-  if(elTotVeic && elTotOficina) {
-      elTotVeic.innerText = window.DADOS_VEICULOS.filter(v => v.status !== "Oficina" && v.status !== "Manutenção" && v.status !== "Inativo").length;
-      elTotOficina.innerText = window.DADOS_VEICULOS.filter(v => v.status === "Oficina" || v.status === "Manutenção").length;
+  if(elTotVeic && elTotOficina && window.DADOS_VEICULOS) {
+      elTotVeic.innerText = window.DADOS_VEICULOS.filter(v => v.status_operacional !== "Em Oficina" && v.status_operacional !== "Inservível" && v.status !== "Oficina").length;
+      elTotOficina.innerText = window.DADOS_VEICULOS.filter(v => v.status_operacional === "Em Oficina" || v.status === "Oficina").length;
   }
 
-  window.DADOS_VEICULOS.forEach(v => {
-     let textoBusca = `${v.id} ${v.placa||''} ${v.modelo || ''} ${v.secretaria || ''} ${v.destinacao || ''}`.toUpperCase();
-     if (fBusca && !textoBusca.includes(fBusca)) return; 
-     
-     let jV = encodeURIComponent(JSON.stringify(v));
-     let tipoStr = v.tipoFrota === 'Máquina' ? '<i class="fas fa-tractor text-warning"></i> Máquina' : '<i class="fas fa-car text-primary"></i> Veículo';
-     let origemStr = v.origem || 'Próprio';
-     let badgeOrigem = origemStr === 'Locado' ? '<span class="badge bg-info text-dark"><i class="fas fa-handshake"></i> Locado</span>' : '<span class="badge bg-secondary">Próprio</span>';
-     let destStr = v.destinacao ? ` / ${v.destinacao}` : '';
-     let idShow = v.placa ? v.placa.toUpperCase() : v.id;
+  if(window.DADOS_VEICULOS) {
+      window.DADOS_VEICULOS.forEach(v => {
+         let textoBusca = `${v.id} ${v.placa||''} ${v.modelo || ''} ${v.secretaria || ''} ${v.destinacao || ''}`.toUpperCase();
+         if (fBusca && !textoBusca.includes(fBusca)) return; 
+         
+         let jV = encodeURIComponent(JSON.stringify(v));
+         let tipoStr = v.tipoFrota === 'Máquina' || v.tipo_padronizado === 'Máquina' ? '<i class="fas fa-tractor text-warning"></i> Máquina' : '<i class="fas fa-car text-primary"></i> Veículo';
+         let origemStr = v.origem || 'Próprio';
+         let badgeOrigem = origemStr === 'Locado' ? '<span class="badge bg-info text-dark"><i class="fas fa-handshake"></i> Locado</span>' : '<span class="badge bg-secondary">Próprio</span>';
+         let destStr = v.destinacao ? ` / ${v.destinacao}` : '';
+         let idShow = v.placa ? v.placa.toUpperCase() : v.id;
 
-     h += `<tr>
-        <td class="fw-bold text-uppercase">${idShow}</td>
-        <td>${badgeOrigem}</td>
-        <td>${tipoStr}<br><small class="text-muted">${v.modelo || 'S/ Modelo'}</small></td>
-        <td><span class="fw-bold">${v.secretaria || 'NÃO INFORMADA'}</span><br><small class="text-primary fw-bold">${destStr}</small></td>
-        <td class="fw-bold text-success">${v.odometro ? v.odometro.toFixed(1) : 0}</td>
-        <td class="text-end text-nowrap">
-            <button class="btn btn-sm btn-outline-info" title="Gerar RDV" onclick="window.IrParaRDV('${idShow}')"><i class="fas fa-file-pdf"></i></button>
-            <button class="btn btn-sm btn-outline-primary ms-1" onclick="window.prepararEdicaoVeic('${jV}')"><i class="fas fa-edit"></i></button>
-            <button class="btn btn-sm btn-outline-danger ms-1" onclick="window.excluirVeic('${v.id}')"><i class="fas fa-trash"></i></button>
-        </td>
-     </tr>`;
-  });
+         let odoAtual = v.km_atual || v.odometro || 0;
+
+         h += `<tr>
+            <td class="fw-bold text-uppercase">${idShow}</td>
+            <td>${badgeOrigem}</td>
+            <td>${tipoStr}<br><small class="text-muted">${v.modelo || 'S/ Modelo'}</small></td>
+            <td><span class="fw-bold">${v.secretaria || 'NÃO INFORMADA'}</span><br><small class="text-primary fw-bold">${destStr}</small></td>
+            <td class="fw-bold text-success">${odoAtual.toFixed(1)}</td>
+            <td class="text-end text-nowrap">
+                <button class="btn btn-sm btn-outline-info" title="Gerar RDV" onclick="window.IrParaRDV('${idShow}')"><i class="fas fa-file-pdf"></i></button>
+                <button class="btn btn-sm btn-outline-primary ms-1" onclick="window.prepararEdicaoVeic('${jV}')"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-outline-danger ms-1" onclick="window.excluirVeic('${v.id}')"><i class="fas fa-trash"></i></button>
+            </td>
+         </tr>`;
+      });
+  }
   
   let elLista = document.getElementById('listaVeic');
   if(elLista) elLista.innerHTML = h || '<tr><td colspan="6" class="text-muted py-4 text-center">Nenhum equipamento encontrado.</td></tr>';
@@ -74,7 +80,7 @@ window.prepararEdicaoVeic = function(str) {
   ids.forEach(id => els[id] = document.getElementById(id));
 
   if(els.hdnOldPlaca) els.hdnOldPlaca.value = v.id; 
-  if(els.vTipo) els.vTipo.value = v.tipoFrota || 'Veículo';
+  if(els.vTipo) els.vTipo.value = v.tipoFrota || v.tipo_padronizado || 'Veículo';
   if(els.vOrigem) els.vOrigem.value = v.origem || 'Próprio';
   if(els.vPlaca) { els.vPlaca.value = v.placa || v.id; els.vPlaca.readOnly = true; }
   if(els.vModelo) els.vModelo.value = v.modelo || ''; 
@@ -85,7 +91,9 @@ window.prepararEdicaoVeic = function(str) {
   if(els.vComb) els.vComb.value = v.combustivel || 'Gasolina';
   if(els.vMedia) els.vMedia.value = window.formatarNumeroInput(v.media, 2);
   if(els.vOdoInicial) els.vOdoInicial.value = v.odometroInicial !== undefined ? window.formatarNumeroInput(v.odometroInicial, 1) : '';
-  if(els.vOdoAtual) els.vOdoAtual.value = v.odometro ? v.odometro.toFixed(1) : 0;
+  
+  let odoAtual = v.km_atual || v.odometro || 0;
+  if(els.vOdoAtual) els.vOdoAtual.value = odoAtual.toFixed(1);
   
   if(els.btnSaveVeic) els.btnSaveVeic.innerHTML = '<i class="fas fa-save"></i> SALVAR ALTERAÇÃO';
   if(els.btnCancelVeic) els.btnCancelVeic.classList.remove('hidden'); 
@@ -145,17 +153,24 @@ window.salvarVeic = async function() {
         media: document.getElementById('vMedia') ? window.safeCurrency(document.getElementById('vMedia').value) : 0
     };
     
-    if(odoIniStr !== '') dados.odometroInicial = window.safeCurrency(odoIniStr);
+    let odoConvertido = 0;
+    if(odoIniStr !== '') {
+        odoConvertido = window.safeCurrency(odoIniStr);
+        dados.odometroInicial = odoConvertido;
+    }
 
     let elHdnOld = document.getElementById('hdnOldPlaca');
+    // Só reseta o hodômetro se for um veículo novo. Se for edição, mantém o KM centralizado.
     if(!elHdnOld || !elHdnOld.value) { 
-        dados.status = 'Disponível'; 
-        dados.odometro = dados.odometroInicial || 0; 
+        dados.status_operacional = 'Disponível'; 
+        dados.odometro = odoConvertido;
+        dados.km_atual = odoConvertido;
+        dados.horimetro = odoConvertido;
     }
     
     await setDoc(doc(db, `${window.tenant}_veiculos`, placa), dados, {merge:true});
     window.cancelarEdicaoVeic(); 
-    await window.buscarTudo();
+    if(window.buscarTudo) await window.buscarTudo();
   } catch(e) { 
       console.error(e); alert("Erro: " + e.message); 
   } finally { 
@@ -164,44 +179,55 @@ window.salvarVeic = async function() {
 };
 
 window.excluirVeic = async function(placa) {
-  if(!confirm(`Excluir ${placa}?`)) return;
-  window.loading(true); 
+  if(!confirm(`Excluir permanentemente o veículo ${placa}? Isso não apagará o histórico de abastecimentos ou RDVs.`)) return;
+  window.loading(true, "Excluindo..."); 
   try { 
       await deleteDoc(doc(db, `${window.tenant}_veiculos`, placa)); 
-      await window.buscarTudo(); 
+      if(window.buscarTudo) await window.buscarTudo(); 
   } catch(e) { 
       console.error(e); alert("Erro: " + e.message); window.loading(false); 
   }
 };
 
 window.IrParaRDV = function(placa) {
-    if(window.alternarModulo) window.alternarModulo('rdv');
+    let tabTarget = document.querySelector('[data-bs-target="#admRDV"]');
+    if(tabTarget) {
+        let tab = new bootstrap.Tab(tabTarget);
+        tab.show();
+    }
+    
     setTimeout(() => {
         let elRdv = document.getElementById('rdv-veiculo-input');
         let elData = document.getElementById('rdv-data');
         if(elRdv) elRdv.value = placa;
-        if(window.SincronizarEventosDoDia && elData) window.SincronizarEventosDoDia(placa, elData.value);
-    }, 300);
+        if(window.AcionarSincronizacaoRDV) window.AcionarSincronizacaoRDV();
+    }, 400);
 };
 
-// === EQUIPE / MOTORISTAS ===
+// =========================================================================
+// 2. EQUIPE / MOTORISTAS
+// =========================================================================
+
 window.renderMotoristas = function() {
     let h = '';
-    window.DADOS_MOTORISTAS.forEach(m => {
-        h += `<tr>
-            <td class="fw-bold">${m.nome}</td>
-            <td>${m.cpf || '-'}</td>
-            <td>${m.cnh || '-'}</td>
-            <td><span class="badge bg-secondary">${m.categoria || '-'}</span></td>
-            <td class="text-end text-nowrap">
-                <button class="btn btn-sm btn-outline-primary" onclick="window.prepararEdicaoMot('${m.id}')"><i class="fas fa-edit"></i></button>
-                <button class="btn btn-sm btn-outline-danger ms-1" onclick="window.excluirMotorista('${m.id}')"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>`;
-    });
+    if(window.DADOS_MOTORISTAS) {
+        window.DADOS_MOTORISTAS.forEach(m => {
+            h += `<tr>
+                <td class="fw-bold">${m.nome}</td>
+                <td>${m.cpf || '-'}</td>
+                <td>${m.cnh || '-'}</td>
+                <td><span class="badge bg-secondary">${m.categoria || '-'}</span></td>
+                <td class="text-end text-nowrap">
+                    <button class="btn btn-sm btn-dark" title="Dossiê de Produtividade" onclick='window.abrirRelatorioMotorista("${m.nome}")'><i class="fas fa-chart-line"></i></button>
+                    <button class="btn btn-sm btn-outline-primary ms-1" onclick="window.prepararEdicaoMot('${m.id}')"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="window.excluirMotorista('${m.id}')"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`;
+        });
+    }
     
     let elTabela = document.getElementById('listaMotoristasTabela');
-    if(elTabela) elTabela.innerHTML = h || '<tr><td colspan="5" class="text-muted py-3">Nenhum motorista cadastrado.</td></tr>';
+    if(elTabela) elTabela.innerHTML = h || '<tr><td colspan="6" class="text-muted py-3">Nenhum motorista cadastrado.</td></tr>';
 };
 
 window.prepararEdicaoMot = function(id) {
@@ -275,7 +301,7 @@ window.salvarMotorista = async function() {
         await setDoc(doc(db, `${window.tenant}_motoristas`, id), { nome: nome, cpf: cpf, cnh: cnh, categoria: cat, cargo: "Motorista", status: "Ativo" }, {merge: true});
         await setDoc(doc(db, `${window.tenant}_equipe`, id), { nome: nome, doc: cpf, cargo: "Motorista", status: "Ativo" }, {merge: true}); 
         window.cancelarEdicaoMot(); 
-        await window.buscarTudo();
+        if(window.buscarTudo) await window.buscarTudo();
     } catch(e) { 
         console.error(e); alert("Erro: " + e.message); 
     } finally { 
@@ -285,35 +311,42 @@ window.salvarMotorista = async function() {
 
 window.excluirMotorista = async function(id) {
     if(!confirm("Tem certeza que deseja excluir este motorista?")) return;
-    window.loading(true);
+    window.loading(true, "Excluindo...");
     try { 
         await deleteDoc(doc(db, `${window.tenant}_motoristas`, id)); 
         await deleteDoc(doc(db, `${window.tenant}_equipe`, id)); 
-        await window.buscarTudo(); 
+        if(window.buscarTudo) await window.buscarTudo(); 
     } catch(e) { 
         console.error(e); alert("Erro: " + e.message); window.loading(false); 
     }
 };
 
-// === POSTOS ===
+// =========================================================================
+// 3. POSTOS DE COMBUSTÍVEL
+// =========================================================================
+
 window.renderPostos = function() {
     let h = '';
     let dHoje = new Date().toISOString().slice(0, 10);
-    window.DADOS_POSTOS.forEach(p => {
-        let badgeCod = p.codigoVinculo ? `<span class="badge bg-primary px-2">${p.codigoVinculo}</span>` : '<span class="text-muted">-</span>';
-        let precosAtuais = window.obterPrecoVigente(p.nome, dHoje);
-        h += `<tr>
-            <td class="fw-bold">${badgeCod}</td>
-            <td class="fw-bold text-dark">${p.nome}</td>
-            <td class="text-danger fw-bold">${precosAtuais.Gasolina ? precosAtuais.Gasolina.toFixed(2) : '0.00'}</td>
-            <td class="text-dark fw-bold">${precosAtuais.Diesel ? precosAtuais.Diesel.toFixed(2) : '0.00'}</td>
-            <td class="text-success fw-bold">${precosAtuais.Etanol ? precosAtuais.Etanol.toFixed(2) : '0.00'}</td>
-            <td class="text-end text-nowrap">
-                <button class="btn btn-sm btn-outline-primary" onclick="window.prepararEdicaoPosto('${p.id}')"><i class="fas fa-edit"></i></button>
-                <button class="btn btn-sm btn-outline-danger ms-1" onclick="window.excluirPosto('${p.id}')"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>`;
-    });
+    if(window.DADOS_POSTOS) {
+        window.DADOS_POSTOS.forEach(p => {
+            let badgeCod = p.codigoVinculo ? `<span class="badge bg-primary px-2">${p.codigoVinculo}</span>` : '<span class="text-muted">-</span>';
+            let precosAtuais = {Gasolina: 0, Diesel: 0, Etanol: 0};
+            if(window.obterPrecoVigente) precosAtuais = window.obterPrecoVigente(p.nome, dHoje);
+            
+            h += `<tr>
+                <td class="fw-bold">${badgeCod}</td>
+                <td class="fw-bold text-dark">${p.nome}</td>
+                <td class="text-danger fw-bold">${precosAtuais.Gasolina ? precosAtuais.Gasolina.toFixed(2) : '0.00'}</td>
+                <td class="text-dark fw-bold">${precosAtuais.Diesel ? precosAtuais.Diesel.toFixed(2) : '0.00'}</td>
+                <td class="text-success fw-bold">${precosAtuais.Etanol ? precosAtuais.Etanol.toFixed(2) : '0.00'}</td>
+                <td class="text-end text-nowrap">
+                    <button class="btn btn-sm btn-outline-primary" onclick="window.prepararEdicaoPosto('${p.id}')"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="window.excluirPosto('${p.id}')"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`;
+        });
+    }
     
     let elTabela = document.getElementById('listaPostosTabela');
     if(elTabela) elTabela.innerHTML = h || '<tr><td colspan="6" class="text-muted py-3">Nenhum posto cadastrado.</td></tr>';
@@ -342,7 +375,9 @@ window.prepararEdicaoPosto = function(id) {
     let dHoje = new Date().toISOString().slice(0, 10);
     if(els.vigencia) els.vigencia.value = dHoje;
     
-    let precosAtuais = window.obterPrecoVigente(p.nome, dHoje);
+    let precosAtuais = {Gasolina: 0, Diesel: 0, Etanol: 0};
+    if(window.obterPrecoVigente) precosAtuais = window.obterPrecoVigente(p.nome, dHoje);
+
     if(els.gas) els.gas.value = precosAtuais.Gasolina ? precosAtuais.Gasolina.toFixed(2).replace('.',',') : '';
     if(els.die) els.die.value = precosAtuais.Diesel ? precosAtuais.Diesel.toFixed(2).replace('.',',') : '';
     if(els.eta) els.eta.value = precosAtuais.Etanol ? precosAtuais.Etanol.toFixed(2).replace('.',',') : '';
@@ -391,8 +426,9 @@ window.excluirVigenciaPosto = async function(idPosto, dataVig) {
         let novasVig = p.vigencias.filter(v => v.data !== dataVig);
         let gas = 0, die = 0, eta = 0;
         if(novasVig.length > 0) { gas = novasVig[0].Gasolina; die = novasVig[0].Diesel; eta = novasVig[0].Etanol; }
+        
         await setDoc(doc(db, `${window.tenant}_postos`, idPosto), { vigencias: novasVig, Gasolina: gas, Diesel: die, Etanol: eta }, {merge: true});
-        await window.buscarTudo(); 
+        if(window.buscarTudo) await window.buscarTudo(); 
         window.prepararEdicaoPosto(idPosto);
     } catch(e) { 
         console.error(e); alert("Erro: " + e.message); 
@@ -466,7 +502,7 @@ window.salvarPosto = async function() {
 
         await setDoc(doc(db, `${window.tenant}_postos`, id), { nome: nome, codigoVinculo: cod, Gasolina: gas, Diesel: die, Etanol: eta, vigencias: vigs }, {merge: true});
         window.cancelarEdicaoPosto(); 
-        await window.buscarTudo();
+        if(window.buscarTudo) await window.buscarTudo();
     } catch(e) { 
         console.error(e); alert("Erro: " + e.message); 
     } finally { 
@@ -476,16 +512,19 @@ window.salvarPosto = async function() {
 
 window.excluirPosto = async function(id) {
     if(!confirm("Excluir este posto e os preços dele?")) return;
-    window.loading(true);
+    window.loading(true, "Excluindo...");
     try { 
         await deleteDoc(doc(db, `${window.tenant}_postos`, id)); 
-        await window.buscarTudo(); 
+        if(window.buscarTudo) await window.buscarTudo(); 
     } catch(e) { 
         console.error(e); alert("Erro: " + e.message); window.loading(false); 
     }
 };
 
-// === CONTRATOS ===
+// =========================================================================
+// 4. CONTRATOS (GERAIS E DE COMBUSTÍVEL)
+// =========================================================================
+
 window.atualizarFiltroDestContrato = function() {
     let elSec = document.getElementById('filtroContratoSec');
     let elDest = document.getElementById('filtroContratoDest');
@@ -617,7 +656,7 @@ window.salvarContratoLote = async function() {
             }
         }
         window.cancelarEdicaoContrato(); 
-        await window.buscarTudo();
+        if(window.buscarTudo) await window.buscarTudo();
     } catch(e) { 
         console.error(e); alert("Erro: " + e.message); 
     } finally { 
@@ -700,10 +739,10 @@ window.editarContrato = function(id) {
 
 window.excluirContrato = async function(id) {
     if(!confirm("Excluir este centro de custo permanentemente? (Não apaga abastecimentos).")) return;
-    window.loading(true);
+    window.loading(true, "Excluindo contrato...");
     try { 
         await deleteDoc(doc(db, `${window.tenant}_contratos`, id)); 
-        await window.buscarTudo(); 
+        if(window.buscarTudo) await window.buscarTudo(); 
     } catch(e) { 
         console.error(e); alert("Erro: " + e.message); window.loading(false); 
     }

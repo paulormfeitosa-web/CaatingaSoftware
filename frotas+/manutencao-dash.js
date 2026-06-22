@@ -3,39 +3,44 @@ import { collection, doc, getDocs, deleteDoc } from "https://www.gstatic.com/fir
 
 const mod = "frota";
 
-// Inicialização segura das variáveis globais
+// Inicialização segura das instâncias de gráficos para evitar duplicidade
 window.chartSec = null; 
 window.chartTipo = null; 
 window.chartVeic = null;
+
+// Sincronização e fallback seguro das variáveis globais entre os escopos do sistema
 window.veiculosList = window.veiculosList || []; 
 window.ordensGlobal = window.ordensGlobal || []; 
 window.contratosList = window.contratosList || []; 
 window.catalogoList = window.catalogoList || [];  
 window.itensOSAtual = window.itensOSAtual || [];
-window.itensContratoAtual = window.itensContratoAtual || [];
-window.lotesContratoAtual = window.lotesContratoAtual || [];
 
 window.getSecretariasInteligentes = function() {
     let secSet = new Set(['SAÚDE', 'EDUCAÇÃO', 'OBRAS', 'AGRICULTURA', 'ASSISTÊNCIA SOCIAL', 'ADMINISTRAÇÃO', 'FINANÇAS', 'MEIO AMBIENTE', 'ESPORTES', 'CULTURA', 'TURISMO', 'SEGURANÇA', 'TRANSPORTE', 'GABINETE', 'EMPREENDEDORISMO']);
-    window.veiculosList.forEach(v => {
+    
+    let listaFrota = window.DADOS_VEICULOS || window.veiculosList || [];
+    let listaContratos = window.DADOS_CONTRATOS || window.contratosList || [];
+    let listaOrdens = window.ordensGlobal || [];
+
+    listaFrota.forEach(v => {
         if(v.secretaria) secSet.add(v.secretaria.toUpperCase().trim());
         if(v.sec) secSet.add(v.sec.toUpperCase().trim());
     });
-    window.contratosList.forEach(c => {
+    listaContratos.forEach(c => {
         if(c.secretaria && !c.secretaria.includes('GERAL')) secSet.add(c.secretaria.toUpperCase().trim());
     });
-    window.ordensGlobal.forEach(os => {
+    listaOrdens.forEach(os => {
         if(os.secretaria_veiculo) secSet.add(os.secretaria_veiculo.toUpperCase().trim());
     });
     return [...secSet].filter(s => s !== '').sort();
 };
 
 window.pesquisarAbaOS = function() {
-    let dIni = document.getElementById('f-os-ini').value;
-    let dFim = document.getElementById('f-os-fim').value;
+    let dIni = document.getElementById('f-os-ini')?.value;
+    let dFim = document.getElementById('f-os-fim')?.value;
     
-    document.getElementById('r-data-ini').value = dIni;
-    document.getElementById('r-data-fim').value = dFim;
+    if(document.getElementById('r-data-ini')) document.getElementById('r-data-ini').value = dIni || '';
+    if(document.getElementById('r-data-fim')) document.getElementById('r-data-fim').value = dFim || '';
     
     window.carregarDadosGerais(dIni, dFim);
 };
@@ -47,7 +52,7 @@ window.limparBancoFrotas = async function() {
     
     if (confirmacao !== "APAGAR TUDO") return alert("Operação cancelada.");
     
-    document.getElementById('loading').classList.remove('hidden');
+    window.loading(true, "Limpando tabelas da oficina...");
     try {
         const colecoesParaLimpar = [
             `${mod}_${window.tenant}_ordens_servico`,
@@ -63,40 +68,29 @@ window.limparBancoFrotas = async function() {
                 totalApagados++;
             }
         }
-        alert(`Base de dados limpa com sucesso! ${totalApagados} registos foram removidos.`);
-        window.carregarDadosGerais(document.getElementById('r-data-ini').value, document.getElementById('r-data-fim').value);
+        alert(`Base de dados da oficina limpa com sucesso! ${totalApagados} registros foram removidos.`);
+        window.carregarDadosGerais();
     } catch(e) {
         alert("Erro ao limpar dados: " + e.message);
+    } finally {
+        window.loading(false);
     }
-    document.getElementById('loading').classList.add('hidden');
 };
 
-async function puxarVeiculosDoFirebase() { 
-    const snap = await getDocs(collection(db, `${window.tenant}_veiculos`)); 
-    let v = []; snap.forEach(d => { let x = d.data(); x.id = d.id; x.placa = d.id; v.push(x); }); return v; 
-}
-
-async function puxarContratosDoFirebase() { 
-    const snap = await getDocs(collection(db, `${mod}_${window.tenant}_contratos`)); 
-    let c = []; snap.forEach(d => { let x = d.data(); x.id = d.id; c.push(x); }); return c; 
-}
-
-async function puxarCatalogoDoFirebase() { 
-    const snap = await getDocs(collection(db, `${mod}_${window.tenant}_catalogo`)); 
-    let c = []; snap.forEach(d => { let x = d.data(); x.id = d.id; c.push(x); }); return c; 
-}
-
-async function puxarTodasOSDoFirebase() {
-    const snap = await getDocs(collection(db, `${mod}_${window.tenant}_ordens_servico`));
-    let o = []; snap.forEach(d => { let x = d.data(); x.idOS = d.id; o.push(x); }); return o;
-}
-
-// O CORAÇÃO DO SISTEMA DE DADOS
+// Sincroniza e espelha as variáveis do core para manter compatibilidade com o módulo de oficina
 window.carregarDadosGerais = async function(buscarDataIni = null, buscarDataFim = null) {
-    let loadingEl = document.getElementById('loading');
-    if(loadingEl) loadingEl.classList.remove('hidden');
+    window.loading(true, "Processando Métricas de Oficina...");
     
     try {
+        if(window.buscarTudo) {
+            await window.buscarTudo(); 
+        }
+
+        // Alinha os arrays locais com a carga unificada do dados.js
+        window.veiculosList = window.DADOS_VEICULOS || [];
+        window.contratosList = window.DADOS_CONTRATOS || [];
+        window.ordensGlobal = window.DADOS_ABASTECIMENTOS || []; // Cruzamento passivo com abastecimento
+
         let dataIni = buscarDataIni;
         let dataFim = buscarDataFim;
         
@@ -108,67 +102,19 @@ window.carregarDadosGerais = async function(buscarDataIni = null, buscarDataFim 
             dataFim = `${hj.getFullYear()}-${m}-${u}`;
         }
         
-        let elIni = document.getElementById('r-data-ini'); if(elIni) elIni.value = dataIni;
-        let elFim = document.getElementById('r-data-fim'); if(elFim) elFim.value = dataFim;
-        let elOsIni = document.getElementById('f-os-ini'); if(elOsIni) elOsIni.value = dataIni;
-        let elOsFim = document.getElementById('f-os-fim'); if(elOsFim) elOsFim.value = dataFim;
+        if(document.getElementById('r-data-ini')) document.getElementById('r-data-ini').value = dataIni; 
+        if(document.getElementById('r-data-fim')) document.getElementById('r-data-fim').value = dataFim;
+        if(document.getElementById('f-os-ini')) document.getElementById('f-os-ini').value = dataIni; 
+        if(document.getElementById('f-os-fim')) document.getElementById('f-os-fim').value = dataFim;
 
-        window.veiculosList = await puxarVeiculosDoFirebase(); 
-        window.contratosList = await puxarContratosDoFirebase(); 
-        window.catalogoList = await puxarCatalogoDoFirebase();
-        window.ordensGlobal = await puxarTodasOSDoFirebase(); 
-
-        window.contratosList.forEach(c => {
-            c.saldo_consumido_real = 0;
-            c.saldo_consumido_pecas = 0;
-            c.saldo_consumido_servicos = 0;
-            if(c.lotes_contrato) {
-                c.lotes_contrato.forEach(l => {
-                    l.consumido_pecas = 0;
-                    l.consumido_servicos = 0;
-                });
-            }
-        });
-        
-        window.ordensGlobal.forEach(os => {
-            if(os.id_contrato && os.status === 'Paga') {
-                let cTarget = window.contratosList.find(c => c.id === os.id_contrato); 
-                if(cTarget) {
-                    cTarget.saldo_consumido_real += (parseFloat(os.valor) || 0);
-                    
-                    let loteTarget = null;
-                    if(os.lote_contrato && cTarget.lotes_contrato) {
-                        loteTarget = cTarget.lotes_contrato.find(l => l.descricao.trim() === os.lote_contrato.trim());
-                    }
-                    
-                    if(os.itens) {
-                        os.itens.forEach(it => {
-                            if(it.categoria === 'Peças' || it.categoria === 'Pneus' || it.categoria === 'Bateria') {
-                                cTarget.saldo_consumido_pecas += (parseFloat(it.valor_total) || 0);
-                                if(loteTarget) loteTarget.consumido_pecas += (parseFloat(it.valor_total) || 0);
-                            } else if(it.categoria === 'Mão de obra' || it.categoria === 'Serviço') {
-                                cTarget.saldo_consumido_servicos += (parseFloat(it.valor_total) || 0);
-                                if(loteTarget) loteTarget.consumido_servicos += (parseFloat(it.valor_total) || 0);
-                            }
-                        });
-                    }
-                }
-            }
-        });
-        
-        // Chamadas dinâmicas para outras telas caso existam
-        if(typeof window.renderizarTabelaVeiculos === 'function') window.renderizarTabelaVeiculos(window.veiculosList); 
-        if(typeof window.renderizarTabelaContratos === 'function') window.renderizarTabelaContratos(window.contratosList); 
-        if(typeof window.renderizarTabelaCatalogo === 'function') window.renderizarTabelaCatalogo(window.catalogoList);
-        
         if(document.getElementById('dash-total-destaque')) await window.carregarDashFiltro(true); 
         if(document.querySelector('#table-os')) await window.carregarTabelaOSComFiltro(true); 
         
     } catch(e) { 
-        console.error("Erro ao carregar dados gerais:", e); 
+        console.error("Erro ao carregar dados gerais da oficina:", e); 
+    } finally {
+        window.loading(false);
     }
-    
-    if(loadingEl) loadingEl.classList.add('hidden');
 };
 
 window.gerarAuditoriaConsumo = function(ordensConsideradas) {
@@ -178,13 +124,13 @@ window.gerarAuditoriaConsumo = function(ordensConsideradas) {
     
     let agrupamento = {};
     ordensConsideradas.forEach(os => {
-        let veic = window.veiculosList.find(v => v.placa === os.placa); 
-        let sec = os.secretaria_veiculo || 'Indefinida'; 
-        let dotacao = veic && veic.dotacao ? veic.dotacao : 'Não Informada';
+        let veic = (window.DADOS_VEICULOS || window.veiculosList || []).find(v => v.id === os.placa); 
+        let sec = os.secretaria_veiculo || os.secretariaReal || 'Indefinida'; 
+        let dotacao = veic && veic.dotacao ? veic.dotacao : (veic && veic.destinacao ? veic.destinacao : 'Não Informada');
         let chave = sec + "|" + dotacao;
         
         if(!agrupamento[chave]) agrupamento[chave] = { sec: sec, dotacao: dotacao, gasto: 0 };
-        agrupamento[chave].gasto += (parseFloat(os.valor_filtrado) || 0);
+        agrupamento[chave].gasto += (parseFloat(os.valor_filtrado || os.valorTotal || os.valor || 0));
     });
     
     const tb = document.querySelector('#table-auditoria tbody'); 
@@ -192,25 +138,25 @@ window.gerarAuditoriaConsumo = function(ordensConsideradas) {
     tb.innerHTML = '';
     
     if(Object.keys(agrupamento).length === 0) { 
-        tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Sem dados neste período.</td></tr>'; 
+        tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Sem dados financeiros de consumo neste período.</td></tr>'; 
         return; 
     }
     
     Object.values(agrupamento).forEach(item => {
         if(item.gasto <= 0) return;
         let projecao = (item.gasto / diasCorridos) * diasNoMes; 
-        let badgeRisco = projecao > 20000 ? '<span class="badge bg-danger pulse-anim">Alto Risco</span>' : '<span class="badge bg-success">Controlado</span>';
+        let badgeRisco = projecao > 20000 ? '<span class="badge bg-danger pulse-anim">Alto Volume</span>' : '<span class="badge bg-success">Estável</span>';
         tb.innerHTML += `<tr><td><strong>${item.sec}</strong></td><td>${item.dotacao}</td><td class="text-primary fw-bold">${window.formatarMoeda(item.gasto)}</td><td class="text-danger fw-bold">${window.formatarMoeda(projecao)}</td><td>${badgeRisco}</td></tr>`;
     });
 };
 
 window.carregarDashFiltro = async function(aplicarFiltrosFront = true) {
-    let dtIni = document.getElementById('r-data-ini').value;
-    let dtFim = document.getElementById('r-data-fim').value;
+    let dtIni = document.getElementById('r-data-ini')?.value;
+    let dtFim = document.getElementById('r-data-fim')?.value;
 
-    let ordens = window.ordensGlobal.filter(os => {
-        if(!os.data_registro) return true;
-        let d = os.data_registro.split('T')[0];
+    let ordens = (window.DADOS_ABASTECIMENTOS || window.ordensGlobal || []).filter(os => {
+        if(!os.dataAbastecimento) return true;
+        let d = os.dataAbastecimento.split('T')[0];
         return d >= dtIni && d <= dtFim;
     });
     
@@ -220,91 +166,54 @@ window.carregarDashFiltro = async function(aplicarFiltrosFront = true) {
         const fStatus = document.getElementById('r-status')?.value;
         const fSec = document.getElementById('r-sec')?.value;
         const fDest = document.getElementById('r-dest')?.value;
-        const fClassOS = document.getElementById('r-class-os')?.value;
-        const fCatItem = document.getElementById('r-cat-item')?.value;
         
         if (fPlaca) ordens = ordens.filter(os => os.placa && os.placa.toUpperCase().includes(fPlaca.toUpperCase()));
-        if (fForn) ordens = ordens.filter(os => os.fornecedor && os.fornecedor.toUpperCase().includes(fForn.toUpperCase()));
+        if (fForn) ordens = ordens.filter(os => os.nomePosto && os.nomePosto.toUpperCase().includes(fForn.toUpperCase()));
         if (fStatus) ordens = ordens.filter(os => os.status === fStatus);
-        if (fSec) ordens = ordens.filter(os => os.secretaria_veiculo && os.secretaria_veiculo.toUpperCase().includes(fSec.toUpperCase()));
-        if (fDest) ordens = ordens.filter(os => os.destinacao_veiculo && os.destinacao_veiculo.toUpperCase().includes(fDest.toUpperCase()));
-        if (fClassOS) ordens = ordens.filter(os => os.tipoServico === fClassOS);
+        if (fSec) ordens = ordens.filter(os => (os.secretaria || os.secretariaReal || '').toUpperCase().includes(fSec.toUpperCase()));
+        if (fDest) ordens = ordens.filter(os => (os.destinacao || os.destinacaoReal || '').toUpperCase().includes(fDest.toUpperCase()));
         
         ordens.forEach(os => {
-            if (fCatItem && os.itens) {
-                let somaCat = 0;
-                os.itens.forEach(it => { if(it.categoria === fCatItem) somaCat += (parseFloat(it.valor_total) || 0); });
-                os.valor_filtrado = somaCat;
-            } else {
-                os.valor_filtrado = parseFloat(os.valor) || 0;
-            }
+            os.valor_filtrado = parseFloat(os.valorTotal || os.valor || 0);
         });
-        
-        if(fCatItem) {
-            ordens = ordens.filter(os => os.valor_filtrado > 0);
-            let lblTotal = document.getElementById('lbl-dash-total');
-            if(lblTotal) lblTotal.innerText = `Gasto Apenas com: ${fCatItem}`;
-        } else {
-            let lblTotal = document.getElementById('lbl-dash-total');
-            if(lblTotal) lblTotal.innerText = `Gasto Total Consolidado (Período)`;
-        }
     }
     
     let totSec = {}, totTipo = {}, totVeic = {}, valorTotalGeral = 0;
-    let fornecedoresUnicos = new Set(), responsaveisUnicos = new Set(), destinacoesUnicas = new Set();
+    let frotaList = window.DADOS_VEICULOS || window.veiculosList || [];
     
-    window.veiculosList.forEach(v => { 
-        v.gasto_total = 0; 
-        if(v.destinacao) destinacoesUnicas.add(v.destinacao);
-    });
-    
-    let ordensParaGraficos = ordens.filter(os => os.status !== 'Cancelada');
+    frotaList.forEach(v => { v.gasto_total = 0; });
+    let ordensParaGraficos = ordens.filter(os => os.status === 'Concluído');
 
     ordensParaGraficos.forEach(os => {
-        let valor = parseFloat(os.valor_filtrado) || 0; 
-        let sec = os.secretaria_veiculo || 'Indefinida'; 
-        let tipo = os.tipoServico || 'Outros'; 
-        let veicLabel = os.placa + " (" + (os.modelo_veiculo || "") + ")";
+        let valor = parseFloat(os.valor_filtrado || os.valorTotal || 0); 
+        let sec = os.secretaria || os.secretariaReal || 'Indefinida'; 
+        let tipo = os.combustivel || os.tipoCombustivel || 'Outros'; 
+        let veicLabel = os.placa;
         
         totSec[sec] = (totSec[sec] || 0) + valor; 
         totTipo[tipo] = (totTipo[tipo] || 0) + valor; 
         totVeic[veicLabel] = (totVeic[veicLabel] || 0) + valor; 
         valorTotalGeral += valor;
         
-        if(os.fornecedor) fornecedoresUnicos.add(os.fornecedor); 
-        if(os.responsavel) responsaveisUnicos.add(os.responsavel);
-        
-        let vTarget = window.veiculosList.find(v => v.id === os.placa); 
+        let vTarget = frotaList.find(v => v.id === os.placa); 
         if(vTarget) vTarget.gasto_total += valor;
     });
     
     let destq = document.getElementById('dash-total-destaque');
     if(destq) destq.innerText = window.formatarMoeda(valorTotalGeral);
     
-    const preencherDataList = (id, set) => {
-        let dl = document.getElementById(id);
-        if(dl) {
-            dl.innerHTML = '';
-            [...set].sort().forEach(item => dl.innerHTML += `<option value="${item}">`);
-        }
-    };
-    
-    preencherDataList('lista-fornecedores', fornecedoresUnicos);
-    preencherDataList('lista-responsaveis', responsaveisUnicos);
-    preencherDataList('lista-destinacoes', destinacoesUnicas);
-    preencherDataList('lista-secretarias', window.getSecretariasInteligentes());
-    
-    if(document.getElementById('chartSecretaria')) {
+    // Renderização dos gráficos com proteção de existência do elemento no DOM
+    if(document.getElementById('chartSecretaria') && typeof Chart !== 'undefined') {
         if(window.chartSec) window.chartSec.destroy(); 
         window.chartSec = new Chart(document.getElementById('chartSecretaria'), { type: 'pie', data: { labels: Object.keys(totSec), datasets: [{ data: Object.values(totSec), backgroundColor: ['#0d6efd','#198754','#dc3545','#ffc107','#0dcaf0','#6610f2'] }] } });
     }
     
-    if(document.getElementById('chartTipo')) {
+    if(document.getElementById('chartTipo') && typeof Chart !== 'undefined') {
         if(window.chartTipo) window.chartTipo.destroy(); 
         window.chartTipo = new Chart(document.getElementById('chartTipo'), { type: 'doughnut', data: { labels: Object.keys(totTipo), datasets: [{ data: Object.values(totTipo), backgroundColor: ['#fd7e14','#20c997','#e83e8c','#6f42c1','#343a40'] }] } });
     }
     
-    if(document.getElementById('chartVeiculo')) {
+    if(document.getElementById('chartVeiculo') && typeof Chart !== 'undefined') {
         const topVeiculos = Object.entries(totVeic).sort((a,b) => b[1] - a[1]).slice(0,5);
         if(window.chartVeic) window.chartVeic.destroy(); 
         window.chartVeic = new Chart(document.getElementById('chartVeiculo'), { type: 'bar', data: { labels: topVeiculos.map(x=>x[0]), datasets: [{ label: 'R$ Gasto', data: topVeiculos.map(x=>x[1]), backgroundColor: '#0d6efd' }] } });
@@ -313,12 +222,10 @@ window.carregarDashFiltro = async function(aplicarFiltrosFront = true) {
     const tbody = document.querySelector('#table-resumo-veiculos tbody'); 
     if(tbody) {
         tbody.innerHTML = '';
-        let veiculosOrdenados = [...window.veiculosList].sort((a,b) => (b.gasto_total||0) - (a.gasto_total||0));
+        let veiculosOrdenados = [...frotaList].sort((a,b) => (b.gasto_total||0) - (a.gasto_total||0));
         veiculosOrdenados.forEach(v => { 
             if(v.gasto_total > 0) {
-                let modeloReal = v.modelo || v.veiculo || '';
-                let secReal = v.secretaria || v.sec || '';
-                tbody.innerHTML += `<tr><td><strong>${v.placa}</strong></td><td>${modeloReal}</td><td>${secReal}<br><small class="text-info">${v.destinacao || ''}</small></td><td>${v.dotacao || '-'}</td><td>${v.vinculo || '-'}</td><td class="text-danger fw-bold text-end pe-4">${window.formatarMoeda(v.gasto_total)}</td></tr>`; 
+                tbody.innerHTML += `<tr><td><strong>${v.placa || v.id}</strong></td><td>${v.modelo || v.veiculo || ''}</td><td>${v.secretaria || v.sec || ''}<br><small class="text-info">${v.destinacao || ''}</small></td><td>${v.dotacao || '-'}</td><td>${v.vinculo || v.origem || '-'}</td><td class="text-danger fw-bold text-end pe-4">${window.formatarMoeda(v.gasto_total)}</td></tr>`; 
             }
         });
     }
@@ -327,80 +234,90 @@ window.carregarDashFiltro = async function(aplicarFiltrosFront = true) {
 };
 
 window.carregarTabelaOSComFiltro = async function(temFiltro = true) {
-    let dtIni = document.getElementById('r-data-ini').value;
-    let dtFim = document.getElementById('r-data-fim').value;
+    // Mantém o espelho reverso estável com a listagem unificada
+    if(window.filtrarRelatorio) window.filtrarRelatorio();
+};
 
-    let ordens = window.ordensGlobal.filter(os => {
-        if(!os.data_registro) return true;
-        let d = os.data_registro.split('T')[0];
-        return d >= dtIni && d <= dtFim;
-    });
+// =========================================================================
+// 3. DOSSIÊ DE PRODUTIVIDADE DO CONDUTOR (MÓDULO MOTORISTA INTEGRADO)
+// =========================================================================
+
+window.abrirRelatorioMotorista = function(nomeMotorista) {
+    window.motoristaSelecionadoParaRelatorio = nomeMotorista;
+    let lblNome = document.getElementById('lblRelatorioMotoristaNome');
+    if(lblNome) lblNome.innerText = nomeMotorista;
     
-    if(temFiltro) {
-        const fPlaca = document.getElementById('f-os-placa')?.value; 
-        const fForn = document.getElementById('f-os-forn')?.value; 
-        const fStatus = document.getElementById('f-os-status')?.value;
+    const hj = new Date();
+    const mesAno = `${hj.getFullYear()}-${String(hj.getMonth() + 1).padStart(2, '0')}`;
+    let elFiltro = document.getElementById('filtroMesMotorista');
+    if(elFiltro) elFiltro.value = mesAno;
+    
+    window.gerarDadosRelatorioMotorista();
+    
+    let modalDossie = document.getElementById('modalRelatorioMotorista');
+    if(modalDossie) {
+        let modalObj = bootstrap.Modal.getInstance(modalDossie) || new bootstrap.Modal(modalDossie);
+        modalObj.show();
+    }
+};
+
+window.gerarDadosRelatorioMotorista = function() {
+    const nomeMot = window.motoristaSelecionadoParaRelatorio;
+    const elFiltro = document.getElementById('filtroMesMotorista');
+    if(!elFiltro) return;
+    
+    const mesAno = elFiltro.value; // Formato de entrada: YYYY-MM
+    
+    let rdvsDoMotorista = (window.ColecaoRDVs || []).filter(r => {
+        // Checagem passiva: valida o condutor principal ou a lista de condutores anexada
+        let bateData = r.data && r.data.startsWith(mesAno);
+        let bateCondutor = false;
         
-        if (fPlaca) ordens = ordens.filter(os => os.placa && os.placa.toUpperCase().includes(fPlaca.toUpperCase()));
-        if (fForn) ordens = ordens.filter(os => os.fornecedor && os.fornecedor.toUpperCase().includes(fForn.toUpperCase()));
-        if (fStatus) ordens = ordens.filter(os => os.status === fStatus);
+        if(r.motorista && r.motorista.toUpperCase() === nomeMot.toUpperCase()) bateCondutor = true;
+        if(Array.isArray(r.condutores) && r.condutores.map(c => c.toUpperCase()).includes(nomeMot.toUpperCase())) bateCondutor = true;
+        
+        return bateData && bateCondutor;
+    });
+
+    let totalKM = 0;
+    let veiculosUnicos = new Set();
+    let diasTrabalhados = new Set();
+    
+    let tbody = document.getElementById('tbRelatorioMotorista');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    
+    if(rdvsDoMotorista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Nenhum registro de atividade em RDV localizado para este condutor neste mês.</td></tr>';
+    } else {
+        rdvsDoMotorista.forEach(r => {
+            let odoIni = parseFloat(r.odo_inicial) || 0;
+            let odoFim = parseFloat(r.odo_final) || odoIni;
+            let kmRodado = odoFim - odoIni;
+            if(kmRodado < 0) kmRodado = 0; // Trava física contra inversão acidental de digitação
+
+            totalKM += kmRodado;
+            if(r.veiculo || r.placa) veiculosUnicos.add((r.veiculo || r.placa).toUpperCase());
+            if(r.data) diasTrabalhados.add(r.data);
+            
+            let dataFormatada = r.data ? r.data.split('-').reverse().join('/') : '-';
+            let veicNome = r.veiculo ? r.veiculo.toUpperCase() : '-';
+            let rotaStr = r.rota || r.destino || 'Não Especificada';
+            
+            tbody.innerHTML += `
+            <tr>
+                <td class="fw-bold text-dark">${dataFormatada}</td>
+                <td class="fw-bold">${veicNome}</td>
+                <td class="small text-muted text-start">${rotaStr}</td>
+                <td>${odoIni.toFixed(1)}</td>
+                <td>${odoFim.toFixed(1)}</td>
+                <td class="fw-bold text-primary">${kmRodado.toFixed(1)}</td>
+            </tr>`;
+        });
     }
     
-    ordens.sort((a,b) => new Date(b.data_registro) - new Date(a.data_registro));
-    
-    const tb = document.querySelector('#table-os tbody'); 
-    if(!tb) return;
-    tb.innerHTML = '';
-    
-    if(ordens.length === 0) { 
-        tb.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhuma ordem encontrada no período ou filtro selecionado.</td></tr>'; 
-        return; 
-    }
-    
-    const isAdm = String(window.USUARIO?.nivel_acesso || '').toUpperCase().includes('ADM') || String(window.USUARIO?.nivel_acesso || '').toUpperCase() === 'GESTOR';
-    
-    ordens.forEach(os => {
-        let dataVisual = os.data_registro ? new Date(os.data_registro).toLocaleDateString('pt-BR') : '-';
-        let statusExibir = os.status || 'Pendente'; 
-        let statusBadge = statusExibir === 'Paga' ? 'bg-success' : (statusExibir === 'Aprovada' ? 'bg-primary' : (statusExibir === 'Cancelada' ? 'bg-danger' : 'bg-warning text-dark'));
-        let isCongelado = os.congelado === true; 
-        let cadeadoIco = isCongelado ? '<i class="fas fa-lock text-warning"></i> ' : ''; 
-        let linhaClass = isCongelado ? 'tr-congelada' : '';
-        let qtItens = os.itens ? os.itens.length : 1; 
-        
-        let valorExibidoOS = parseFloat(os.valor) || 0;
-        
-        let html = `<tr class="${linhaClass}">`;
-        
-        if(isAdm && !isCongelado) {
-            html += `<td class="adm-only"><input type="checkbox" class="chk-os-item form-check-input" value="${os.idOS}"></td>`;
-        } else if (isAdm && isCongelado) {
-            html += `<td class="adm-only text-center"><i class="fas fa-lock text-muted small"></i></td>`;
-        } else {
-            html += `<td class="adm-only hidden"></td>`;
-        }
-        
-        html += `
-            <td>${cadeadoIco}${dataVisual}</td>
-            <td>${os.fornecedor || '-'}</td>
-            <td><strong>${os.placa}</strong><br><small class="text-muted">${os.destinacao_veiculo || os.modelo_veiculo || ''}</small></td>
-            <td>${os.tipoServico}<br><small class="text-muted">${qtItens} item(ns)</small></td>
-            <td><span class="badge ${statusBadge}">${statusExibir}</span></td>
-            <td class="fw-bold text-primary text-end pe-3">${window.formatarMoeda(valorExibidoOS)}</td>`;
-        
-        let acoes = `<button class="btn btn-sm btn-dark me-1" onclick='window.imprimirOS("${os.idOS}")' title="Imprimir Ticket"><i class="fas fa-print"></i></button>`;
-        
-        if(isAdm && !isCongelado) { 
-            html += `<td class="adm-only text-nowrap">
-                        ${acoes}
-                        <button class="btn btn-sm btn-light text-primary" onclick='window.editarOS(${JSON.stringify(os)})'><i class="fas fa-edit"></i></button> 
-                        <button class="btn btn-sm btn-light text-danger" onclick='window.deletarOS("${os.idOS}")'><i class="fas fa-trash"></i></button>
-                    </td></tr>`; 
-        } else if (isAdm && isCongelado) { 
-            html += `<td class="adm-only text-nowrap">${acoes} <span class="badge bg-light text-muted border">Fechado</span></td></tr>`; 
-        } else { 
-            html += `<td class="adm-only hidden"></td></tr>`; 
-        }
-        tb.innerHTML += html;
-    });
+    // Atualização em lote dos KPIs superiores do dossiê
+    let elMotKMs = document.getElementById('relMotKMs'); if(elMotKMs) elMotKMs.innerText = totalKM.toFixed(1);
+    let elMotDias = document.getElementById('relMotDias'); if(elMotDias) elMotDias.innerText = diasTrabalhados.size;
+    let elMotVeic = document.getElementById('relMotVeiculos'); if(elMotVeic) elMotVeic.innerText = veiculosUnicos.size;
 };

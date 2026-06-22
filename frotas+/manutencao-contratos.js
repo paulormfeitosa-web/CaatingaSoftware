@@ -1,14 +1,17 @@
 import { db } from './firebase-env.js';
 import { doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-const mod = "frota";
+const mod = "frota"; // Prefixo para isolar Contratos de Oficina dos Contratos de Combustível
+
+window.itensContratoAtual = window.itensContratoAtual || [];
+window.lotesContratoAtual = window.lotesContratoAtual || [];
 
 window.renderizarTabelaContratos = function(contratos) {
     const tb = document.querySelector('#table-contratos tbody'); 
     if(!tb) return; 
     tb.innerHTML = '';
     
-    if(contratos.length === 0) { 
+    if(!contratos || contratos.length === 0) { 
         tb.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Nenhum contrato cadastrado.</td></tr>'; 
         return; 
     }
@@ -93,7 +96,8 @@ window.renderizarTabelaContratos = function(contratos) {
 };
 
 window.abrirEncarteContrato = function(idContrato) {
-    let c = window.contratosList.find(x => x.id === idContrato);
+    let listContratos = window.contratosList || window.DADOS_CONTRATOS || [];
+    let c = listContratos.find(x => x.id === idContrato);
     if(!c) return alert("Contrato não encontrado.");
 
     let totalContratado = 0; let totalGasto = 0; let detalhamentoHtml = '';
@@ -125,26 +129,46 @@ window.abrirEncarteContrato = function(idContrato) {
         </div>
         <h5 class="fw-bold mb-3 border-bottom pb-2">Detalhamento por Lotes/Categorias</h5>${detalhamentoHtml}`;
 
-    document.getElementById('content-encarte-modal').innerHTML = htmlCompleto;
-    new bootstrap.Modal(document.getElementById('modalEncarte')).show();
+    let modalContent = document.getElementById('content-encarte-modal');
+    if(modalContent) modalContent.innerHTML = htmlCompleto;
+    
+    let modalEl = document.getElementById('modalEncarte');
+    if(modalEl) {
+        let modalObj = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modalObj.show();
+    }
 };
 
-window.imprimirEncarteAtual = function() { window.imprimirDocumento(document.getElementById('content-encarte-modal').innerHTML, 'Encarte_Contrato'); };
+window.imprimirEncarteAtual = function() { 
+    let modalContent = document.getElementById('content-encarte-modal');
+    if(modalContent && window.imprimirDocumento) {
+        window.imprimirDocumento(modalContent.innerHTML, 'Encarte_Contrato'); 
+    }
+};
 
 window.popularSecretariasContrato = function() {
     let select = document.getElementById('c-secretaria');
+    if(!select) return;
     select.innerHTML = '<option value="GERAL / TODAS AS SECRETARIAS">GERAL / TODAS AS SECRETARIAS</option>';
-    window.getSecretariasInteligentes().forEach(s => { select.innerHTML += `<option value="${s}">${s}</option>`; });
+    if(window.getSecretariasInteligentes) {
+        window.getSecretariasInteligentes().forEach(s => { select.innerHTML += `<option value="${s}">${s}</option>`; });
+    }
 };
 
 window.popularSelectCatalogoContrato = function() {
     let sel = document.getElementById('c-item-catalogo');
+    if(!sel) return;
     sel.innerHTML = '<option value="">Selecione um item do Catálogo...</option><option value="NOVO" class="fw-bold text-primary">+++ NOVO ITEM (Digitar Manualmente) +++</option>';
-    window.catalogoList.forEach(c => { sel.innerHTML += `<option value="${c.id}" data-desc="${c.descricao}" data-cat="${c.categoria}">[${c.categoria}] ${c.descricao} (Ref: ${window.formatarMoeda(c.valor_referencia)})</option>`; });
+    
+    let listaCat = window.catalogoList || [];
+    listaCat.forEach(c => { sel.innerHTML += `<option value="${c.id}" data-desc="${c.descricao}" data-cat="${c.categoria}">[${c.categoria}] ${c.descricao} (Ref: ${window.formatarMoeda(c.valor_referencia)})</option>`; });
 };
 
 window.mudarTipoContrato = function() {
-    let tipo = document.getElementById('c-categoria').value;
+    let elCategoria = document.getElementById('c-categoria');
+    if(!elCategoria) return;
+    let tipo = elCategoria.value;
+    
     if(tipo === 'Itens') {
         document.querySelectorAll('.div-global').forEach(e => e.classList.add('hidden'));
         document.querySelectorAll('.div-itens').forEach(e => e.classList.remove('hidden'));
@@ -159,27 +183,42 @@ window.mudarTipoContrato = function() {
 window.verificarNovoItemContrato = function() {
     let sel = document.getElementById('c-item-catalogo');
     let divNovo = document.getElementById('div-c-novo-item');
-    if(sel && sel.value === 'NOVO') { divNovo.classList.remove('hidden'); } else { if(divNovo) divNovo.classList.add('hidden'); }
+    if(sel && sel.value === 'NOVO') { 
+        if(divNovo) divNovo.classList.remove('hidden'); 
+    } else { 
+        if(divNovo) divNovo.classList.add('hidden'); 
+    }
 };
 
 window.adicionarLoteContrato = function() {
-    let desc = document.getElementById('c-lote-desc').value.toUpperCase().trim();
+    let elDesc = document.getElementById('c-lote-desc');
+    let elPecas = document.getElementById('c-lote-pecas');
+    let elMo = document.getElementById('c-lote-mo');
+    
+    if(!elDesc || !elPecas || !elMo) return;
+
+    let desc = elDesc.value.toUpperCase().trim();
     if(!desc) return alert("Descreva a Categoria (ex: Médio Porte Gasolina).");
 
-    let vlrPecas = parseFloat(document.getElementById('c-lote-pecas').value.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
-    let vlrMo = parseFloat(document.getElementById('c-lote-mo').value.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+    let vlrPecas = window.safeCurrency(elPecas.value);
+    let vlrMo = window.safeCurrency(elMo.value);
 
     if(vlrPecas === 0 && vlrMo === 0) return alert("Defina pelo menos um valor para Peças ou Mão de Obra.");
 
     window.lotesContratoAtual.push({ descricao: desc, teto_pecas: vlrPecas, teto_servicos: vlrMo });
-    document.getElementById('c-lote-desc').value = ''; document.getElementById('c-lote-pecas').value = ''; document.getElementById('c-lote-mo').value = '';
+    elDesc.value = ''; elPecas.value = ''; elMo.value = '';
     window.renderLotesContrato();
 };
 
-window.removerLoteContrato = function(idx) { window.lotesContratoAtual.splice(idx, 1); window.renderLotesContrato(); };
+window.removerLoteContrato = function(idx) { 
+    window.lotesContratoAtual.splice(idx, 1); 
+    window.renderLotesContrato(); 
+};
 
 window.renderLotesContrato = function() {
     let tb = document.querySelector('#table-contrato-lotes tbody');
+    if(!tb) return;
+    
     tb.innerHTML = ''; let sumPecas = 0, sumMo = 0;
     
     window.lotesContratoAtual.forEach((lote, idx) => {
@@ -189,27 +228,34 @@ window.renderLotesContrato = function() {
     
     if(window.lotesContratoAtual.length === 0) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Nenhuma categoria adicionada. O contrato ficará zerado.</td></tr>';
     
-    document.getElementById('c-tot-pecas').innerText = window.formatarMoeda(sumPecas);
-    document.getElementById('c-tot-mo').innerText = window.formatarMoeda(sumMo);
-    document.getElementById('c-tot-geral').innerText = window.formatarMoeda(sumPecas + sumMo);
+    let elTotP = document.getElementById('c-tot-pecas'); if(elTotP) elTotP.innerText = window.formatarMoeda(sumPecas);
+    let elTotM = document.getElementById('c-tot-mo'); if(elTotM) elTotM.innerText = window.formatarMoeda(sumMo);
+    let elTotG = document.getElementById('c-tot-geral'); if(elTotG) elTotG.innerText = window.formatarMoeda(sumPecas + sumMo);
 };
 
 window.adicionarItemContrato = function() {
     let sel = document.getElementById('c-item-catalogo');
+    if(!sel) return;
+    
     let isNovo = (sel.value === 'NOVO');
     if(!sel.value) return alert("Selecione um item do catálogo ou crie um novo.");
     
-    let qtd = parseInt(document.getElementById('c-item-qtd').value) || 0;
+    let elQtd = document.getElementById('c-item-qtd');
+    let qtd = parseInt(elQtd ? elQtd.value : 0) || 0;
     if(qtd <= 0) return alert("A quantidade licitada deve ser maior que zero.");
     
-    let vlrUnit = parseFloat(document.getElementById('c-item-vlr').value.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+    let elVlr = document.getElementById('c-item-vlr');
+    let vlrUnit = window.safeCurrency(elVlr ? elVlr.value : 0);
     if(vlrUnit <= 0) return alert("Defina o valor unitário licitado.");
 
     let idParaAdicionar = sel.value, descParaAdicionar = '', catParaAdicionar = '';
 
     if(isNovo) {
-        descParaAdicionar = document.getElementById('c-item-desc-novo').value.toUpperCase().trim();
-        catParaAdicionar = document.getElementById('c-item-cat-novo').value;
+        let elDescNovo = document.getElementById('c-item-desc-novo');
+        descParaAdicionar = elDescNovo ? elDescNovo.value.toUpperCase().trim() : '';
+        let elCatNovo = document.getElementById('c-item-cat-novo');
+        catParaAdicionar = elCatNovo ? elCatNovo.value : 'Peças';
+        
         if(!descParaAdicionar) return alert("Digite a descrição do novo item.");
         idParaAdicionar = null; 
     } else {
@@ -226,15 +272,25 @@ window.adicionarItemContrato = function() {
     
     window.itensContratoAtual.push({ id_catalogo: idParaAdicionar, descricao: descParaAdicionar, categoria: catParaAdicionar, qtd_licitada: qtd, valor_unitario: vlrUnit, qtd_consumida: 0 });
     
-    document.getElementById('c-item-qtd').value = '1'; document.getElementById('c-item-vlr').value = ''; 
-    if(document.getElementById('c-item-desc-novo')) document.getElementById('c-item-desc-novo').value = '';
-    sel.value = ''; window.verificarNovoItemContrato(); window.renderItensContrato();
+    if(elQtd) elQtd.value = '1'; 
+    if(elVlr) elVlr.value = ''; 
+    let elDescNovo = document.getElementById('c-item-desc-novo');
+    if(elDescNovo) elDescNovo.value = '';
+    
+    sel.value = ''; 
+    window.verificarNovoItemContrato(); 
+    window.renderItensContrato();
 };
 
-window.removerItemContrato = function(idx) { window.itensContratoAtual.splice(idx, 1); window.renderItensContrato(); };
+window.removerItemContrato = function(idx) { 
+    window.itensContratoAtual.splice(idx, 1); 
+    window.renderItensContrato(); 
+};
 
 window.renderItensContrato = function() {
     let tb = document.querySelector('#table-contrato-itens tbody');
+    if(!tb) return;
+    
     tb.innerHTML = ''; let somaTotal = 0;
     
     window.itensContratoAtual.forEach((it, idx) => {
@@ -246,31 +302,54 @@ window.renderItensContrato = function() {
     if(window.itensContratoAtual.length === 0) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Nenhum item adicionado à ata.</td></tr>';
     
     let elValor = document.getElementById('c-valor-total');
-    elValor.value = somaTotal.toFixed(2).replace(".", "");
-    window.aplicarMascaraMonetaria(elValor);
+    if(elValor) {
+        elValor.value = somaTotal.toFixed(2).replace(".", "");
+        window.aplicarMascaraMonetaria(elValor);
+    }
 };
 
 window.abrirModalContrato = function() { 
-    document.getElementById('formContrato').reset(); 
-    document.getElementById('c-id').value = ''; 
-    window.itensContratoAtual = []; window.lotesContratoAtual = []; 
-    window.popularSecretariasContrato(); window.popularSelectCatalogoContrato(); 
-    window.verificarNovoItemContrato(); window.mudarTipoContrato(); 
-    document.getElementById('btn-del-contrato').classList.add('hidden'); 
-    new bootstrap.Modal(document.getElementById('modalContrato')).show(); 
+    let elForm = document.getElementById('formContrato');
+    if(elForm) elForm.reset(); 
+    
+    let elId = document.getElementById('c-id');
+    if(elId) elId.value = ''; 
+    
+    window.itensContratoAtual = []; 
+    window.lotesContratoAtual = []; 
+    
+    window.popularSecretariasContrato(); 
+    window.popularSelectCatalogoContrato(); 
+    window.verificarNovoItemContrato(); 
+    window.mudarTipoContrato(); 
+    
+    let btnDel = document.getElementById('btn-del-contrato');
+    if(btnDel) btnDel.classList.add('hidden'); 
+    
+    let modalContratoEl = document.getElementById('modalContrato');
+    if(modalContratoEl) {
+        let modalObj = bootstrap.Modal.getInstance(modalContratoEl) || new bootstrap.Modal(modalContratoEl);
+        modalObj.show();
+    }
 };
 
 window.editarContrato = function(c) { 
-    document.getElementById('c-id').value = c.id; 
-    document.getElementById('c-numero').value = c.numero; 
-    document.getElementById('c-categoria').value = c.categoria || 'Global';
-    document.getElementById('c-fornecedor').value = c.fornecedor; 
-    document.getElementById('c-objeto').value = c.objeto || ''; 
-    document.getElementById('c-ini').value = c.data_inicio || ''; 
-    document.getElementById('c-fim').value = c.data_fim || ''; 
+    let ids = ['c-id', 'c-numero', 'c-categoria', 'c-fornecedor', 'c-objeto', 'c-ini', 'c-fim'];
+    let els = {};
+    ids.forEach(id => els[id] = document.getElementById(id));
+
+    if(els['c-id']) els['c-id'].value = c.id; 
+    if(els['c-numero']) els['c-numero'].value = c.numero; 
+    if(els['c-categoria']) els['c-categoria'].value = c.categoria || 'Global';
+    if(els['c-fornecedor']) els['c-fornecedor'].value = c.fornecedor; 
+    if(els['c-objeto']) els['c-objeto'].value = c.objeto || ''; 
+    if(els['c-ini']) els['c-ini'].value = c.data_inicio || ''; 
+    if(els['c-fim']) els['c-fim'].value = c.data_fim || ''; 
     
     window.popularSecretariasContrato();
-    document.getElementById('c-secretaria').value = c.secretaria || 'GERAL / TODAS AS SECRETARIAS'; 
+    let elSec = document.getElementById('c-secretaria');
+    if(elSec) elSec.value = c.secretaria || 'GERAL / TODAS AS SECRETARIAS'; 
+    
     window.popularSelectCatalogoContrato();
     
     window.itensContratoAtual = c.itens_contrato ? [...c.itens_contrato] : [];
@@ -280,25 +359,39 @@ window.editarContrato = function(c) {
         window.lotesContratoAtual.push({ descricao: "FROTA GERAL (MIGRADO)", teto_pecas: c.valor_teto_pecas || 0, teto_servicos: c.valor_teto_servicos || 0 });
     }
 
-    window.verificarNovoItemContrato(); window.mudarTipoContrato(); 
+    window.verificarNovoItemContrato(); 
+    window.mudarTipoContrato(); 
     
     let elValorTot = document.getElementById('c-valor-total');
-    elValorTot.value = (parseFloat(c.valor_total) || 0).toFixed(2).replace(".", "");
-    window.aplicarMascaraMonetaria(elValorTot);
+    if(elValorTot) {
+        elValorTot.value = (parseFloat(c.valor_total) || 0).toFixed(2).replace(".", "");
+        window.aplicarMascaraMonetaria(elValorTot);
+    }
     
-    document.getElementById('btn-del-contrato').classList.remove('hidden'); 
-    new bootstrap.Modal(document.getElementById('modalContrato')).show(); 
+    let btnDel = document.getElementById('btn-del-contrato');
+    if(btnDel) btnDel.classList.remove('hidden'); 
+    
+    let modalContratoEl = document.getElementById('modalContrato');
+    if(modalContratoEl) {
+        let modalObj = bootstrap.Modal.getInstance(modalContratoEl) || new bootstrap.Modal(modalContratoEl);
+        modalObj.show();
+    }
 };
 
 window.salvarContrato = async function() { 
-    const numero = document.getElementById('c-numero').value.trim(); 
+    let elNum = document.getElementById('c-numero');
+    const numero = elNum ? elNum.value.trim() : ''; 
     if(!numero) return alert("Informe o número do contrato."); 
     
-    let cat = document.getElementById('c-categoria').value;
+    let elCat = document.getElementById('c-categoria');
+    let cat = elCat ? elCat.value : 'Global';
+    
     if(cat === 'Itens' && window.itensContratoAtual.length === 0) return alert("Adicione pelo menos um item licitado à ata.");
     if(cat === 'Global' && window.lotesContratoAtual.length === 0) return alert("Adicione pelo menos uma categoria de frota (Lote) ao contrato.");
 
-    document.getElementById('loading').classList.remove('hidden');
+    window.loading(true, "Salvando contrato da oficina...");
+    let btnSalvar = document.querySelector('#modalContrato .btn-success');
+    window.toggleButtonLoading(btnSalvar, true);
 
     let valTetoPecas = 0, valTetoServicos = 0, valTotalItens = 0;
 
@@ -319,25 +412,64 @@ window.salvarContrato = async function() {
     }
     
     const dados = { 
-        numero: numero, categoria: cat, fornecedor: document.getElementById('c-fornecedor').value, secretaria: document.getElementById('c-secretaria').value.toUpperCase(),
-        objeto: document.getElementById('c-objeto').value, data_inicio: document.getElementById('c-ini').value, data_fim: document.getElementById('c-fim').value, 
-        valor_total: cat === 'Itens' ? valTotalItens : (valTetoPecas + valTetoServicos), valor_teto_pecas: valTetoPecas, valor_teto_servicos: valTetoServicos,
-        itens_contrato: cat === 'Itens' ? window.itensContratoAtual : null, lotes_contrato: cat === 'Global' ? window.lotesContratoAtual : null, ativo: true 
+        numero: numero, 
+        categoria: cat, 
+        fornecedor: document.getElementById('c-fornecedor')?.value || '', 
+        secretaria: document.getElementById('c-secretaria')?.value.toUpperCase() || 'GERAL / TODAS AS SECRETARIAS',
+        objeto: document.getElementById('c-objeto')?.value || '', 
+        data_inicio: document.getElementById('c-ini')?.value || '', 
+        data_fim: document.getElementById('c-fim')?.value || '', 
+        valor_total: cat === 'Itens' ? valTotalItens : (valTetoPecas + valTetoServicos), 
+        valor_teto_pecas: valTetoPecas, 
+        valor_teto_servicos: valTetoServicos,
+        itens_contrato: cat === 'Itens' ? window.itensContratoAtual : null, 
+        lotes_contrato: cat === 'Global' ? window.lotesContratoAtual : null, 
+        ativo: true 
     }; 
     
-    let id = document.getElementById('c-id').value || `CONT-${Date.now()}`; 
-    await setDoc(doc(db, `${mod}_${window.tenant}_contratos`, id), dados, {merge: true}); 
+    let elId = document.getElementById('c-id');
+    let id = (elId && elId.value) ? elId.value : `CONT-${Date.now()}`; 
     
-    document.getElementById('loading').classList.add('hidden');
-    bootstrap.Modal.getInstance(document.getElementById('modalContrato')).hide(); 
-    alert("Contrato salvo com sucesso!"); 
-    window.carregarDadosGerais(document.getElementById('r-data-ini').value, document.getElementById('r-data-fim').value); 
+    try {
+        await setDoc(doc(db, `${mod}_${window.tenant}_contratos`, id), dados, {merge: true}); 
+        
+        let modalContratoEl = document.getElementById('modalContrato');
+        if(modalContratoEl) bootstrap.Modal.getInstance(modalContratoEl).hide(); 
+        
+        alert("Contrato de Manutenção salvo com sucesso!"); 
+        
+        if(window.buscarTudo) await window.buscarTudo();
+        else if(window.carregarDadosGerais) window.carregarDadosGerais(document.getElementById('r-data-ini')?.value, document.getElementById('r-data-fim')?.value);
+        
+    } catch(e) {
+        console.error(e);
+        alert("Erro ao salvar contrato: " + e.message);
+    } finally {
+        window.toggleButtonLoading(btnSalvar, false);
+        window.loading(false);
+    }
 };
 
 window.deletarContrato = async function() { 
-    if(confirm("Tem certeza que deseja excluir este contrato?")) { 
-        await deleteDoc(doc(db, `${mod}_${window.tenant}_contratos`, document.getElementById('c-id').value)); 
-        bootstrap.Modal.getInstance(document.getElementById('modalContrato')).hide(); 
-        window.carregarDadosGerais(document.getElementById('r-data-ini').value, document.getElementById('r-data-fim').value); 
+    if(confirm("Tem certeza que deseja excluir permanentemente este contrato de manutenção?")) { 
+        window.loading(true, "Excluindo contrato...");
+        let elId = document.getElementById('c-id');
+        let idContrato = elId ? elId.value : null;
+        if(!idContrato) { window.loading(false); return; }
+        
+        try {
+            await deleteDoc(doc(db, `${mod}_${window.tenant}_contratos`, idContrato)); 
+            
+            let modalContratoEl = document.getElementById('modalContrato');
+            if(modalContratoEl) bootstrap.Modal.getInstance(modalContratoEl).hide(); 
+            
+            if(window.buscarTudo) await window.buscarTudo();
+            else if(window.carregarDadosGerais) window.carregarDadosGerais(document.getElementById('r-data-ini')?.value, document.getElementById('r-data-fim')?.value); 
+        } catch(e) {
+            console.error(e);
+            alert("Erro ao excluir contrato: " + e.message);
+        } finally {
+            window.loading(false);
+        }
     } 
 };

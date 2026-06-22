@@ -1,6 +1,9 @@
 import { db } from './firebase-env.js';
-import { doc, getDoc, getDocs, collection, query, where, orderBy, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { doc, setDoc, getDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
+// =========================================================================
+// 1. FECHAMENTO E TRAVAS DE MÊS (AUDITORIA)
+// =========================================================================
 window.obterPrecoVigente = function(nomePosto, dataIsoBase) {
     let p = window.DADOS_POSTOS.find(x => x.nome === nomePosto);
     if(!p) return { Gasolina: 0, Diesel: 0, Etanol: 0 };
@@ -14,12 +17,11 @@ window.obterPrecoVigente = function(nomePosto, dataIsoBase) {
         let vOld = vigs[vigs.length-1]; 
         return { Gasolina: window.safeCurrency(vOld.Gasolina), Diesel: window.safeCurrency(vOld.Diesel), Etanol: window.safeCurrency(vOld.Etanol) };
     }
-    return { Gasolina: window.safeCurrency(p.Gasolina), Diesel: window.safeCurrency(p.Etanol), Etanol: window.safeCurrency(p.Etanol) };
+    return { Gasolina: window.safeCurrency(p.Gasolina), Diesel: window.safeCurrency(p.Diesel), Etanol: window.safeCurrency(p.Etanol) };
 };
 
-// === GUARDA-COSTAS: BLOQUEIO DE MÊS ===
 window.isMesTrancado = async function(dataIsoCompleta) {
-    if(!dataIsoCompleta) return false;
+    if(!dataIsoCompleta || !window.tenant) return false;
     let mesAno = dataIsoCompleta.substring(0, 7); 
     try {
         const docSnap = await getDoc(doc(db, `${window.tenant}_mesesFechados`, mesAno));
@@ -62,7 +64,7 @@ window.alternarTravaMes = async function() {
                 await setDoc(docRef, { fechado: false }, { merge: true }); alert("Mês reaberto."); 
             } 
         } else { 
-            if (confirm(`Deseja TRANCAR o mês ${mesSelecionado}?`)) { 
+            if (confirm(`Deseja TRANCAR o mês ${mesSelecionado}? Lançamentos retroativos não serão mais permitidos neste período.`)) { 
                 await setDoc(docRef, { fechado: true, dataFechamento: new Date().toISOString() }, { merge: true }); alert("Mês trancado!"); 
             } 
         }
@@ -70,89 +72,9 @@ window.alternarTravaMes = async function() {
     } catch (e) { alert("Erro ao alterar status do mês."); console.error(e); } finally { window.toggleButtonLoading(btn, false); }
 };
 
-// === TIMELINE ENGINE ===
-window.reprocessarHistoricoVeiculo = async function(placa) {
-    try {
-        const veicRef = doc(db, `${window.tenant}_veiculos`, placa);
-        const veicSnap = await getDoc(veicRef);
-        if (!veicSnap.exists()) return;
-
-        let veicData = veicSnap.data();
-        let mediaV = window.safeCurrency(veicData.media) > 0 ? window.safeCurrency(veicData.media) : 1;
-        let odoAtualTimeline = window.safeCurrency(veicData.odometroInicial) || 0;
-
-        const lockedSnap = await getDocs(collection(db, `${window.tenant}_mesesFechados`));
-        let lockedMonths = new Set(); 
-        lockedSnap.forEach(d => { if(d.data().fechado) lockedMonths.add(d.id); });
-
-        const qAbast = query(collection(db, `${window.tenant}_abastecimentos`), where('placa', '==', placa), orderBy('dataAbastecimento', 'asc'));
-        const abastSnap = await getDocs(qAbast);
-        const batch = writeBatch(db); 
-        let alteracoes = 0;
-
-        abastSnap.forEach((docSnap) => {
-            let abast = docSnap.data();
-            if(abast.status !== 'Concluído') return;
-
-            let lts = window.safeCurrency(abast.quantidade);
-            let mesAno = abast.dataAbastecimento.slice(0, 7);
-            let avanco = (veicData.tipoFrota === 'Máquina') ? (lts / mediaV) : (lts * mediaV);
-
-            if (lockedMonths.has(mesAno)) {
-                odoAtualTimeline = window.safeCurrency(abast.odometroPainel);
-            } else {
-                if (abast.odometroCalculado === true) {
-                    odoAtualTimeline += avanco; 
-                    odoAtualTimeline = Math.round(odoAtualTimeline * 10) / 10;
-                    batch.update(docSnap.ref, { 
-                        odometroPainel: odoAtualTimeline, 
-                        odometroSistemaAnterior: Math.round((odoAtualTimeline - avanco) * 10) / 10, 
-                        odometroSistema: odoAtualTimeline, 
-                        saldoOdometro: 0 
-                    });
-                    alteracoes++;
-                } else {
-                    let odoReal = window.safeCurrency(abast.odometroPainel);
-                    if (odoReal >= odoAtualTimeline || odoAtualTimeline === 0) {
-                        let odoAnteriorSist = odoAtualTimeline;
-                        odoAtualTimeline = odoReal; 
-                        let odoProjSist = odoAnteriorSist + avanco;
-                        let novoSaldo = (odoReal - odoAnteriorSist) - avanco;
-                        batch.update(docSnap.ref, { 
-                            odometroSistemaAnterior: odoAnteriorSist, 
-                            odometroSistema: odoProjSist, 
-                            saldoOdometro: novoSaldo 
-                        });
-                        alteracoes++;
-                    }
-                }
-            }
-        });
-        batch.update(veicRef, { odometro: odoAtualTimeline });
-        if (alteracoes > 0 || abastSnap.size > 0) await batch.commit();
-    } catch (error) { console.error("Erro no recálculo cronológico:", error); }
-};
-
-window.reprocessarFrotaMes = async function(mesIso) {
-    if(!mesIso) return alert("Selecione um mês na Auditoria.");
-    if(!confirm(`RECALCULAR FROTA GLOBAL: O sistema irá varrer a linha do tempo de todos os veículos. Confirmar?`)) return;
-    
-    let btn = document.querySelector('.ferramentas-auditoria .btn-warning');
-    window.toggleButtonLoading(btn, true, "Recalculando..."); 
-    window.loading(true, "Recalculando Cadeia de Frota Global...");
-    
-    try {
-        let placas = [...new Set(window.DADOS_ABASTECIMENTOS.map(a => a.placa))];
-        for (let placa of placas) { await window.reprocessarHistoricoVeiculo(placa); }
-        await window.buscarTudo(); 
-        alert("Todos os hodômetros da frota foram reprocessados com sucesso!");
-    } catch(e) { 
-        alert("Erro no reprocessamento: " + e.message); 
-    } finally { 
-        window.toggleButtonLoading(btn, false); window.loading(false); 
-    }
-};
-
+// =========================================================================
+// 2. NOVA AUDITORIA CIRÚRGICA DE FROTAS (Sem reprocessamento em cadeia)
+// =========================================================================
 window.renderAnaliseFrota = function() {
     let elAnalise = document.getElementById('tbAnaliseBody');
     let elFreq = document.getElementById('listaAltaFrequencia');
@@ -164,34 +86,211 @@ window.renderAnaliseFrota = function() {
     let analise = window.DADOS_VEICULOS.map(v => {
         let concluidosMes = window.DADOS_ABASTECIMENTOS.filter(a => a.placa === v.id && a.status === 'Concluído' && a.dataAbastecimento.startsWith(mesAtual));
         concluidosMes.sort((a,b) => new Date(b.dataAbastecimento) - new Date(a.dataAbastecimento));
-        let ultimo = concluidosMes[0]; 
-        let saldoUltimo = ultimo ? window.safeCurrency(ultimo.saldoOdometro) : 0;
-        let desviosNegativos = concluidosMes.filter(a => window.safeCurrency(a.saldoOdometro) < -20).length;
         
-        return { placa: v.id, modelo: v.modelo || '', secretaria: v.secretaria || 'N/A', destinacao: v.destinacao || 'GERAL', odometro: v.odometro || 0, tipoFrota: v.tipoFrota, saldoUltimo: saldoUltimo, qtdAbastecimentosMes: concluidosMes.length, alertasDesvio: desviosNegativos };
+        let alertasDesvio = 0; // Removida a dependência de "saldoOdometro" do BD. Agora é calculado no renderAuditoria.
+        
+        return { 
+            placa: v.id, 
+            modelo: v.modelo || v.veiculo || '', 
+            secretaria: v.secretaria || v.sec || 'N/A', 
+            destinacao: v.destinacao || 'GERAL', 
+            odometro: v.km_atual || v.odometro || 0, 
+            tipoFrota: v.tipo_padronizado || v.tipoFrota, 
+            qtdAbastecimentosMes: concluidosMes.length, 
+            alertasDesvio: alertasDesvio 
+        };
     });
     
     analise.sort((a,b) => b.qtdAbastecimentosMes - a.qtdAbastecimentosMes);
     let h = ''; let hAlertaFrequencia = ''; let hAlertaConsumo = '';
     
     analise.forEach(v => {
-        let isCritico = v.alertasDesvio > 1 || v.qtdAbastecimentosMes > 8; 
+        let isCritico = v.qtdAbastecimentosMes > 8; 
         h += `<tr class="${isCritico ? 'linha-critica' : ''} tr-auditoria">
             <td class="fw-bold placa-busca text-start">${v.placa}<br><small class="text-muted fw-normal">${v.modelo}</small></td>
             <td>${v.secretaria}<br><small class="text-primary fw-bold">${v.destinacao}</small></td>
             <td class="text-dark fw-bold">${v.odometro.toFixed(1)} <small class="text-muted">${v.tipoFrota === 'Máquina' ? 'h' : 'km'}</small></td>
             <td><span class="badge bg-dark">${v.qtdAbastecimentosMes} no mês</span></td>
-            <td class="fw-bold ${v.saldoUltimo < -20 ? 'text-danger' : (v.saldoUltimo > 20 ? 'text-warning' : 'text-success')} fs-6 bg-light border-start">${v.saldoUltimo > 0 ? '+'+v.saldoUltimo.toFixed(1) : v.saldoUltimo.toFixed(1)}</td>
+            <td class="fw-bold text-success fs-6 bg-light border-start"><i class="fas fa-check"></i> Monitorado</td>
         </tr>`;
         if(v.qtdAbastecimentosMes > 8) hAlertaFrequencia += `<div class="mb-1 border-bottom pb-1"><b class="text-danger">${v.placa}</b>: Alta frequência (<b>${v.qtdAbastecimentosMes} idas ao posto</b> no mês).</div>`;
-        if(v.alertasDesvio > 1) hAlertaConsumo += `<div class="mb-1 border-bottom pb-1"><b class="text-danger">${v.placa}</b>: <b>Alto consumo detectado</b> (Múltiplos desvios negativos de km).</div>`;
     });
     
     elAnalise.innerHTML = h;
     if(elFreq) elFreq.innerHTML = hAlertaFrequencia || '<div class="text-success fw-bold mt-2"><i class="fas fa-check-circle"></i> Frequência de abastecimentos normalizada.</div>';
-    if(elCons) elCons.innerHTML = hAlertaConsumo || '<div class="text-success fw-bold mt-2"><i class="fas fa-check-circle"></i> Sem anomalias de consumo detectadas.</div>';
+    if(elCons) elCons.innerHTML = hAlertaConsumo || '<div class="text-success fw-bold mt-2"><i class="fas fa-check-circle"></i> Análise de Média Ativa (Baseada nos lançamentos mais recentes)</div>';
 };
 
+window.renderAuditoria = function() {
+    let mesFiltro = document.getElementById('fMesAuditoria') ? document.getElementById('fMesAuditoria').value : '';
+    if(!mesFiltro) {
+        let d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        mesFiltro = d.toISOString().slice(0, 7);
+        if(document.getElementById('fMesAuditoria')) document.getElementById('fMesAuditoria').value = mesFiltro;
+    }
+
+    let hAuditoria = '';
+    let abastecimentosAgrupados = {};
+
+    window.DADOS_ABASTECIMENTOS.filter(a => a.status === 'Concluído').forEach(a => {
+        if(!abastecimentosAgrupados[a.placa]) abastecimentosAgrupados[a.placa] = [];
+        abastecimentosAgrupados[a.placa].push(a);
+    });
+
+    let listaAuditoria = [];
+
+    for(let placa in abastecimentosAgrupados) {
+        let abasts = abastecimentosAgrupados[placa];
+        abasts.sort((a,b) => new Date(a.dataAbastecimento) - new Date(b.dataAbastecimento));
+
+        for(let i = 0; i < abasts.length; i++) {
+            let a = abasts[i];
+            if(!a.dataAbastecimento.startsWith(mesFiltro)) continue;
+
+            let tempoUltimo = '-'; let alertaTempo = false; let diffKm = 0; let kmlReal = 0; let saldoLocal = 0;
+            
+            if(i > 0) {
+                let ant = abasts[i-1];
+                let dataAtual = new Date(a.dataAbastecimento);
+                let dataAnt = new Date(ant.dataAbastecimento);
+                let diffMs = dataAtual - dataAnt;
+                let diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
+                let diffMin = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                
+                tempoUltimo = `${diffHoras}h ${diffMin}m`;
+                if(diffHoras < 3) alertaTempo = true; 
+                
+                let odoAnt = window.safeCurrency(ant.odometroPainel);
+                let odoAt = window.safeCurrency(a.odometroPainel);
+                
+                if(odoAnt > 0 && odoAt > odoAnt) {
+                    diffKm = odoAt - odoAnt;
+                    let lts = window.safeCurrency(a.quantidade);
+                    kmlReal = (lts > 0) ? (diffKm / lts) : 0;
+                    
+                    let veic = window.DADOS_VEICULOS.find(x => x.id === a.placa);
+                    let baseMedia = veic ? window.safeCurrency(veic.media) : 0;
+                    
+                    if(baseMedia > 0) {
+                        let esperadoKm = lts * baseMedia;
+                        saldoLocal = diffKm - esperadoKm;
+                    }
+                }
+            }
+
+            let alertaKm = false;
+            if(saldoLocal < -15 || saldoLocal > 100) alertaKm = true; 
+
+            listaAuditoria.push({
+                a: a, tempoUltimo, alertaTempo, 
+                odoPainel: window.safeCurrency(a.odometroPainel), 
+                kmlReal, saldoLocal, alertaKm, dataObj: new Date(a.dataAbastecimento)
+            });
+        }
+    }
+
+    listaAuditoria.sort((a,b) => b.dataObj - a.dataObj);
+
+    listaAuditoria.forEach(item => {
+        let a = item.a;
+        let v = window.DADOS_VEICULOS.find(x => x.id === a.placa);
+        let dFmt = item.dataObj.toLocaleString('pt-BR').slice(0, 16);
+        
+        let txtPainel = (item.odoPainel > 0) ? item.odoPainel.toFixed(1) : '<span class="text-muted">-</span>';
+        let txtSaldo = (item.saldoLocal !== 0) ? (item.saldoLocal > 0 ? '+'+item.saldoLocal.toFixed(1) : item.saldoLocal.toFixed(1)) : '-';
+        
+        let corTempo = item.alertaTempo ? 'text-danger fw-bold' : 'text-dark';
+        let iconeTempo = item.alertaTempo ? '<i class="fas fa-exclamation-triangle" title="Menos de 3h entre abastecimentos"></i> ' : '';
+        let corSaldo = item.saldoLocal >= 0 ? (item.alertaKm ? 'text-warning text-dark fw-bold' : 'text-success') : 'text-danger fw-bold';
+        
+        let statusClasse = (item.alertaTempo || item.alertaKm) ? 'linha-atencao' : 'linha-ok';
+
+        let badgeStatus = '-';
+        if(item.kmlReal > 0 && v && window.safeCurrency(v.media) > 0) {
+             let base = window.safeCurrency(v.media);
+             if (item.kmlReal < (base * 0.7)) badgeStatus = `<span class="badge bg-danger" title="Média Real: ${item.kmlReal.toFixed(2)} (Base: ${base})"><i class="fas fa-arrow-down"></i> Baixo Rencimento</span>`;
+             else if (item.kmlReal > (base * 1.3)) badgeStatus = `<span class="badge bg-warning text-dark" title="Média Real: ${item.kmlReal.toFixed(2)} (Base: ${base})"><i class="fas fa-arrow-up"></i> Alto Desvio</span>`;
+             else badgeStatus = `<span class="badge bg-success" title="Média Real: ${item.kmlReal.toFixed(2)} (Base: ${base})"><i class="fas fa-check"></i> Na média</span>`;
+        }
+        
+        hAuditoria += `<tr class="${statusClasse} tr-auditoria">
+            <td>${dFmt}</td>
+            <td class="fw-bold text-dark placa-busca">${a.placa}<br><small class="text-muted fw-normal">${v ? v.modelo || v.veiculo : '-'}</small></td>
+            <td><small>${a.nomePosto || '-'}</small></td>
+            <td class="${corTempo}">${iconeTempo}${item.tempoUltimo}</td>
+            <td class="fw-bold border-start">${txtPainel}</td>
+            <td>${badgeStatus}</td>
+            <td class="${corSaldo} border-end">${txtSaldo}</td>
+        </tr>`;
+    });
+    
+    if(document.getElementById('tbAuditoriaBody')) {
+        document.getElementById('tbAuditoriaBody').innerHTML = hAuditoria || '<tr><td colspan="7" class="text-muted py-4">Nenhum registro no mês selecionado.</td></tr>';
+    }
+};
+
+window.filtrarAuditoriaVisual = function() {
+    let placaStr = document.getElementById('fAuditoriaPlaca') ? document.getElementById('fAuditoriaPlaca').value.toUpperCase() : '';
+    let statusSel = document.getElementById('fAuditoriaStatus') ? document.getElementById('fAuditoriaStatus').value : 'todos';
+
+    let linhas = document.querySelectorAll('.tr-auditoria');
+    linhas.forEach(linha => {
+        let textoPlaca = linha.querySelector('.placa-busca') ? linha.querySelector('.placa-busca').innerText.toUpperCase() : '';
+        let isAlerta = linha.classList.contains('linha-critica') || linha.classList.contains('linha-atencao');
+
+        let mostraPlaca = textoPlaca.includes(placaStr);
+        let mostraStatus = true;
+        if (statusSel === 'alerta' && !isAlerta) mostraStatus = false;
+        if (statusSel === 'ok' && isAlerta) mostraStatus = false;
+
+        linha.style.display = (mostraPlaca && mostraStatus) ? '' : 'none';
+    });
+};
+
+window.imprimirAuditoria = function() {
+    let hOciosidade = document.getElementById('tabelaOciosidade').outerHTML;
+    let hDesvios = document.getElementById('tabelaAuditoriaSaldos').outerHTML;
+    let mes = document.getElementById('fMesAuditoria').value.split('-').reverse().join('/');
+
+    let win = window.open('', '_blank', 'width=1000,height=600');
+    win.document.write(`
+        <html><head><title>Relatório de Auditoria de Frota</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; }
+            h3 { text-align: center; text-transform: uppercase; margin-bottom: 20px; color: #333; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            h4 { margin-top: 30px; color: #555; font-size: 16px; margin-bottom: 10px; }
+            table { width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; margin-bottom: 20px; border: 1px solid #ccc; }
+            th, td { border: 1px solid #ccc; padding: 8px; }
+            th { background-color: #f2f2f2; }
+            .text-danger { color: red; }
+            .text-success { color: green; }
+            .text-primary { color: blue; }
+            .text-warning { color: darkgoldenrod; }
+            .text-muted { color: gray; }
+            .fw-bold { font-weight: bold; }
+            .badge { border: 1px solid #000; padding: 3px 5px; font-size: 10px; border-radius: 4px; }
+            .bg-danger { background-color: #f8d7da !important; color: #721c24 !important; }
+            .bg-warning { background-color: #fff3cd !important; color: #856404 !important; }
+            .linha-critica { background-color: #ffeeee !important; font-weight: bold; }
+            .linha-atencao { background-color: #fffdf2 !important; }
+        </style>
+        </head><body>
+            <h3>RELATÓRIO DE AUDITORIA DE FROTA - MÊS: ${mes}</h3>
+            <h4><i class="fas fa-parking"></i> STATUS ATUAL DA FROTA</h4>
+            ${hOciosidade}
+            <h4><i class="fas fa-shield-alt"></i> HISTÓRICO DE DESVIOS E ABASTECIMENTOS DO MÊS</h4>
+            ${hDesvios}
+            ${window.BLOCO_ASSINATURA}
+            <script>setTimeout(() => { window.print(); window.close(); }, 500);<\/script>
+        </body></html>
+    `);
+    win.document.close();
+};
+
+// =========================================================================
+// 3. MAPAS GERENCIAIS E IMPRESSÕES GERAIS
+// =========================================================================
 window.filtrarRelatorio = function() {
     let ids = ['fIni', 'fFim', 'fSec', 'fDest', 'fComb', 'fPosto', 'fTexto', 'fOrigem', 'fOrigemLanc'];
     let els = {}; ids.forEach(id => els[id] = document.getElementById(id));
@@ -220,9 +319,9 @@ window.filtrarRelatorio = function() {
 
     let filtrados = concluidos.filter(a => {
         let v = window.DADOS_VEICULOS.find(x => x.id === a.placa);
-        a.modelo = v ? v.modelo : '-'; 
-        a.secretariaReal = a.secretaria || (v ? v.secretaria : '-'); 
-        a.destinacaoReal = a.destinacao || (v ? v.destinacao : 'GERAL') || 'GERAL';
+        a.modelo = v ? (v.modelo || v.veiculo) : '-'; 
+        a.secretariaReal = a.secretaria || (v ? (v.secretaria || v.sec) : '-'); 
+        a.destinacaoReal = a.destinacao || (v ? (v.destinacao || 'GERAL') : 'GERAL') || 'GERAL';
         let origemReal = v ? (v.origem || 'Próprio') : 'Avulso';
         
         if(!podeVerTudo && !userSecs.includes(a.secretariaReal)) return false;
@@ -240,7 +339,7 @@ window.filtrarRelatorio = function() {
         if(fOrigemLanc === 'ExtraADM' && (!a.lancamentoManual || !String(a.nomeFrentista).includes('(ADM)'))) return false;
         
         if(fTxt) { 
-            let sTxt = `${a.placa} ${a.placaExibicao||''} ${a.modelo} ${a.motorista} ${a.nomePosto}`.toUpperCase(); 
+            let sTxt = `${a.placa} ${a.placaExibicao||''} ${a.modelo} ${a.motorista||''} ${a.nomePosto||''}`.toUpperCase(); 
             if(!sTxt.includes(fTxt)) return false; 
         }
         return true;
@@ -255,6 +354,7 @@ window.filtrarRelatorio = function() {
     
     filtrados.sort((a,b) => new Date(b.dataAbastecimento) - new Date(a.dataAbastecimento)); 
     let html = '';
+    
     filtrados.forEach(a => {
         let dFmt = new Date(a.dataAbastecimento).toLocaleString('pt-BR').slice(0, 16);
         let v = window.DADOS_VEICULOS.find(x => x.id === a.placa);
@@ -262,15 +362,9 @@ window.filtrarRelatorio = function() {
         let placaShow = a.placaExibicao ? `<span class="text-danger" title="Placa na Bomba: ${a.placaExibicao}">${a.placa}*</span>` : a.placa;
         let textSec = a.secretariaReal; if(a.destinacaoReal && a.destinacaoReal !== 'GERAL') textSec += `<br><small class="text-primary fw-bold">${a.destinacaoReal}</small>`;
         
-        // Versão Blindada do badgeStatus
-        let badgeStatus = `<span class="badge bg-secondary">-</span>`;
-        if (a.statusConsumo) {
-            if (a.statusConsumo.includes('Gastão')) badgeStatus = `<span class="badge bg-danger">Gastão</span>`;
-            else if (a.statusConsumo.includes('Econômico')) badgeStatus = `<span class="badge bg-success">Econômico</span>`;
-            else if (a.statusConsumo.includes('Na média')) badgeStatus = `<span class="badge bg-info text-dark">Na média</span>`;
-        }
+        let odoStr = (a.odometroPainel > 0) ? a.odometroPainel.toFixed(1) : '-';
 
-        html += `<tr><td class="text-nowrap">${dFmt}</td><td class="fw-bold text-nowrap">${placaShow}${origemInd}</td><td class="text-nowrap">${textSec}</td><td><small class="text-muted fw-bold">${a.nomePosto || '-'}</small></td><td><small class="text-secondary fw-bold">${a.tipoCombustivel || '-'}</small></td><td><small class="text-dark fw-bold">R$ ${window.safeCurrency(a.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</small></td><td class="text-primary fw-bold">${window.safeCurrency(a.quantidade).toLocaleString('pt-BR', {minimumFractionDigits: 3})}</td><td class="text-success fw-bold">${window.safeCurrency(a.valorTotal).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td><td class="text-dark fw-bold bg-light">${a.odometroSistema ? window.safeCurrency(a.odometroSistema).toFixed(1) : '-'}</td><td>${badgeStatus}</td><td class="d-print-none text-nowrap"><button onclick="window.abrirModalLancamentoAdm('${a.id}')" class="btn btn-sm btn-outline-dark" title="Editar"><i class="fas fa-edit"></i></button> <button onclick="window.excluirAbastecimento('${a.id}', '${a.placa}')" class="btn btn-sm btn-outline-danger ms-1" title="Excluir"><i class="fas fa-trash"></i></button></td></tr>`;
+        html += `<tr><td class="text-nowrap">${dFmt}</td><td class="fw-bold text-nowrap">${placaShow}${origemInd}</td><td class="text-nowrap">${textSec}</td><td><small class="text-muted fw-bold">${a.nomePosto || '-'}</small></td><td><small class="text-secondary fw-bold">${a.tipoCombustivel || '-'}</small></td><td><small class="text-dark fw-bold">R$ ${window.safeCurrency(a.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</small></td><td class="text-primary fw-bold">${window.safeCurrency(a.quantidade).toLocaleString('pt-BR', {minimumFractionDigits: 3})}</td><td class="text-success fw-bold">${window.safeCurrency(a.valorTotal).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td><td class="text-dark fw-bold bg-light">${odoStr}</td><td>-</td><td class="d-print-none text-nowrap"><button onclick="window.abrirModalLancamentoAdm('${a.id}')" class="btn btn-sm btn-outline-dark" title="Editar"><i class="fas fa-edit"></i></button> <button onclick="window.excluirAbastecimento('${a.id}', '${a.placa}')" class="btn btn-sm btn-outline-danger ms-1" title="Excluir"><i class="fas fa-trash"></i></button></td></tr>`;
     });
     
     let elTbRelat = document.getElementById('tbRelatBody');

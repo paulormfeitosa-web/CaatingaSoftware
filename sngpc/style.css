@@ -1,0 +1,29 @@
+:root { --p: #0077b6; --s: #03045e; --bg: #f8f9fa; --card-bg: #ffffff; }
+body { background-color: var(--bg); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; margin: 0; padding: 0; }
+.oculto { display: none !important; }
+
+.navbar-custom { background-color: var(--card-bg) !important; border-bottom: 2px solid var(--p); box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+.navbar-brand, .nav-link { color: var(--s) !important; font-weight: 500; cursor: pointer; transition: 0.3s; }
+.nav-link:hover, .nav-link.active { color: var(--p) !important; font-weight: bold; border-bottom: 2px solid var(--p); }
+
+.card-kpi { border-radius: 15px; border-left: 5px solid var(--p); background: white; transition: 0.2s ease; border: 1px solid #e9ecef; }
+.card-kpi:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
+
+#telaLogin { height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--s) 0%, #0077b6 100%); }
+.login-card { background: white; padding: 3rem; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 100%; max-width: 420px; text-align: center; border-top: 5px solid var(--p); }
+
+#loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+
+.btn-primary-custom { background-color: var(--p); color: white; border: none; font-weight: 600; transition: 0.3s; }
+.btn-primary-custom:hover { background-color: #023e8a; color: white; }
+.table-custom th { background-color: #f8f9fa; color: var(--s); font-weight: 600; text-transform: uppercase; font-size: 0.85rem; }
+
+.lote-row { background: #f1f8ff; border-radius: 8px; padding: 10px; margin-bottom: 10px; border: 1px solid #cfe2ff; }
+.carrinho-box { border: 2px dashed #cfe2ff; border-radius: 15px; padding: 15px; background: #fafcff; }
+
+.ts-control { border-radius: 0.375rem; padding: 0.6rem 0.75rem; border-color: #dee2e6; }
+.select-status-tx { cursor: pointer; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.select-status-tx:focus { outline: none; box-shadow: 0 0 0 3px rgba(0,119,182,0.2); }
+
+.tr-clicavel { cursor: pointer; transition: background-color 0.2s; }
+.tr-clicavel:hover { background-color: #f1f8ff !important; }

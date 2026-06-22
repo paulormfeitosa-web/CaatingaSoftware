@@ -1,3 +1,5 @@
+import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
 // --- VARIÁVEIS DE ESTADO GLOBAIS ---
 window.USUARIO = null;
 window.tenant = "";
@@ -27,7 +29,6 @@ window.PATHS = {
     rdvs: `caatinga_admin_rdv`
 };
 
-// CORREÇÃO: Adicionado 'd-none d-print-block' para ocultar da tela e exibir só na impressão
 window.BLOCO_ASSINATURA = `
 <div class="d-none d-print-block" style="margin-top: 60px; text-align: center; width: 100%; page-break-inside: avoid;">
     <div style="display: inline-block; width: 45%; margin-right: 2%;">
@@ -78,15 +79,20 @@ window.toggleButtonLoading = function(btn, isProcessing, customText = "Processan
     }
 };
 
-window.maskMoeda = function(e) {
-    if (!e || !e.target) return;
-    let input = e.target;
-    let val = input.value.replace(/\D/g, '');
-    if (val === '') { input.value = ''; return; }
-    val = (parseInt(val, 10) / 100).toFixed(2) + '';
-    val = val.replace(".", ",");
-    val = val.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
-    input.value = val;
+// --- UTILITÁRIOS MONETÁRIOS E DE FORMATAÇÃO ---
+const formatadorMoeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+window.formatarMoeda = function(valor) { 
+    return formatadorMoeda.format(Number(valor || 0)); 
+};
+
+window.aplicarMascaraMonetaria = function(elemento) {
+    let valor = elemento.value.replace(/\D/g, ""); 
+    if (valor === "") { 
+        elemento.value = ""; 
+        return; 
+    }
+    valor = (parseInt(valor, 10) / 100).toFixed(2); 
+    elemento.value = valor.replace(".", ",").replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1."); 
 };
 
 window.maskLitros = function(e) {
@@ -141,25 +147,8 @@ window.alternarModulo = function(idModulo) {
     if(viewEl) viewEl.classList.remove("hidden");
     if(navEl) navEl.classList.add("active");
 };
-// =========================================================
-// UTILITÁRIOS E IMPRESSÃO (IMPORTADOS DA MANUTENÇÃO)
-// =========================================================
 
-const formatadorMoeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-window.formatarMoeda = function(valor) { 
-    return formatadorMoeda.format(Number(valor || 0)); 
-};
-
-window.aplicarMascaraMonetaria = function(elemento) {
-    let valor = elemento.value.replace(/\D/g, ""); 
-    if (valor === "") { 
-        elemento.value = ""; 
-        return; 
-    }
-    valor = (parseInt(valor, 10) / 100).toFixed(2); 
-    elemento.value = valor.replace(".", ",").replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1."); 
-};
-
+// --- IMPRESSÃO UNIVERSAL ---
 window.imprimirDocumento = function(htmlConteudo, titulo) {
     let win = window.open('', '_blank');
     win.document.write(`
@@ -197,4 +186,43 @@ window.imprimirDocumento = function(htmlConteudo, titulo) {
     `);
     win.document.close();
     win.focus();
+};
+
+// ================= MOTOR CENTRAL DE ODÔMETRO (NOVA ESTRUTURA UNIFICADA) =================
+// Utilizado por: Abastecimento, RDV e Manutenção
+// Regra Base: O KM só avança se for MAIOR que o cadastrado no banco. Sem recálculos futuros.
+window.sincronizarOdometroCentral = async function(placa, novoKm) {
+    if(!placa || !novoKm || !window.tenant) return;
+    
+    let kmInformado = parseInt(novoKm) || 0;
+    if(kmInformado <= 0) return;
+
+    try {
+        const veicRef = doc(window.db, `${window.tenant}_veiculos`, placa);
+        const veicSnap = await getDoc(veicRef);
+        
+        if(veicSnap.exists()) {
+            let v = veicSnap.data();
+            let kmBanco = parseInt(v.km_atual) || parseInt(v.odometro) || parseInt(v.horimetro) || 0;
+            
+            // Regra de Ouro: O KM da ficha só avança, nunca recua automaticamente.
+            if(kmInformado > kmBanco) {
+                await setDoc(veicRef, {
+                    km_atual: kmInformado,
+                    odometro: kmInformado,
+                    horimetro: kmInformado
+                }, { merge: true });
+                
+                // Atualiza a variável global localmente para não precisar recarregar o banco à toa
+                let vLocal = window.DADOS_VEICULOS.find(x => x.id === placa);
+                if(vLocal) {
+                    vLocal.km_atual = kmInformado;
+                    vLocal.odometro = kmInformado;
+                    vLocal.horimetro = kmInformado;
+                }
+            }
+        }
+    } catch(e) {
+        console.error("Falha ao sincronizar o odômetro central:", e);
+    }
 };
