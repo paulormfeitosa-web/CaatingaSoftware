@@ -528,4 +528,80 @@ window.CompilarERenderizarPDF_Prefeitura = function() {
     let win = window.open('', '_blank');
     win.document.write(htmlPrint);
     win.document.close();
+
+    
+};
+// =========================================================================
+// FUNÇÕES PARA A LISTA INTELIGENTE DE MOTORISTAS (NO RDV)
+// =========================================================================
+
+window.BuscarMotoristaListaInteligente = function(texto) {
+    let dropdown = document.getElementById('lista-inteligente-dropdown');
+    if (!dropdown) return;
+
+    let termo = (texto || '').toUpperCase().trim();
+    let motoristas = window.DADOS_MOTORISTAS || [];
+
+    // Filtra motoristas (se 'termo' estiver vazio, mostra todos os ativos)
+    let filtrados = motoristas.filter(m => {
+        if (m.status === 'Inativo') return false;
+        if (!termo) return true;
+        return (m.nome || '').toUpperCase().includes(termo) || (m.cpf && m.cpf.includes(termo));
+    });
+
+    if (filtrados.length === 0) {
+        dropdown.innerHTML = '<div class="list-group-item text-muted small py-2 fw-bold text-center border-0 bg-light"><i class="fas fa-exclamation-circle text-warning"></i> Nenhum motorista encontrado.</div>';
+        dropdown.classList.remove('hidden');
+        return;
+    }
+
+    let html = '';
+    filtrados.forEach(m => {
+        html += `<button type="button" class="list-group-item list-group-item-action py-2 fw-bold border-bottom" onclick="window.AdicionarMotoristaTag('${m.nome}', '${m.id}')">
+            <i class="fas fa-user-circle text-primary me-2 fs-5"></i> ${m.nome}
+        </button>`;
+    });
+
+    dropdown.innerHTML = html;
+    dropdown.classList.remove('hidden');
+};
+
+// Fechar o dropdown automaticamente ao clicar em qualquer lugar fora da caixa
+document.addEventListener('click', function(event) {
+    let dropdown = document.getElementById('lista-inteligente-dropdown');
+    let input = document.getElementById('rdv-motorista-busca');
+    if (dropdown && !dropdown.contains(event.target) && event.target !== input) {
+        dropdown.classList.add('hidden');
+    }
+});
+
+window.AdicionarMotoristaTag = function(nome, id) {
+    let container = document.getElementById('container-motoristas-tags');
+    if(!container) return;
+
+    // Proteção: não deixa adicionar a mesma pessoa 2 vezes
+    let existente = container.querySelector(`[data-id="${id}"]`);
+    if(existente) {
+        alert("Este motorista já foi adicionado ao RDV!");
+        return;
+    }
+
+    // Cria a TAG (badge azul) visual
+    let tag = document.createElement('div');
+    tag.className = 'badge bg-primary fs-6 me-2 mb-2 p-2 d-inline-flex align-items-center shadow-sm';
+    tag.setAttribute('data-id', id);
+    tag.setAttribute('data-nome', nome);
+    tag.innerHTML = `
+        <i class="fas fa-steering-wheel me-2"></i> ${nome}
+        <i class="fas fa-times ms-3 text-white" style="cursor:pointer;" onclick="this.parentElement.remove()" title="Remover Motorista"></i>
+    `;
+    
+    container.appendChild(tag);
+    
+    // Esconde o dropdown e limpa a pesquisa
+    let dropdown = document.getElementById('lista-inteligente-dropdown');
+    if(dropdown) dropdown.classList.add('hidden');
+    
+    let input = document.getElementById('rdv-motorista-busca');
+    if(input) input.value = '';
 };

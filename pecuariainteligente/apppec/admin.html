@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Painel SaaS - Pecuária Inteligente</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#1A374D">
+  
+  <link rel="icon" type="image/png" href="./assets/icon-192.png">
+  <link rel="stylesheet" href="./css/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+</head>
+<body>
+
+<div id="loadingOverlay" class="oculto">
+  <div class="spinner-border spinner-custom" role="status"></div>
+  <div class="mt-2 fw-bold text-muted" id="loading-msg">A Processar...</div>
+</div>
+
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 9999">
+  <div id="liveToast" class="toast align-items-center text-white bg-success border-0 shadow" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fs-6" id="toastMsg">Sucesso!</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- TELA DE LOGIN DO ADMIN -->
+<div id="telaLoginAdmin">
+  <div class="login-card mx-auto mt-5" style="max-width: 400px; background: white; padding: 2.5rem; border-radius: 15px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); text-align: center;">
+    <h3 class="mb-2 fw-bold" style="color:#1A374D"><i class="bi bi-shield-lock"></i> Master Admin</h3>
+    <p class="text-muted mb-4">Gestão do Pecuária SaaS</p>
+    <div id="msgLogin" class="alert alert-danger oculto py-2 small"></div>
+    <form onsubmit="event.preventDefault(); window.logarAdmin();">
+      <div class="form-floating mb-3"><input type="email" id="adminEmail" class="form-control" placeholder="E-mail" required><label>E-mail do Administrador</label></div>
+      <div class="form-floating mb-4"><input type="password" id="adminSenha" class="form-control" placeholder="Senha" required><label>Senha</label></div>
+      <button type="submit" class="btn text-white w-100 py-3 fw-bold shadow-sm" style="background-color: #1A374D;">ACESSAR PAINEL</button>
+    </form>
+    
+    <!-- Botão oculto para primeiro setup do Admin (Use apenas uma vez e depois apague) -->
+    <button class="btn btn-sm btn-link text-muted mt-3" onclick="window.setupPrimeiroAdmin()" style="font-size: 0.7em;">Setup Inicial Admin</button>
+  </div>
+</div>
+
+<!-- SISTEMA ADMIN PRINCIPAL -->
+<div id="sistemaAdmin" class="oculto">
+  <nav class="navbar navbar-dark shadow-sm px-3 sticky-top" style="background-color: #1A374D;">
+    <span class="navbar-brand fw-bold"><i class="bi bi-bezier2"></i> Pecuária SaaS - Central de Clientes</span>
+    <div class="d-flex">
+      <button class="btn btn-sm text-white border-white" onclick="window.sairAdmin()">Sair do Painel</button>
+    </div>
+  </nav>
+
+  <div class="container-fluid mt-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h4 class="fw-bold text-dark m-0"><i class="bi bi-buildings"></i> Assinaturas Ativas</h4>
+      <button class="btn text-white fw-bold shadow-sm px-4" style="background-color: #E06C3F;" onclick="window.abrirModalNovoCliente()">+ Implantar Novo Cliente</button>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light">
+              <tr>
+                <th class="ps-4 py-3">ID da Propriedade (Tenant)</th>
+                <th>Plano Contratado</th>
+                <th>Status</th>
+                <th class="text-end pe-4">Ações do Sistema</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-clientes">
+              <!-- Linhas renderizadas via Javascript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE CADASTRO DE CLIENTE -->
+<div class="modal fade" id="modalNovoCliente" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header text-white" style="background-color: #E06C3F;">
+        <h5 class="modal-title fw-bold"><i class="bi bi-person-plus"></i> Configurar Nova Fazenda</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body bg-light">
+        <form onsubmit="event.preventDefault(); window.criarNovoCliente();">
+          <div class="mb-3">
+            <label class="small fw-bold">ID Curto da Propriedade (Sem espaços ou acentos)</label>
+            <input type="text" id="novo-tenantId" class="form-control" placeholder="ex: fazenda_sao_joao" required>
+            <small class="text-muted" style="font-size: 0.75em;">Este será o identificador único do banco de dados deste cliente.</small>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-12">
+              <label class="small fw-bold">Nome do Titular / Operador Principal</label>
+              <input type="text" id="novo-nome" class="form-control" placeholder="Nome Completo" required>
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="small fw-bold">CPF (Será o Login)</label>
+              <input type="text" id="novo-cpf" class="form-control" placeholder="Apenas números" required>
+            </div>
+            <div class="col-6">
+              <label class="small fw-bold">Senha Inicial</label>
+              <input type="text" id="novo-senha" class="form-control" value="Mudar@123" required>
+            </div>
+          </div>
+          <div class="mb-4 p-3 border rounded" style="background-color: white; border-color: #e5e7eb !important;">
+            <label class="small fw-bold text-dark d-block mb-2"><i class="bi bi-star-fill text-warning"></i> Nível do Plano de Acesso</label>
+            <select id="novo-plano" class="form-select border-secondary fw-bold">
+              <option value="bronze">🥉 Bronze (Básico + Gestão de Pastos)</option>
+              <option value="prata">🥈 Prata (Bronze + Financeiro + Histórico)</option>
+              <option value="ouro">🥇 Ouro (Prata + Leilões + Rastreabilidade Completa)</option>
+            </select>
+          </div>
+          <button type="submit" class="btn text-white w-100 fw-bold py-2" style="background-color: #1A374D;" id="btn-criar-cliente">Gerar Acesso e Criar Banco</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./js/admin.js"></script>
+</body>
+</html>

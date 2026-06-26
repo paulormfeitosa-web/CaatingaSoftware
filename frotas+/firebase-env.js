@@ -12,10 +12,20 @@ const firebaseConfig = {
     measurementId: "G-ZVSVPMDHP0" 
 };
 
-window.app = initializeApp(firebaseConfig);
-window.db = getFirestore(window.app);
-window.auth = getAuth(window.app);
+// 1. Inicializa os serviços do Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
 
+// 2. EXPORTA para que os outros arquivos (auth.js, dados.js) possam usar o 'import { db, auth }'
+export { app, db, auth };
+
+// 3. Mantém o espelho na 'window' para que as funções de clique no HTML consigam enxergá-los
+window.app = app;
+window.db = db;
+window.auth = auth;
+
+// Variáveis de sessão globais
 window.USUARIO = null;
 window.tenant = "";
 window.listenerUsuario = null;

@@ -1,12 +1,13 @@
 import { db } from './firebase-env.js';
-import { doc, setDoc, getDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 // =========================================================================
-// 1. FECHAMENTO E TRAVAS DE MÊS (AUDITORIA)
+// 1. FECHAMENTO E TRAVAS DE MÊS
 // =========================================================================
 window.obterPrecoVigente = function(nomePosto, dataIsoBase) {
+    if (!window.DADOS_POSTOS) return { Gasolina: 0, Diesel: 0, Etanol: 0 };
     let p = window.DADOS_POSTOS.find(x => x.nome === nomePosto);
-    if(!p) return { Gasolina: 0, Diesel: 0, Etanol: 0 };
+    if(!p || !dataIsoBase) return { Gasolina: 0, Diesel: 0, Etanol: 0 };
     let dBusca = dataIsoBase.slice(0, 10); 
     
     if(p.vigencias && p.vigencias.length > 0) {
@@ -39,11 +40,11 @@ window.verificarStatusMes = async function() {
         const docSnap = await getDoc(doc(db, `${window.tenant}_mesesFechados`, elMes.value));
         if (docSnap.exists() && docSnap.data().fechado === true) {
             btn.className = "btn btn-danger fw-bold shadow-sm text-nowrap"; 
-            btn.innerHTML = '<i class="fas fa-lock"></i> Mês Fechado (Clique p/ Reabrir)'; 
+            btn.innerHTML = '<i class="fas fa-lock"></i> Mês Fechado'; 
             btn.dataset.status = "fechado";
         } else {
             btn.className = "btn btn-success fw-bold shadow-sm text-nowrap"; 
-            btn.innerHTML = '<i class="fas fa-lock-open"></i> Mês Aberto (Clique p/ Trancar)'; 
+            btn.innerHTML = '<i class="fas fa-lock-open"></i> Mês Aberto'; 
             btn.dataset.status = "aberto";
         }
     } catch(e) { console.error(e); }
@@ -57,71 +58,53 @@ window.alternarTravaMes = async function() {
     let isFechado = btn.dataset.status === "fechado";
     const docRef = doc(db, `${window.tenant}_mesesFechados`, mesSelecionado);
     
-    window.toggleButtonLoading(btn, true);
+    if(window.toggleButtonLoading) window.toggleButtonLoading(btn, true);
     try {
         if (isFechado) { 
             if (confirm(`Deseja REABRIR o mês ${mesSelecionado} para edições?`)) { 
-                await setDoc(docRef, { fechado: false }, { merge: true }); alert("Mês reaberto."); 
+                await setDoc(docRef, { fechado: false }, { merge: true }); alert("Mês reaberto com sucesso."); 
             } 
         } else { 
-            if (confirm(`Deseja TRANCAR o mês ${mesSelecionado}? Lançamentos retroativos não serão mais permitidos neste período.`)) { 
-                await setDoc(docRef, { fechado: true, dataFechamento: new Date().toISOString() }, { merge: true }); alert("Mês trancado!"); 
+            if (confirm(`Deseja TRANCAR o mês ${mesSelecionado}? Edições não serão mais permitidas.`)) { 
+                await setDoc(docRef, { fechado: true, dataFechamento: new Date().toISOString() }, { merge: true }); alert("Mês trancado e protegido."); 
             } 
         }
         await window.verificarStatusMes(); 
-    } catch (e) { alert("Erro ao alterar status do mês."); console.error(e); } finally { window.toggleButtonLoading(btn, false); }
+    } catch (e) { alert("Erro ao alterar status."); console.error(e); } 
+    finally { if(window.toggleButtonLoading) window.toggleButtonLoading(btn, false); }
 };
 
 // =========================================================================
-// 2. NOVA AUDITORIA CIRÚRGICA DE FROTAS (Sem reprocessamento em cadeia)
+// 2. AUDITORIA VISUAL AVANÇADA
 // =========================================================================
 window.renderAnaliseFrota = function() {
-    let elAnalise = document.getElementById('tbAnaliseBody');
-    let elFreq = document.getElementById('listaAltaFrequencia');
-    let elCons = document.getElementById('listaMaiorConsumo');
-    
-    if(!elAnalise) return;
-
     let mesAtual = new Date().toISOString().slice(0, 7);
+    let elFreq = document.getElementById('listaVisualAltaFrequencia');
+    let elCons = document.getElementById('listaVisualMaiorConsumo');
+    let kpiFreq = document.getElementById('audi-kpi-freq');
+    
     let analise = window.DADOS_VEICULOS.map(v => {
-        let concluidosMes = window.DADOS_ABASTECIMENTOS.filter(a => a.placa === v.id && a.status === 'Concluído' && a.dataAbastecimento.startsWith(mesAtual));
-        concluidosMes.sort((a,b) => new Date(b.dataAbastecimento) - new Date(a.dataAbastecimento));
-        
-        let alertasDesvio = 0; // Removida a dependência de "saldoOdometro" do BD. Agora é calculado no renderAuditoria.
-        
-        return { 
-            placa: v.id, 
-            modelo: v.modelo || v.veiculo || '', 
-            secretaria: v.secretaria || v.sec || 'N/A', 
-            destinacao: v.destinacao || 'GERAL', 
-            odometro: v.km_atual || v.odometro || 0, 
-            tipoFrota: v.tipo_padronizado || v.tipoFrota, 
-            qtdAbastecimentosMes: concluidosMes.length, 
-            alertasDesvio: alertasDesvio 
-        };
+        let concluidosMes = window.DADOS_ABASTECIMENTOS.filter(a => a.placa === v.id && a.status === 'Concluído' && a.dataAbastecimento && a.dataAbastecimento.startsWith(mesAtual));
+        return { placa: v.id, qtdAbastecimentosMes: concluidosMes.length };
     });
     
     analise.sort((a,b) => b.qtdAbastecimentosMes - a.qtdAbastecimentosMes);
-    let h = ''; let hAlertaFrequencia = ''; let hAlertaConsumo = '';
+    let hAlertaFrequencia = '';
+    let totalAlertasFreq = 0;
     
     analise.forEach(v => {
-        let isCritico = v.qtdAbastecimentosMes > 8; 
-        h += `<tr class="${isCritico ? 'linha-critica' : ''} tr-auditoria">
-            <td class="fw-bold placa-busca text-start">${v.placa}<br><small class="text-muted fw-normal">${v.modelo}</small></td>
-            <td>${v.secretaria}<br><small class="text-primary fw-bold">${v.destinacao}</small></td>
-            <td class="text-dark fw-bold">${v.odometro.toFixed(1)} <small class="text-muted">${v.tipoFrota === 'Máquina' ? 'h' : 'km'}</small></td>
-            <td><span class="badge bg-dark">${v.qtdAbastecimentosMes} no mês</span></td>
-            <td class="fw-bold text-success fs-6 bg-light border-start"><i class="fas fa-check"></i> Monitorado</td>
-        </tr>`;
-        if(v.qtdAbastecimentosMes > 8) hAlertaFrequencia += `<div class="mb-1 border-bottom pb-1"><b class="text-danger">${v.placa}</b>: Alta frequência (<b>${v.qtdAbastecimentosMes} idas ao posto</b> no mês).</div>`;
+        if(v.qtdAbastecimentosMes > 8) {
+            totalAlertasFreq++;
+            hAlertaFrequencia += `<div class="mb-2 p-2 bg-white border border-danger rounded shadow-sm d-flex justify-content-between align-items-center"><b class="text-danger">${v.placa}</b> <span class="badge bg-danger rounded-pill">${v.qtdAbastecimentosMes} Idas ao Posto</span></div>`;
+        }
     });
     
-    elAnalise.innerHTML = h;
-    if(elFreq) elFreq.innerHTML = hAlertaFrequencia || '<div class="text-success fw-bold mt-2"><i class="fas fa-check-circle"></i> Frequência de abastecimentos normalizada.</div>';
-    if(elCons) elCons.innerHTML = hAlertaConsumo || '<div class="text-success fw-bold mt-2"><i class="fas fa-check-circle"></i> Análise de Média Ativa (Baseada nos lançamentos mais recentes)</div>';
+    if(kpiFreq) kpiFreq.innerText = totalAlertasFreq;
+    if(elFreq) elFreq.innerHTML = hAlertaFrequencia || '<div class="text-success fw-bold mt-2"><i class="fas fa-check-circle"></i> Nenhuma anomalia de frequência.</div>';
+    if(elCons) elCons.innerHTML = '<div class="text-success fw-bold mt-2"><i class="fas fa-check-circle"></i> As anomalias de média baseadas no histórico real são exibidas na tabela abaixo.</div>';
 };
 
-window.renderAuditoria = function() {
+window.renderAuditoriaVisual = function() {
     let mesFiltro = document.getElementById('fMesAuditoria') ? document.getElementById('fMesAuditoria').value : '';
     if(!mesFiltro) {
         let d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -138,54 +121,51 @@ window.renderAuditoria = function() {
     });
 
     let listaAuditoria = [];
+    let contOK = 0, contDesvio = 0;
 
     for(let placa in abastecimentosAgrupados) {
         let abasts = abastecimentosAgrupados[placa];
-        abasts.sort((a,b) => new Date(a.dataAbastecimento) - new Date(b.dataAbastecimento));
+        
+        let abastsOrdenadosTudo = [...abasts].sort((x,y) => new Date(x.dataAbastecimento || 0) - new Date(y.dataAbastecimento || 0));
+        let histKm = 0, histLts = 0;
+        if(abastsOrdenadosTudo.length > 1) {
+            let pPrimeiroOdo = window.safeCurrency(abastsOrdenadosTudo[0].odometroPainel);
+            let pUltimoOdo = window.safeCurrency(abastsOrdenadosTudo[abastsOrdenadosTudo.length-1].odometroPainel);
+            if (pUltimoOdo > pPrimeiroOdo) {
+                histKm = pUltimoOdo - pPrimeiroOdo;
+                for(let j=1; j<abastsOrdenadosTudo.length; j++) histLts += window.safeCurrency(abastsOrdenadosTudo[j].quantidade);
+            }
+        }
+        let mediaHistorica = (histKm > 0 && histLts > 0) ? (histKm / histLts) : 0;
 
-        for(let i = 0; i < abasts.length; i++) {
-            let a = abasts[i];
-            if(!a.dataAbastecimento.startsWith(mesFiltro)) continue;
+        for(let i = 0; i < abastsOrdenadosTudo.length; i++) {
+            let a = abastsOrdenadosTudo[i];
+            if(!a.dataAbastecimento || !a.dataAbastecimento.startsWith(mesFiltro)) continue;
 
-            let tempoUltimo = '-'; let alertaTempo = false; let diffKm = 0; let kmlReal = 0; let saldoLocal = 0;
+            let tempoUltimo = '-'; let alertaTempo = false; let diffKm = 0; let kmlReal = 0;
             
             if(i > 0) {
-                let ant = abasts[i-1];
-                let dataAtual = new Date(a.dataAbastecimento);
-                let dataAnt = new Date(ant.dataAbastecimento);
-                let diffMs = dataAtual - dataAnt;
-                let diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
-                let diffMin = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-                
-                tempoUltimo = `${diffHoras}h ${diffMin}m`;
-                if(diffHoras < 3) alertaTempo = true; 
+                let ant = abastsOrdenadosTudo[i-1];
+                if(a.dataAbastecimento && ant.dataAbastecimento) {
+                    let dataAtual = new Date(a.dataAbastecimento);
+                    let dataAnt = new Date(ant.dataAbastecimento);
+                    let diffMs = dataAtual - dataAnt;
+                    let diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
+                    let diffMin = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                    tempoUltimo = `${diffHoras}h ${diffMin}m`;
+                    if(diffHoras < 3) alertaTempo = true; 
+                }
                 
                 let odoAnt = window.safeCurrency(ant.odometroPainel);
                 let odoAt = window.safeCurrency(a.odometroPainel);
-                
                 if(odoAnt > 0 && odoAt > odoAnt) {
                     diffKm = odoAt - odoAnt;
                     let lts = window.safeCurrency(a.quantidade);
                     kmlReal = (lts > 0) ? (diffKm / lts) : 0;
-                    
-                    let veic = window.DADOS_VEICULOS.find(x => x.id === a.placa);
-                    let baseMedia = veic ? window.safeCurrency(veic.media) : 0;
-                    
-                    if(baseMedia > 0) {
-                        let esperadoKm = lts * baseMedia;
-                        saldoLocal = diffKm - esperadoKm;
-                    }
                 }
             }
 
-            let alertaKm = false;
-            if(saldoLocal < -15 || saldoLocal > 100) alertaKm = true; 
-
-            listaAuditoria.push({
-                a: a, tempoUltimo, alertaTempo, 
-                odoPainel: window.safeCurrency(a.odometroPainel), 
-                kmlReal, saldoLocal, alertaKm, dataObj: new Date(a.dataAbastecimento)
-            });
+            listaAuditoria.push({ a: a, tempoUltimo, alertaTempo, odoPainel: window.safeCurrency(a.odometroPainel), kmlReal, mediaHistorica, dataObj: new Date(a.dataAbastecimento) });
         }
     }
 
@@ -195,41 +175,60 @@ window.renderAuditoria = function() {
         let a = item.a;
         let v = window.DADOS_VEICULOS.find(x => x.id === a.placa);
         let dFmt = item.dataObj.toLocaleString('pt-BR').slice(0, 16);
-        
         let txtPainel = (item.odoPainel > 0) ? item.odoPainel.toFixed(1) : '<span class="text-muted">-</span>';
-        let txtSaldo = (item.saldoLocal !== 0) ? (item.saldoLocal > 0 ? '+'+item.saldoLocal.toFixed(1) : item.saldoLocal.toFixed(1)) : '-';
-        
-        let corTempo = item.alertaTempo ? 'text-danger fw-bold' : 'text-dark';
-        let iconeTempo = item.alertaTempo ? '<i class="fas fa-exclamation-triangle" title="Menos de 3h entre abastecimentos"></i> ' : '';
-        let corSaldo = item.saldoLocal >= 0 ? (item.alertaKm ? 'text-warning text-dark fw-bold' : 'text-success') : 'text-danger fw-bold';
-        
-        let statusClasse = (item.alertaTempo || item.alertaKm) ? 'linha-atencao' : 'linha-ok';
+        let statusClasse = '';
+        let badgeStatus = '<span class="badge bg-secondary">Aguardando Parâmetro</span>';
 
-        let badgeStatus = '-';
-        if(item.kmlReal > 0 && v && window.safeCurrency(v.media) > 0) {
-             let base = window.safeCurrency(v.media);
-             if (item.kmlReal < (base * 0.7)) badgeStatus = `<span class="badge bg-danger" title="Média Real: ${item.kmlReal.toFixed(2)} (Base: ${base})"><i class="fas fa-arrow-down"></i> Baixo Rencimento</span>`;
-             else if (item.kmlReal > (base * 1.3)) badgeStatus = `<span class="badge bg-warning text-dark" title="Média Real: ${item.kmlReal.toFixed(2)} (Base: ${base})"><i class="fas fa-arrow-up"></i> Alto Desvio</span>`;
-             else badgeStatus = `<span class="badge bg-success" title="Média Real: ${item.kmlReal.toFixed(2)} (Base: ${base})"><i class="fas fa-check"></i> Na média</span>`;
+        if(item.alertaTempo) statusClasse = 'linha-atencao';
+
+        if(item.kmlReal > 0 && item.mediaHistorica > 0) {
+             let margemInferior = item.mediaHistorica * 0.7; 
+             let margemSuperior = item.mediaHistorica * 1.3; 
+             
+             if (item.kmlReal < margemInferior) {
+                 badgeStatus = `<span class="badge bg-danger shadow-sm"><i class="fas fa-arrow-down"></i> Baixo Rendimento</span>`;
+                 statusClasse = 'linha-critica';
+                 contDesvio++;
+             } else if (item.kmlReal > margemSuperior) {
+                 badgeStatus = `<span class="badge bg-warning text-dark shadow-sm"><i class="fas fa-arrow-up"></i> Manipulação Odo.</span>`;
+                 statusClasse = 'linha-atencao';
+                 contDesvio++;
+             } else {
+                 badgeStatus = `<span class="badge bg-success shadow-sm"><i class="fas fa-check"></i> Normal</span>`;
+                 if(statusClasse === '') statusClasse = 'linha-ok';
+                 contOK++;
+             }
+        } else if (item.odoPainel > 0) {
+             badgeStatus = `<span class="badge bg-info text-dark shadow-sm"><i class="fas fa-check"></i> Informado</span>`;
+             if(statusClasse === '') statusClasse = 'linha-ok';
+             contOK++;
         }
+
+        let txtHistorica = item.mediaHistorica > 0 ? `${item.mediaHistorica.toFixed(1)} Km/L` : 'S/ Dados';
+        let txtRendimento = item.kmlReal > 0 ? `${item.kmlReal.toFixed(1)} Km/L` : '-';
+        let txtLocal = a.nomePosto ? a.nomePosto : (a.nomeFrentista && a.nomeFrentista.includes('ADM') ? 'Painel Administrativo' : 'Não Informado');
         
         hAuditoria += `<tr class="${statusClasse} tr-auditoria">
-            <td>${dFmt}</td>
+            <td class="text-nowrap">${dFmt}</td>
             <td class="fw-bold text-dark placa-busca">${a.placa}<br><small class="text-muted fw-normal">${v ? v.modelo || v.veiculo : '-'}</small></td>
-            <td><small>${a.nomePosto || '-'}</small></td>
-            <td class="${corTempo}">${iconeTempo}${item.tempoUltimo}</td>
-            <td class="fw-bold border-start">${txtPainel}</td>
-            <td>${badgeStatus}</td>
-            <td class="${corSaldo} border-end">${txtSaldo}</td>
+            <td><small class="fw-bold">${txtLocal}</small></td>
+            <td class="text-nowrap fw-bold ${item.alertaTempo ? 'text-danger' : 'text-dark'}">${item.tempoUltimo}</td>
+            <td class="fw-bold border-start border-dark">${txtPainel}</td>
+            <td>${badgeStatus}<br><small class="text-muted" style="font-size:10px;">Base Histórica: ${txtHistorica}</small></td>
+            <td class="fw-bold fs-6 ${item.kmlReal > 0 ? 'text-primary' : 'text-muted'}">${txtRendimento}</td>
         </tr>`;
     });
     
-    if(document.getElementById('tbAuditoriaBody')) {
-        document.getElementById('tbAuditoriaBody').innerHTML = hAuditoria || '<tr><td colspan="7" class="text-muted py-4">Nenhum registro no mês selecionado.</td></tr>';
-    }
+    let elTbAud = document.getElementById('tbAuditoriaVisualBody');
+    if(elTbAud) elTbAud.innerHTML = hAuditoria || '<tr><td colspan="7" class="text-muted py-5 fw-bold"><i class="fas fa-box-open fs-2 mb-2 d-block"></i>Nenhum registro encontrado neste mês.</td></tr>';
+
+    let elOk = document.getElementById('audi-kpi-ok'); if(elOk) elOk.innerText = contOK;
+    let elDesv = document.getElementById('audi-kpi-desvio'); if(elDesv) elDesv.innerText = contDesvio;
+    
+    if (window.renderAnaliseFrota) window.renderAnaliseFrota();
 };
 
-window.filtrarAuditoriaVisual = function() {
+window.filtrarAuditoriaNaTela = function() {
     let placaStr = document.getElementById('fAuditoriaPlaca') ? document.getElementById('fAuditoriaPlaca').value.toUpperCase() : '';
     let statusSel = document.getElementById('fAuditoriaStatus') ? document.getElementById('fAuditoriaStatus').value : 'todos';
 
@@ -247,63 +246,70 @@ window.filtrarAuditoriaVisual = function() {
     });
 };
 
-window.imprimirAuditoria = function() {
-    let hOciosidade = document.getElementById('tabelaOciosidade').outerHTML;
+window.imprimirPainelAuditoria = function() {
     let hDesvios = document.getElementById('tabelaAuditoriaSaldos').outerHTML;
     let mes = document.getElementById('fMesAuditoria').value.split('-').reverse().join('/');
 
-    let win = window.open('', '_blank', 'width=1000,height=600');
-    win.document.write(`
-        <html><head><title>Relatório de Auditoria de Frota</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    let htmlConteudo = `
         <style>
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; }
-            h3 { text-align: center; text-transform: uppercase; margin-bottom: 20px; color: #333; border-bottom: 2px solid #000; padding-bottom: 10px; }
-            h4 { margin-top: 30px; color: #555; font-size: 16px; margin-bottom: 10px; }
-            table { width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; margin-bottom: 20px; border: 1px solid #ccc; }
-            th, td { border: 1px solid #ccc; padding: 8px; }
-            th { background-color: #f2f2f2; }
-            .text-danger { color: red; }
-            .text-success { color: green; }
-            .text-primary { color: blue; }
-            .text-warning { color: darkgoldenrod; }
-            .text-muted { color: gray; }
-            .fw-bold { font-weight: bold; }
-            .badge { border: 1px solid #000; padding: 3px 5px; font-size: 10px; border-radius: 4px; }
-            .bg-danger { background-color: #f8d7da !important; color: #721c24 !important; }
-            .bg-warning { background-color: #fff3cd !important; color: #856404 !important; }
-            .linha-critica { background-color: #ffeeee !important; font-weight: bold; }
-            .linha-atencao { background-color: #fffdf2 !important; }
+            @page { size: A4 landscape; margin: 12mm; }
+            body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            h3 { text-align: center; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 5px;}
+            p.sub { text-align: center; font-weight: bold; margin-bottom: 20px; color: #444; }
+            h4 { color: #222; text-transform: uppercase; margin-top: 20px; font-size: 14px;}
+            table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: center; margin-top: 10px; }
+            th, td { border: 1px solid #555; padding: 6px; }
+            th { background-color: #e0e0e0 !important; font-weight: bold; color: #000; }
+            tr { page-break-inside: avoid; }
+            .linha-critica { background-color: #ffe6e6 !important; }
+            .linha-atencao { background-color: #fff3cd !important; }
+            .text-success { color: #006600 !important; }
+            .text-primary { color: #0000cc !important; }
+            .text-danger { color: #cc0000 !important; }
+            .text-warning { color: #cc8800 !important; }
+            .badge { padding: 4px; border: 1px solid #ccc; border-radius: 4px; display: inline-block; font-size: 10px; background: #fff;}
         </style>
-        </head><body>
-            <h3>RELATÓRIO DE AUDITORIA DE FROTA - MÊS: ${mes}</h3>
-            <h4><i class="fas fa-parking"></i> STATUS ATUAL DA FROTA</h4>
-            ${hOciosidade}
-            <h4><i class="fas fa-shield-alt"></i> HISTÓRICO DE DESVIOS E ABASTECIMENTOS DO MÊS</h4>
-            ${hDesvios}
-            ${window.BLOCO_ASSINATURA}
-            <script>setTimeout(() => { window.print(); window.close(); }, 500);<\/script>
-        </body></html>
-    `);
-    win.document.close();
+        <h3>RELATÓRIO GERENCIAL DE AUDITORIA DE FROTA (ANTIFRAUDE)</h3>
+        <p class="sub">PERÍODO ANALISADO: ${mes}</p>
+        <h4>DETALHAMENTO DE DESVIOS DE MÉDIA</h4>
+        ${hDesvios}
+        <div style="margin-top: 30px; font-size: 11px; color: #555; padding: 10px; border: 1px dashed #ccc; border-radius: 5px; page-break-inside: avoid;">
+          <b>Nota Explicativa:</b><br>
+          * A Avaliação de Desempenho acusa anomalia se o KM/L do momento for 30% maior ou menor do que a Base Histórica (média de todo o período no sistema) do próprio veículo.<br>
+          * Abastecimentos com menos de 3 horas de diferença apontam erro logístico ou suspeita de fragmentação.
+        </div>
+    `;
+    if(window.imprimirDocumento) window.imprimirDocumento(htmlConteudo, 'Auditoria_Frota_' + mes.replace('/',''));
 };
 
 // =========================================================================
-// 3. MAPAS GERENCIAIS E IMPRESSÕES GERAIS
+// 3. MAPAS GERENCIAIS (Aba Mapa Combustível)
 // =========================================================================
+
 window.filtrarRelatorio = function() {
     let ids = ['fIni', 'fFim', 'fSec', 'fDest', 'fComb', 'fPosto', 'fTexto', 'fOrigem', 'fOrigemLanc'];
     let els = {}; ids.forEach(id => els[id] = document.getElementById(id));
 
-    let fIni = els.fIni ? els.fIni.value : ''; 
-    let fFim = els.fFim ? els.fFim.value : '';
-    let fSec = els.fSec ? els.fSec.value.toUpperCase() : ''; 
-    let fDest = els.fDest ? els.fDest.value.toUpperCase() : '';
-    let fComb = els.fComb ? els.fComb.value : ''; 
-    let fPosto = els.fPosto ? els.fPosto.value.toUpperCase() : '';
-    let fTxt = els.fTexto ? els.fTexto.value.toUpperCase() : '';
-    let fOrigem = els.fOrigem ? els.fOrigem.value : ''; 
-    let fOrigemLanc = els.fOrigemLanc ? els.fOrigemLanc.value : ''; 
+    // A MÁGICA DO FILTRO AUTOMÁTICO PARA O MÊS ATUAL
+    if (!els.fIni.value && !els.fFim.value) {
+        let d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        let ano = d.getFullYear();
+        let mes = String(d.getMonth() + 1).padStart(2, '0');
+        let ultimoDia = new Date(ano, d.getMonth() + 1, 0).getDate();
+        
+        els.fIni.value = `${ano}-${mes}-01`;
+        els.fFim.value = `${ano}-${mes}-${ultimoDia}`;
+    }
+
+    let fIni = els.fIni.value; 
+    let fFim = els.fFim.value;
+    let fSec = els.fSec.value.toUpperCase(); 
+    let fDest = els.fDest.value.toUpperCase();
+    let fComb = els.fComb.value; 
+    let fPosto = els.fPosto.value.toUpperCase();
+    let fTxt = els.fTexto.value.toUpperCase();
+    let fOrigem = els.fOrigem.value; 
+    let fOrigemLanc = els.fOrigemLanc.value; 
 
     let tituloImp = "MAPA OFICIAL DE ABASTECIMENTO";
     let elTitulo = document.getElementById('tituloMapaPrint');
@@ -325,8 +331,10 @@ window.filtrarRelatorio = function() {
         let origemReal = v ? (v.origem || 'Próprio') : 'Avulso';
         
         if(!podeVerTudo && !userSecs.includes(a.secretariaReal)) return false;
-        if(fIni && a.dataAbastecimento < fIni) return false; 
-        if(fFim && a.dataAbastecimento > fFim + "T23:59") return false;
+        
+        if(fIni && (!a.dataAbastecimento || a.dataAbastecimento < fIni)) return false; 
+        if(fFim && (!a.dataAbastecimento || a.dataAbastecimento > fFim + "T23:59")) return false;
+        
         if(fSec && a.secretariaReal !== fSec) return false; 
         if(fDest && a.destinacaoReal !== fDest) return false;
         if(fComb && a.tipoCombustivel !== fComb) return false; 
@@ -352,11 +360,11 @@ window.filtrarRelatorio = function() {
     if(document.getElementById('kpiLitros')) document.getElementById('kpiLitros').innerText = tLitros.toLocaleString('pt-BR', {minimumFractionDigits: 2});
     if(document.getElementById('kpiQtd')) document.getElementById('kpiQtd').innerText = filtrados.length;
     
-    filtrados.sort((a,b) => new Date(b.dataAbastecimento) - new Date(a.dataAbastecimento)); 
+    filtrados.sort((a,b) => new Date(b.dataAbastecimento || 0) - new Date(a.dataAbastecimento || 0)); 
     let html = '';
     
     filtrados.forEach(a => {
-        let dFmt = new Date(a.dataAbastecimento).toLocaleString('pt-BR').slice(0, 16);
+        let dFmt = a.dataAbastecimento ? new Date(a.dataAbastecimento).toLocaleString('pt-BR').slice(0, 16) : '-';
         let v = window.DADOS_VEICULOS.find(x => x.id === a.placa);
         let origemInd = (v && v.origem === 'Locado') ? ' <span class="badge bg-info text-dark" title="Locado">L</span>' : '';
         let placaShow = a.placaExibicao ? `<span class="text-danger" title="Placa na Bomba: ${a.placaExibicao}">${a.placa}*</span>` : a.placa;
@@ -364,11 +372,56 @@ window.filtrarRelatorio = function() {
         
         let odoStr = (a.odometroPainel > 0) ? a.odometroPainel.toFixed(1) : '-';
 
-        html += `<tr><td class="text-nowrap">${dFmt}</td><td class="fw-bold text-nowrap">${placaShow}${origemInd}</td><td class="text-nowrap">${textSec}</td><td><small class="text-muted fw-bold">${a.nomePosto || '-'}</small></td><td><small class="text-secondary fw-bold">${a.tipoCombustivel || '-'}</small></td><td><small class="text-dark fw-bold">R$ ${window.safeCurrency(a.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</small></td><td class="text-primary fw-bold">${window.safeCurrency(a.quantidade).toLocaleString('pt-BR', {minimumFractionDigits: 3})}</td><td class="text-success fw-bold">${window.safeCurrency(a.valorTotal).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td><td class="text-dark fw-bold bg-light">${odoStr}</td><td>-</td><td class="d-print-none text-nowrap"><button onclick="window.abrirModalLancamentoAdm('${a.id}')" class="btn btn-sm btn-outline-dark" title="Editar"><i class="fas fa-edit"></i></button> <button onclick="window.excluirAbastecimento('${a.id}', '${a.placa}')" class="btn btn-sm btn-outline-danger ms-1" title="Excluir"><i class="fas fa-trash"></i></button></td></tr>`;
+        html += `<tr>
+            <td class="text-nowrap">${dFmt}</td>
+            <td class="fw-bold text-nowrap">${placaShow}${origemInd}</td>
+            <td class="text-nowrap">${textSec}</td>
+            <td><small class="text-muted fw-bold">${a.nomePosto || '-'}</small></td>
+            <td><small class="text-secondary fw-bold">${a.tipoCombustivel || '-'}</small></td>
+            <td><small class="text-dark fw-bold">R$ ${window.safeCurrency(a.precoUnitario).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</small></td>
+            <td class="text-primary fw-bold">${window.safeCurrency(a.quantidade).toLocaleString('pt-BR', {minimumFractionDigits: 3})}</td>
+            <td class="text-success fw-bold">${window.safeCurrency(a.valorTotal).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+            <td class="text-dark fw-bold bg-light">${odoStr}</td>
+            <td class="d-print-none text-nowrap"><button onclick="window.abrirModalLancamentoAdm('${a.id}')" class="btn btn-sm btn-outline-dark" title="Editar"><i class="fas fa-edit"></i></button> <button onclick="window.excluirAbastecimento('${a.id}', '${a.placa}')" class="btn btn-sm btn-outline-danger ms-1" title="Excluir"><i class="fas fa-trash"></i></button></td>
+        </tr>`;
     });
     
     let elTbRelat = document.getElementById('tbRelatBody');
     if(elTbRelat) elTbRelat.innerHTML = html;
+};
+
+// Nova Função Dedicada de Impressão do Mapa
+window.imprimirMapa = function() {
+    let area = document.getElementById('areaImpressao');
+    if(!area) return;
+    
+    let clone = area.cloneNode(true);
+    let acoesH = clone.querySelectorAll('.d-print-none');
+    acoesH.forEach(el => el.remove());
+
+    let htmlFinal = `
+    <style>
+        @page { size: A4 landscape; margin: 12mm; }
+        body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        h4 { text-align: center; text-transform: uppercase; font-size: 18px; margin-bottom: 20px; color: #222; border-bottom: 2px solid #000; padding-bottom: 10px;}
+        .row { display: flex; width: 100%; justify-content: space-between; margin-bottom: 20px; }
+        .col-4 { width: 32%; }
+        .kpi-card { border: 1px solid #444; padding: 12px; border-radius: 8px; text-align: center; font-weight: bold; background-color: #f9f9f9; }
+        .kpi-card h4 { font-size: 18px; margin: 0; padding: 0; border: none; color: #000; }
+        table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: center; margin-top: 15px; }
+        th, td { border: 1px solid #555; padding: 6px; }
+        th { background-color: #e0e0e0 !important; font-weight: bold; color: #000; }
+        tr { page-break-inside: avoid; }
+        .text-success { color: #006600 !important; }
+        .text-primary { color: #0000cc !important; }
+        .text-danger { color: #cc0000 !important; }
+        .text-muted { color: #666 !important; }
+        .d-print-none { display: none !important; }
+        .d-none { display: block !important; } /* Força exibir o título do print */
+    </style>
+    ${clone.outerHTML}
+    `;
+    if(window.imprimirDocumento) window.imprimirDocumento(htmlFinal, 'Mapa_Abastecimento');
 };
 
 window.imprimirDiario = function() {
@@ -383,12 +436,5 @@ window.imprimirDiario = function() {
     if(elIni) elIni.value = dataIso; if(elFim) elFim.value = dataIso;
     
     window.filtrarRelatorio(); 
-    setTimeout(() => { 
-        let area = document.getElementById('areaImpressao');
-        if(!area) return;
-        let printDiv = area.outerHTML; 
-        let win = window.open('', '_blank', 'width=1000,height=600');
-        win.document.write(`<html><head><title>Mapa Diário</title><link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet"><style>body { font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; } table { font-size: 11px; } th { background-color: #eee !important; color: #000 !important; }</style></head><body>${printDiv} ${window.BLOCO_ASSINATURA} <script>setTimeout(() => { window.print(); window.close(); }, 500);<\/script></body></html>`);
-        win.document.close();
-    }, 500); 
+    setTimeout(() => { window.imprimirMapa(); }, 500); 
 };

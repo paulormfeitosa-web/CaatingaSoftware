@@ -10,8 +10,27 @@
   <link rel="icon" href="/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    .kpi-card { transition: transform 0.2s; border-radius: 12px; }
+    .kpi-card:hover { transform: translateY(-4px); }
+    .card-alerta { border-left-width: 5px !important; border-radius: 10px; }
+    .card-alerta.critico { border-left-color: #dc3545 !important; background-color: #fff5f5; }
+    .card-alerta.atencao { border-left-color: #ffc107 !important; background-color: #fffdeb; }
+    .linha-critica { background-color: #ffe6e6 !important; }
+    .linha-atencao { background-color: #fff3cd !important; }
+    .linha-ok { background-color: #f8fff5 !important; }
+    .progress-bar-fundo { width: 100%; background: #e9ecef; border-radius: 6px; overflow: hidden; margin-top: 5px; height: 18px; }
+    .progress-bar-preenchimento { height: 100%; color: white; text-align: center; font-size: 11px; line-height: 18px; font-weight: bold; transition: width 0.3s ease; }
+    .img-preview { max-height: 120px; object-fit: cover; cursor: pointer; }
+    .min-vh-25 { min-height: 120px; }
+    @media print {
+      .no-print, nav, .modal-backdrop, .modal, .ferramentas-auditoria { display: none !important; }
+      body { background-color: #fff !important; }
+      .card { border: 1px solid #ccc !important; box-shadow: none !important; page-break-inside: avoid; }
+    }
+  </style>
 </head>
 
 <body>
@@ -22,13 +41,13 @@
   </div>
 
   <div id="viewLogin" class="container mt-5 hidden" style="max-width: 400px;">
-    <div class="card p-4 text-center shadow">
-      <h3 class="text-primary fw-bold mb-4">SISTEMA INTEGRADO</h3>
-      <p class="text-muted small mb-3">Frotas+ & Abastecimento</p>
-      <input type="text" id="userCpf" class="form-control mb-3" placeholder="CPF do Usuário">
-      <input type="password" id="userPass" class="form-control mb-3" placeholder="Senha">
-      <button onclick="window.fazerLogin()" id="btnLogin" class="btn btn-primary w-100 fw-bold py-2">ENTRAR</button>
-      <a href="/" class="btn btn-outline-secondary w-100 mt-2 py-2 fw-bold">Voltar ao Portal</a>
+    <div class="card p-4 text-center shadow border-0 rounded-4">
+      <h3 class="text-primary fw-bold mb-3"><i class="fas fa-gas-pump"></i> Frota & Abastecimento</h3>
+      <p class="text-muted small mb-4">Módulo de Controle e Inteligência</p>
+      <input type="text" id="userCpf" class="form-control form-control-lg mb-3" placeholder="CPF do Usuário">
+      <input type="password" id="userPass" class="form-control form-control-lg mb-3" placeholder="Senha">
+      <button onclick="window.fazerLogin()" id="btnLogin" class="btn btn-primary w-100 fw-bold py-3 fs-5 shadow">ENTRAR</button>
+      <a href="/" class="btn btn-outline-secondary w-100 mt-2 py-2 fw-bold border-0">Voltar ao Portal</a>
       <div id="msgLogin" class="text-danger mt-3 small fw-bold hidden"></div>
     </div>
   </div>
@@ -50,24 +69,26 @@
     <datalist id="listaDestinacoesGerais"></datalist>
     <datalist id="listaRotas"></datalist>
     <datalist id="listaNomesMotoristas"></datalist>
+    <datalist id="lista-fornecedores"></datalist>
 
     <div id="viewADM" class="hidden">
       <div class="card p-3 shadow-sm border-0 bg-white">
         <div class="d-flex justify-content-between align-items-center mb-3 no-print border-bottom pb-2">
-          <ul class="nav nav-tabs border-0 w-100">
+          <ul class="nav nav-tabs border-0 w-100 flex-wrap">
             <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" data-bs-target="#admDashboard"><i class="fas fa-chart-pie"></i> Dashboard</a></li>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admRDV"><i class="fas fa-clipboard-list"></i> RDV</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admRelat"><i class="fas fa-map"></i> Mapa Consolidado</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admAnalise"><i class="fas fa-search-dollar"></i> Auditoria</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admContratos"><i class="fas fa-file-contract"></i> Contratos</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admVeic"><i class="fas fa-car"></i> Frota & Máquinas</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admRelat"><i class="fas fa-map"></i> Mapa Combustível</a></li>
+            <li class="nav-item"><a class="nav-link text-primary fw-bold" data-bs-toggle="tab" data-bs-target="#admAnalise"><i class="fas fa-shield-alt"></i> Auditoria Visual</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admVeic"><i class="fas fa-car"></i> Frota</a></li>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admMotoristas"><i class="fas fa-users"></i> Equipe</a></li>
             <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admPostos"><i class="fas fa-gas-pump"></i> Postos</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" data-bs-target="#admConfig"><i class="fas fa-cog"></i> Prefeitura</a></li>
+            <li class="nav-item"><a class="nav-link text-success fw-bold" data-bs-toggle="tab" data-bs-target="#admContratos"><i class="fas fa-file-contract"></i> Contratos de Combustível</a></li>
+            <li class="nav-item"><a class="nav-link text-muted" data-bs-toggle="tab" data-bs-target="#admConfig"><i class="fas fa-cog"></i> Prefeitura</a></li>
           </ul>
         </div>
 
         <div class="tab-content">
+          <!-- DASHBOARD -->
           <div class="tab-pane fade show active" id="admDashboard">
             <div class="row mb-3">
               <div class="col-md-12">
@@ -76,21 +97,21 @@
             </div>
             <div class="row g-3 mb-4">
               <div class="col-md-4">
-                <div class="card p-3 border-start border-4 border-primary h-100">
-                  <div class="text-muted small fw-bold">VEÍCULOS ATIVOS</div>
+                <div class="card p-3 border-start border-4 border-primary h-100 kpi-card shadow-sm">
+                  <div class="text-muted small fw-bold">VEÍCULOS DISPONÍVEIS</div>
                   <h2 class="fw-bold text-dark my-1" id="dash-tot-veiculos">0</h2>
                   <div class="small text-success"><i class="fas fa-check"></i> Monitorados no sistema</div>
                 </div>
               </div>
               <div class="col-md-4">
-                <div class="card p-3 border-start border-4 border-warning h-100">
-                  <div class="text-muted small fw-bold">VEÍCULOS NA OFICINA</div>
+                <div class="card p-3 border-start border-4 border-warning h-100 kpi-card shadow-sm">
+                  <div class="text-muted small fw-bold">VEÍCULOS INATIVOS</div>
                   <h2 class="fw-bold text-dark my-1" id="dash-tot-oficina">0</h2>
-                  <div class="small text-warning"><i class="fas fa-exclamation-triangle"></i> Bloqueados para rota</div>
+                  <div class="small text-warning"><i class="fas fa-exclamation-triangle"></i> Oficina e Baixados</div>
                 </div>
               </div>
               <div class="col-md-4">
-                <div class="card p-3 border-start border-4 border-info h-100">
+                <div class="card p-3 border-start border-4 border-info h-100 kpi-card shadow-sm">
                   <div class="text-muted small fw-bold">TOTAL DE RDVs HOMOLOGADOS</div>
                   <h2 class="fw-bold text-dark my-1" id="dash-tot-rdv">0</h2>
                   <div class="small text-info"><i class="fas fa-file-pdf"></i> Arquivados historicamente</div>
@@ -121,6 +142,7 @@
             </div>
           </div>
 
+          <!-- RDV -->
           <div class="tab-pane fade" id="admRDV">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h4 class="fw-bold text-dark"><i class="fas fa-clipboard-list me-2 text-primary"></i>Gerenciador de RDV</h4>
@@ -128,61 +150,53 @@
             </div>
             <div class="row">
               <div class="col-lg-8">
-                <div class="card shadow-sm">
-                  <div class="card-header card-header-navy p-3 bg-dark text-white fw-bold"><i class="fas fa-edit me-2"></i>Dados Gerais e Parâmetros Técnicos</div>
+                <div class="card shadow-sm mb-4">
+                  <div class="card-header bg-dark text-white fw-bold"><i class="fas fa-edit me-2"></i>Dados Gerais</div>
                   <div class="card-body p-4">
                     <form id="form-master-rdv" onsubmit="event.preventDefault();">
                       <div class="row g-3 mb-4">
                         <div class="col-md-4 position-relative" id="rdv-veiculo-busca-container">
                           <label class="form-label fw-bold">Veículo (Placa)</label>
-                          <input type="text" id="rdv-veiculo-input" class="form-control fw-bold text-uppercase border-dark" placeholder="Digite a placa..." onkeyup="window.FiltrarLista('veiculo', this.value)" autocomplete="off">
-                          <div id="dropdown-veiculos" class="list-group position-absolute w-100 hidden" style="z-index: 1050; max-height: 250px; overflow-y: auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"></div>
+                          <input type="text" id="rdv-veiculo-input" class="form-control text-uppercase border-dark" placeholder="Placa..." onkeyup="window.FiltrarLista('veiculo', this.value)" autocomplete="off">
+                          <div id="dropdown-veiculos" class="list-group position-absolute w-100 hidden" style="z-index: 1050; max-height: 200px; overflow-y: auto;"></div>
                         </div>
                         <div class="col-md-4">
-                          <label class="form-label fw-bold">Data de Referência</label>
+                          <label class="form-label fw-bold">Data Referência</label>
                           <input type="date" id="rdv-data" class="form-control border-dark" required onchange="window.AcionarSincronizacaoRDV()">
                         </div>
                         <div class="col-md-4 position-relative" id="rdv-rota-busca-container">
-                          <label class="form-label fw-bold">Rota ou Destino</label>
-                          <input type="text" id="rdv-rota-input" class="form-control text-uppercase" placeholder="Digite ou busque..." onkeyup="window.FiltrarLista('rota', this.value)" autocomplete="off">
-                          <div id="dropdown-rotas" class="list-group position-absolute w-100 hidden" style="z-index: 1050; max-height: 250px; overflow-y: auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"></div>
+                          <label class="form-label fw-bold">Rota/Destino</label>
+                          <input type="text" id="rdv-rota-input" class="form-control text-uppercase" placeholder="Destino..." onkeyup="window.FiltrarLista('rota', this.value)" autocomplete="off">
+                          <div id="dropdown-rotas" class="list-group position-absolute w-100 hidden" style="z-index: 1050; max-height: 200px; overflow-y: auto;"></div>
                         </div>
                       </div>
 
                       <div class="row g-3 p-3 bg-light border rounded mb-4">
-                        <div class="col-md-12 d-flex justify-content-between align-items-center">
-                          <span class="fw-bold text-dark"><i class="fas fa-anchor me-2"></i>Odômetro / Horímetro</span>
+                        <div class="col-12 d-flex justify-content-between">
+                          <span class="fw-bold"><i class="fas fa-tachometer-alt me-2"></i>Odômetro</span>
                           <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="rdv-medidor-defeito" onchange="window.TratarMedidorDefeito(this.checked)">
-                            <label class="form-check-label fw-bold text-danger" for="rdv-medidor-defeito">Medidor com Defeito</label>
+                            <label class="form-check-label fw-bold text-danger" for="rdv-medidor-defeito">Defeito no Painel</label>
                           </div>
                         </div>
-                        <div class="col-md-6">
-                          <label class="form-label small fw-bold">Medidor Inicial</label>
-                          <input type="number" id="rdv-odo-inicial" class="form-control fw-bold text-center border-dark" placeholder="KM ou Horas">
-                        </div>
-                        <div class="col-md-6">
-                          <label class="form-label small fw-bold text-primary">Medidor Final</label>
-                          <input type="number" id="rdv-odo-final" class="form-control fw-bold text-center border-primary" placeholder="KM ou Horas">
-                        </div>
+                        <div class="col-md-6"><label class="small fw-bold">Medidor Inicial</label><input type="number" id="rdv-odo-inicial" class="form-control text-center border-dark" placeholder="KM ou Horas"></div>
+                        <div class="col-md-6"><label class="small fw-bold text-primary">Medidor Final</label><input type="number" id="rdv-odo-final" class="form-control text-center border-primary" placeholder="KM ou Horas"></div>
                         <div class="col-12">
                           <div id="resumo-rdv-calc" class="hidden"></div>
                         </div>
                       </div>
 
                       <div class="card border mb-4 shadow-none">
-                        <div class="card-header bg-secondary text-white p-2 fw-bold"><i class="fas fa-user-steering me-2"></i>Condutores (Lista Inteligente)</div>
+                        <div class="card-header bg-secondary text-white p-2 fw-bold"><i class="fas fa-users me-2"></i>Condutores (Lista Inteligente)</div>
                         <div class="card-body p-3">
-                          <div class="row g-2 mb-2">
-                            <div class="col-md-9 position-relative">
-                              <input type="text" id="rdv-motorista-busca" class="form-control" placeholder="Pesquisar motorista..." onkeyup="window.BuscarMotoristaListaInteligente(this.value)" autocomplete="off">
+                          <div class="d-flex gap-2 position-relative">
+                            <div class="w-100 position-relative">
+                              <input type="text" id="rdv-motorista-busca" class="form-control" placeholder="Buscar motorista..." onfocus="window.BuscarMotoristaListaInteligente(this.value)" onkeyup="window.BuscarMotoristaListaInteligente(this.value)" autocomplete="off">
                               <div id="lista-inteligente-dropdown" class="list-group position-absolute w-100 hidden" style="z-index:1050; max-height:200px; overflow-y:auto; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div>
                             </div>
-                            <div class="col-md-3">
-                              <button type="button" class="btn btn-primary w-100 fw-bold" onclick="window.AbrirModalMembroEquipe()"><i class="fas fa-plus"></i> Novo</button>
-                            </div>
+                            <button type="button" class="btn btn-primary fw-bold text-nowrap" onclick="window.AbrirModalMembroEquipe()"><i class="fas fa-plus"></i> Novo</button>
                           </div>
-                          <div id="container-motoristas-tags" class="p-2 border rounded bg-white min-vh-25 mt-2"></div>
+                          <div id="container-motoristas-tags" class="p-2 border rounded bg-light mt-2 min-vh-25"></div>
                         </div>
                       </div>
 
@@ -192,35 +206,14 @@
                           <button type="button" class="btn btn-xs btn-light fw-bold py-0 px-2" onclick="window.AdicionarLinhaAbastecimento()"><i class="fas fa-plus text-success"></i> Linha Manual</button>
                         </div>
                         <div class="card-body p-0 table-responsive">
-                          <table class="table table-bordered table-sm align-middle text-center m-0" id="tabela-rdv-abastecimentos">
-                            <thead class="table-light">
-                              <tr>
-                                <th>Posto / Local</th>
-                                <th>Combustível</th>
-                                <th>Litros</th>
-                                <th>Odômetro BD</th>
-                                <th>R$ Total</th>
-                                <th style="width:50px;">-</th>
-                              </tr>
-                            </thead>
+                          <table class="table table-bordered table-sm text-center m-0" id="tabela-rdv-abastecimentos">
+                            <thead class="table-light"><tr><th>Posto</th><th>Combustível</th><th>Litros</th><th>Painel BD</th><th>Valor</th><th>-</th></tr></thead>
                             <tbody id="corpo-rdv-abastecimentos"></tbody>
                           </table>
                         </div>
                       </div>
 
-                      <div class="card border mb-4 shadow-none">
-                        <div class="card-header bg-warning text-dark p-2 fw-bold d-flex justify-content-between align-items-center">
-                          <span><i class="fas fa-hammer me-2"></i>Manutenção e Oficina</span>
-                          <div class="form-check form-check-inline m-0">
-                            <input class="form-check-input" type="checkbox" id="rdv-veiculo-oficina" onchange="window.AlternarCamposOficina(this.checked)">
-                            <label class="form-check-label fw-bold text-dark" for="rdv-veiculo-oficina">Veículo na Oficina Hoje</label>
-                          </div>
-                        </div>
-                        <div class="card-body p-3">
-                          <textarea id="rdv-oficina-descricao" class="form-control" rows="2" placeholder="Descreva manutenções, trocas de óleo ou ocorrências do dia..."></textarea>
-                        </div>
-                      </div>
-
+                      <!-- EVIDÊNCIAS SEPARADAS E RESTAURADAS COM SUCESSO -->
                       <div class="card border mb-4 shadow-none">
                         <div class="card-header bg-dark text-white p-2 fw-bold"><i class="fas fa-images me-2"></i>Evidências Fotográficas (Galeria Múltipla)</div>
                         <div class="card-body p-3">
@@ -269,7 +262,6 @@
                   </div>
                 </div>
               </div>
-
               <div class="col-lg-4">
                 <div class="card shadow-sm">
                   <div class="card-header bg-secondary text-white p-3 fw-bold"><i class="fas fa-history me-2"></i>Últimos RDVs Gerados</div>
@@ -281,9 +273,10 @@
             </div>
           </div>
 
+          <!-- MAPA COMBUSTÍVEL -->
           <div class="tab-pane fade" id="admRelat">
             <div class="d-flex justify-content-between mb-3 no-print">
-              <h5 class="fw-bold text-secondary">Mapa Consolidado</h5>
+              <h5 class="fw-bold text-secondary"><i class="fas fa-map-marked-alt"></i> Mapa Consolidado de Abastecimento</h5>
               <button class="btn btn-primary btn-sm fw-bold shadow-sm" onclick="window.abrirModalLancamentoAdm()"><i class="fas fa-plus"></i> Lançamento Retroativo</button>
             </div>
 
@@ -293,77 +286,44 @@
                 <div class="col-md-2"><label class="small fw-bold">Fim</label><input type="date" id="fFim" class="form-control form-control-sm" onchange="window.filtrarRelatorio()"></div>
                 <div class="col-md-2"><label class="small fw-bold">Secretaria</label><select id="fSec" class="form-select form-select-sm" onchange="window.filtrarRelatorio()"></select></div>
                 <div class="col-md-2"><label class="small fw-bold">Destinação</label><select id="fDest" class="form-select form-select-sm" onchange="window.filtrarRelatorio()"></select></div>
-                <div class="col-md-2"><label class="small fw-bold">Combustível</label><select id="fComb" class="form-select form-select-sm" onchange="window.filtrarRelatorio()">
-                    <option value="">Todos</option>
-                    <option value="Gasolina">Gasolina</option>
-                    <option value="Diesel">Diesel</option>
-                    <option value="Etanol">Etanol</option>
-                  </select></div>
+                <div class="col-md-2">
+                  <label class="small fw-bold">Combustível</label>
+                  <select id="fComb" class="form-select form-select-sm" onchange="window.filtrarRelatorio()">
+                    <option value="">Todos</option><option value="Gasolina">Gasolina</option><option value="Diesel">Diesel</option><option value="Etanol">Etanol</option>
+                  </select>
+                </div>
                 <div class="col-md-2">
                   <label class="small fw-bold">Lançamento</label>
                   <select id="fOrigemLanc" class="form-select form-select-sm" onchange="window.filtrarRelatorio()">
-                    <option value="">Todos</option>
-                    <option value="App">App (Normal / Fila)</option>
-                    <option value="Manual">Qualquer Extra / Retroativo</option>
-                    <option value="ExtraPosto">Extra (Gerente do Posto)</option>
-                    <option value="ExtraADM">Retroativo (ADM)</option>
+                    <option value="">Todos</option><option value="App">App (Normal / Fila)</option><option value="Manual">Retroativos / Manuais</option>
                   </select>
                 </div>
-
-                <div class="col-md-2"><label class="small fw-bold">Origem (Frota)</label><select id="fOrigem" class="form-select form-select-sm" onchange="window.filtrarRelatorio()">
-                    <option value="">Todas</option>
-                    <option value="Próprio">Próprio</option>
-                    <option value="Locado">Locado</option>
-                  </select></div>
+                <div class="col-md-2">
+                  <label class="small fw-bold">Origem (Frota)</label>
+                  <select id="fOrigem" class="form-select form-select-sm" onchange="window.filtrarRelatorio()">
+                    <option value="">Todas</option><option value="Próprio">Próprio</option><option value="Locado">Locado</option>
+                  </select>
+                </div>
                 <div class="col-md-2"><label class="small fw-bold">Posto</label><select id="fPosto" class="form-select form-select-sm" onchange="window.filtrarRelatorio()"></select></div>
                 <div class="col-md-6"><label class="small fw-bold">Busca Livre</label><input type="text" id="fTexto" class="form-control form-control-sm" placeholder="Buscar Placa, Modelo, Motorista..." onkeyup="window.filtrarRelatorio()"></div>
                 <div class="col-md-2 d-flex gap-1 align-items-end">
-                  <button onclick="window.print()" class="btn btn-dark btn-sm w-100 fw-bold"><i class="fas fa-print"></i> Mapa</button>
+                  <button onclick="window.imprimirMapa()" class="btn btn-dark btn-sm w-100 fw-bold"><i class="fas fa-print"></i> PDF</button>
                   <button onclick="window.imprimirDiario()" class="btn btn-info btn-sm w-100 fw-bold text-white"><i class="fas fa-calendar-day"></i> Diário</button>
                 </div>
               </div>
             </div>
 
             <div id="areaImpressao" class="mt-3">
-              <h4 id="tituloMapaPrint" class="text-center d-none d-print-block mb-4 fw-bold text-uppercase">MAPA OFICIAL DE ABASTECIMENTO</h4>
-
+              <h4 id="tituloMapaPrint" class="text-center d-none d-print-block mb-4 fw-bold text-uppercase">MAPA DE ABASTECIMENTO</h4>
               <div class="row g-3 mb-4">
-                <div class="col-4">
-                  <div class="kpi-card text-center p-3 border rounded bg-white shadow-sm border-start border-success border-4">
-                    <h4 class="text-success fw-bold mb-0">R$ <span id="kpiValor">0,00</span></h4>
-                    <small class="text-muted fw-bold">Total Gasto</small>
-                  </div>
-                </div>
-                <div class="col-4">
-                  <div class="kpi-card text-center p-3 border rounded bg-white shadow-sm border-start border-primary border-4">
-                    <h4 class="text-primary fw-bold mb-0"><span id="kpiLitros">0,00</span> L</h4>
-                    <small class="text-muted fw-bold">Total Litros</small>
-                  </div>
-                </div>
-                <div class="col-4">
-                  <div class="kpi-card text-center p-3 border rounded bg-white shadow-sm border-start border-secondary border-4">
-                    <h4 class="text-secondary fw-bold mb-0"><span id="kpiQtd">0</span></h4>
-                    <small class="text-muted fw-bold">Abastecimentos</small>
-                  </div>
-                </div>
+                <div class="col-4"><div class="kpi-card text-center p-3 border rounded bg-white shadow-sm border-start border-success border-4"><h4 class="text-success fw-bold mb-0">R$ <span id="kpiValor">0,00</span></h4><small class="text-muted fw-bold">Total Gasto</small></div></div>
+                <div class="col-4"><div class="kpi-card text-center p-3 border rounded bg-white shadow-sm border-start border-primary border-4"><h4 class="text-primary fw-bold mb-0"><span id="kpiLitros">0,00</span> L</h4><small class="text-muted fw-bold">Total Litros</small></div></div>
+                <div class="col-4"><div class="kpi-card text-center p-3 border rounded bg-white shadow-sm border-start border-secondary border-4"><h4 class="text-secondary fw-bold mb-0"><span id="kpiQtd">0</span></h4><small class="text-muted fw-bold">Abastecimentos</small></div></div>
               </div>
-
               <div class="table-responsive bg-white shadow-sm rounded border">
                 <table class="table table-hover table-bordered align-middle mb-0 text-center" style="font-size: 0.85rem;">
                   <thead class="table-dark">
-                    <tr>
-                      <th>Data</th>
-                      <th>Identificação</th>
-                      <th>Sec/Destinação</th>
-                      <th>Posto</th>
-                      <th>Combustível</th>
-                      <th>Preço/L</th>
-                      <th>Litros</th>
-                      <th>Valor R$</th>
-                      <th>Odo/Hor Proj.</th>
-                      <th>Status Consumo</th>
-                      <th class="d-print-none">Ações</th>
-                    </tr>
+                    <tr><th>Data</th><th>Identificação</th><th>Sec/Destinação</th><th>Posto</th><th>Combustível</th><th>R$/L</th><th>Litros</th><th>Valor R$</th><th>Odo/Hor</th><th class="d-print-none">Ações</th></tr>
                   </thead>
                   <tbody id="tbRelatBody"></tbody>
                 </table>
@@ -371,97 +331,260 @@
             </div>
           </div>
 
+          <!-- AUDITORIA VISUAL -->
           <div class="tab-pane fade" id="admAnalise">
-            <div class="card p-3 mb-4 border-0 shadow-sm border-start border-dark border-4 bg-light">
-              <div class="d-flex justify-content-between align-items-center">
+            <div class="card p-3 mb-4 border-0 shadow-sm bg-dark text-white rounded-3">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
-                  <h6 class="fw-bold text-dark mb-1"><i class="fas fa-lock"></i> Fechamento de Mês</h6>
-                  <small class="text-muted">Tranque meses passados para impedir edições, exclusões ou lançamentos retroativos acidentais.</small>
+                  <h5 class="fw-bold mb-1 text-warning"><i class="fas fa-shield-alt"></i> Central de Auditoria Antifraude</h5>
+                  <p class="mb-0 small text-light opacity-75">Análise dinâmica com base na média histórica real dos veículos.</p>
                 </div>
-                <div class="d-flex gap-2 align-items-center">
-                  <input type="month" id="fMesFechamento" class="form-control border-dark" onchange="window.verificarStatusMes()">
-                  <button id="btnTravarMes" onclick="window.alternarTravaMes()" class="btn btn-secondary fw-bold shadow-sm text-nowrap"><i class="fas fa-lock"></i> Checando...</button>
+                <div class="d-flex gap-2 bg-white bg-opacity-10 p-2 rounded">
+                  <input type="month" id="fMesFechamento" class="form-control form-control-sm border-0">
+                  <button id="btnTravarMes" onclick="window.alternarTravaMes()" class="btn btn-light btn-sm fw-bold shadow-sm text-nowrap"><i class="fas fa-lock"></i> Trancar Mês</button>
                 </div>
               </div>
             </div>
 
-            <div class="ferramentas-auditoria no-print d-flex justify-content-between align-items-center mb-3">
-              <div class="d-flex gap-2">
-                <input type="text" id="fAuditoriaPlaca" class="form-control border-dark" placeholder="Buscar Placa ou Modelo..." oninput="window.filtrarAuditoriaVisual()">
-                <select id="fAuditoriaStatus" class="form-select border-dark" onchange="window.filtrarAuditoriaVisual()">
-                  <option value="todos">Todos os Status (Alertas + OK)</option>
-                  <option value="alerta">Apenas Linhas de Alerta (Cores)</option>
-                  <option value="ok">Apenas Linhas OK (Sem Alertas)</option>
-                </select>
-                <input type="month" id="fMesAuditoria" class="form-control border-dark" title="Mês Base de Análise" onchange="window.renderAuditoria()">
+            <div class="row g-2 mb-4">
+               <div class="col-md-3">
+                  <label class="small fw-bold text-muted">Mês Analisado</label>
+                  <input type="month" id="fMesAuditoria" class="form-control form-control-lg border-dark fw-bold text-primary" onchange="window.renderAuditoriaVisual()">
+               </div>
+               <div class="col-md-3">
+                  <label class="small fw-bold text-muted">Filtrar Alertas Visuais</label>
+                  <select id="fAuditoriaStatus" class="form-select form-select-lg border-dark" onchange="window.filtrarAuditoriaNaTela()">
+                    <option value="todos">Exibir Tudo (Alertas + OK)</option>
+                    <option value="alerta">Apenas Linhas com Alerta (Cores)</option>
+                    <option value="ok">Apenas Comportamento OK (Verde)</option>
+                  </select>
+               </div>
+               <div class="col-md-4">
+                  <label class="small fw-bold text-muted">Buscar Placa ou Modelo</label>
+                  <input type="text" id="fAuditoriaPlaca" class="form-control form-control-lg border-dark text-uppercase" placeholder="Filtrar..." oninput="window.filtrarAuditoriaNaTela()">
+               </div>
+               <div class="col-md-2 d-flex align-items-end">
+                  <button class="btn btn-dark btn-lg w-100 fw-bold shadow-sm" onclick="window.imprimirPainelAuditoria()"><i class="fas fa-print"></i> PDF Auditoria</button>
+               </div>
+            </div>
+
+            <div class="row g-3 mb-4 text-center">
+              <div class="col-md-4">
+                <div class="card p-3 border-0 shadow-sm bg-white h-100 rounded-3 border-bottom border-4 border-success">
+                  <div class="text-muted small fw-bold text-uppercase mb-1"><i class="fas fa-check-circle text-success"></i> Abastecimentos Normais</div>
+                  <h2 class="fw-bold text-dark m-0" id="audi-kpi-ok">0</h2>
+                </div>
               </div>
-              <div class="d-flex gap-2">
-                <button class="btn btn-warning fw-bold shadow-sm px-3" onclick="window.reprocessarFrotaMes(document.getElementById('fMesAuditoria').value)" title="Recalcula hodômetros e consumo do mês"><i class="fas fa-sync-alt"></i> Recalcular Mês</button>
-                <button class="btn btn-dark fw-bold shadow-sm px-4" onclick="window.imprimirAuditoria()"><i class="fas fa-print"></i> Imprimir Auditoria</button>
+              <div class="col-md-4">
+                <div class="card p-3 border-0 shadow-sm bg-white h-100 rounded-3 border-bottom border-4 border-warning">
+                  <div class="text-muted small fw-bold text-uppercase mb-1"><i class="fas fa-exclamation-triangle text-warning"></i> Anomalias de Média</div>
+                  <h2 class="fw-bold text-dark m-0" id="audi-kpi-desvio">0</h2>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="card p-3 border-0 shadow-sm bg-white h-100 rounded-3 border-bottom border-4 border-danger">
+                  <div class="text-muted small fw-bold text-uppercase mb-1"><i class="fas fa-gas-pump text-danger"></i> Alta Frequência (Ids)</div>
+                  <h2 class="fw-bold text-dark m-0" id="audi-kpi-freq">0</h2>
+                </div>
               </div>
             </div>
 
-            <div class="row g-3 mb-4 cards-alertas">
+            <div class="row g-3 mb-4 no-print">
               <div class="col-md-6">
-                <div class="card-alerta critico h-100 p-3 border rounded">
-                  <h6 class="fw-bold mb-3" style="color: #721c24;"><i class="fas fa-gas-pump"></i> Alerta: Alta Frequência (Mês Atual)</h6>
-                  <div id="listaAltaFrequencia" class="small"></div>
+                <div class="card card-alerta critico h-100 p-3 border-0 shadow-sm">
+                  <h6 class="fw-bold mb-2 text-danger"><i class="fas fa-exclamation-circle"></i> Ranking: Alta Frequência (Posto)</h6>
+                  <div id="listaVisualAltaFrequencia" class="small"></div>
                 </div>
               </div>
               <div class="col-md-6">
-                <div class="card-alerta atencao h-100 p-3 border rounded">
-                  <h6 class="fw-bold mb-3" style="color: #856404;"><i class="fas fa-chart-line"></i> Alerta: Alto Consumo / Desvios (Mês Atual)</h6>
-                  <div id="listaMaiorConsumo" class="small"></div>
+                <div class="card card-alerta atencao h-100 p-3 border-0 shadow-sm">
+                  <h6 class="fw-bold mb-2 text-warning text-dark"><i class="fas fa-chart-bar"></i> Alertas Passivos de Consumo</h6>
+                  <div id="listaVisualMaiorConsumo" class="small"></div>
                 </div>
               </div>
             </div>
 
-            <h6 class="fw-bold text-secondary mb-3 mt-2"><i class="fas fa-tachometer-alt"></i> Análise Cirúrgica do Mês</h6>
-            <div class="alert alert-light border small text-muted">
-              <b>Auditoria Mês Vigente:</b> Foco na quantidade de idas ao posto e anomalias de consumo baseadas no desvio (km rodada informada vs projetada pela média). O sistema interpola os km em branco automaticamente quando um hodômetro real é lançado.
-            </div>
-            <div class="table-responsive shadow-sm bg-white rounded border mb-4">
-              <table class="table table-hover align-middle mb-0 text-center" id="tabelaOciosidade">
-                <thead class="table-light">
-                  <tr>
-                    <th>Placa / Modelo</th>
-                    <th>Secretaria / Dest.</th>
-                    <th>Último Odo/Hor</th>
-                    <th>Abastecimentos (Mês)</th>
-                    <th>Saldo Atual (Desvio)</th>
-                  </tr>
-                </thead>
-                <tbody id="tbAnaliseBody"></tbody>
-              </table>
-            </div>
-
-            <h6 class="fw-bold text-secondary mb-3 mt-4 border-top pt-3"><i class="fas fa-shield-alt"></i> Histórico de Desvios (Mês Específico)</h6>
+            <h5 class="fw-bold text-secondary mb-3 mt-2"><i class="fas fa-tachometer-alt"></i> Linha do Tempo e Consistência de Dados</h5>
             <div class="table-responsive shadow-sm bg-white rounded border">
               <table class="table table-hover align-middle mb-0 text-center" id="tabelaAuditoriaSaldos">
-                <thead class="table-dark">
+                <thead class="table-light text-muted small text-uppercase">
                   <tr>
                     <th>Data / Hora</th>
-                    <th>Placa (Veículo)</th>
-                    <th>Posto</th>
-                    <th>Intervalo (h/m)</th>
-                    <th>Odo Informado</th>
-                    <th>Status Média</th>
-                    <th>Desvio do Período (Saldo)</th>
+                    <th>Identificação</th>
+                    <th>Local (Posto)</th>
+                    <th>Intervalo Tempo</th>
+                    <th>Odômetro BD</th>
+                    <th>Avaliação do Sistema</th>
+                    <th>Desvio Km/L</th>
                   </tr>
                 </thead>
-                <tbody id="tbAuditoriaBody"></tbody>
+                <tbody id="tbAuditoriaVisualBody">
+                   <tr><td colspan="7" class="py-4 text-muted">Carregando...</td></tr>
+                </tbody>
               </table>
             </div>
           </div>
 
+          <!-- FROTA -->
+          <div class="tab-pane fade" id="admVeic">
+            <div class="row g-2 mb-4 bg-light p-3 rounded border shadow-sm">
+              <input type="hidden" id="hdnOldPlaca">
+              <div class="col-md-2"><label class="small fw-bold">Tipo</label><select id="vTipo" class="form-select fw-bold"><option value="Veículo">Veículo</option><option value="Máquina">Máquina</option></select></div>
+              <div class="col-md-2"><label class="small fw-bold">Origem</label><select id="vOrigem" class="form-select fw-bold"><option value="Próprio">Próprio</option><option value="Locado">Locado</option></select></div>
+              <div class="col-md-2"><label class="small fw-bold">Placa / ID</label><input id="vPlaca" class="form-control text-uppercase fw-bold" placeholder="ABC1D23"></div>
+              <div class="col-md-2"><label class="small fw-bold">Modelo</label><input id="vModelo" class="form-control" placeholder="Ex: Gol"></div>
+
+              <div class="col-md-2"><label class="small fw-bold text-dark">Secretaria</label><input id="vSec" class="form-control text-uppercase border-dark" placeholder="Ex: SAUDE" list="listaSecretarias" onchange="window.atualizarDestinacoesVeiculo()"></div>
+              <div class="col-md-2"><label class="small fw-bold text-primary">Destinação</label><select id="vDest" class="form-select border-primary fw-bold"><option value="GERAL">GERAL</option></select></div>
+
+              <div class="col-md-2"><label class="small fw-bold">Combustível Fixo</label><select id="vComb" class="form-select fw-bold"><option value="Gasolina">Gasolina</option><option value="Diesel">Diesel</option><option value="Etanol">Etanol</option></select></div>
+              <div class="col-md-2"><label class="small fw-bold text-primary">Média Real (Mês)</label><input id="vMediaReal" type="text" class="form-control fw-bold text-primary bg-light" readonly placeholder="Calculado auto" title="Média calculada automaticamente pelos abastecimentos deste mês."></div>
+              
+              <div class="col-md-2">
+                <label class="small fw-bold text-info">Status Operacional</label>
+                <select id="vStatus" class="form-select fw-bold border-info">
+                  <option value="Disponível">Disponível</option>
+                  <option value="Oficina">Oficina</option>
+                  <option value="Inservível">Inservível</option>
+                </select>
+              </div>
+
+              <div class="col-md-2"><label class="small fw-bold text-dark">Odo. Inicial Base</label><input id="vOdoInicial" type="text" class="form-control fw-bold border-dark" placeholder="Métrica inicial" inputmode="numeric"></div>
+              <div class="col-md-4"><label class="small fw-bold text-success"><i class="fas fa-satellite-dish"></i> Último Odômetro Lógico</label><input id="vOdoAtual" type="text" class="form-control form-control-lg fw-bold border-success text-success bg-light" readonly title="Rastreado automaticamente a partir do último Abastecimento ou RDV."></div>
+
+              <div class="col-12 d-flex gap-2 mt-3">
+                <button onclick="window.salvarVeic()" id="btnSaveVeic" class="btn btn-success w-100 fw-bold"><i class="fas fa-save"></i> GRAVAR VEÍCULO</button>
+                <button onclick="window.cancelarEdicaoVeic()" id="btnCancelVeic" class="btn btn-secondary hidden">Cancelar</button>
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
+              <div class="d-flex align-items-center gap-2 w-50">
+                <h6 class="fw-bold text-secondary m-0 text-nowrap"><i class="fas fa-list"></i> Lista de Equipamentos</h6>
+                <input type="text" id="fBuscaVeic" class="form-control form-control-sm border-dark w-100" placeholder="Filtrar por Placa, Modelo ou Secretaria..." onkeyup="window.renderTabVeiculos()">
+              </div>
+              <div>
+                <button onclick="window.abrirModalPrintVeic()" class="btn btn-dark btn-sm fw-bold shadow-sm"><i class="fas fa-print"></i> Imprimir Frota</button>
+              </div>
+            </div>
+            <div class="table-responsive shadow-sm bg-white rounded border" id="listaVeiculosBox">
+              <table class="table table-hover mb-0 align-middle text-center">
+                <thead class="table-dark">
+                  <tr>
+                    <th>ID / Placa</th>
+                    <th>Origem</th>
+                    <th>Tipo / Modelo</th>
+                    <th>Secretaria / Destinação</th>
+                    <th>Status</th>
+                    <th>Último Odo.</th>
+                    <th class="text-end">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="listaVeic"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- EQUIPE -->
+          <div class="tab-pane fade" id="admMotoristas">
+            <div class="row g-2 mb-4 bg-light p-3 rounded border shadow-sm">
+              <input type="hidden" id="hdnIdMotorista">
+              <div class="col-md-3"><label class="small fw-bold">Nome do Colaborador</label><input id="cadMotNome" class="form-control text-uppercase" placeholder="Ex: JOÃO DA SILVA"></div>
+              <div class="col-md-2"><label class="small fw-bold">CPF</label><input id="cadMotCPF" class="form-control" placeholder="Apenas números"></div>
+              <div class="col-md-2"><label class="small fw-bold">Nº CNH / Reg.</label><input id="cadMotCNH" class="form-control" placeholder="Opcional"></div>
+              <div class="col-md-1"><label class="small fw-bold">Cat.</label><input id="cadMotCat" class="form-control text-uppercase" placeholder="AB"></div>
+              <div class="col-md-2"><label class="small fw-bold">Cargo/Papel</label><select id="cadMotCargo" class="form-select">
+                  <option value="MOTORISTA">Motorista</option>
+                  <option value="GESTOR">Gestor de Frota</option>
+                </select></div>
+              <div class="col-md-2 d-flex align-items-end gap-1"><button onclick="window.salvarMotorista()" id="btnSaveMot" class="btn btn-success w-100 fw-bold"><i class="fas fa-save"></i> SALVAR</button><button onclick="window.cancelarEdicaoMot()" id="btnCancelMot" class="btn btn-secondary hidden" title="Cancelar Edição"><i class="fas fa-times"></i></button></div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
+              <h6 class="fw-bold text-secondary m-0">Lista de Motoristas e Gestores</h6>
+              <button onclick="window.imprimirLista('listaMotoristasBox', 'RELAÇÃO DE MOTORISTAS E OPERADORES')" class="btn btn-dark btn-sm fw-bold shadow-sm"><i class="fas fa-print"></i> Imprimir Lista</button>
+            </div>
+            <div class="table-responsive shadow-sm bg-white rounded border" id="listaMotoristasBox">
+              <table class="table table-hover mb-0 align-middle text-center">
+                <thead class="table-dark">
+                  <tr>
+                    <th>Nome do Colaborador</th>
+                    <th>CPF</th>
+                    <th>CNH</th>
+                    <th>Categoria</th>
+                    <th>Cargo</th>
+                    <th class="text-end">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="listaMotoristasTabela"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- POSTOS -->
+          <div class="tab-pane fade" id="admPostos">
+            <div class="row g-2 mb-4 bg-light p-3 rounded border shadow-sm">
+              <input type="hidden" id="hdnIdPosto">
+              <div class="col-md-6"><label class="small fw-bold">Nome do Posto</label><input id="cadPostoNome" class="form-control text-uppercase" placeholder="Ex: POSTO CENTRAL"></div>
+              <div class="col-md-6"><label class="small fw-bold text-primary"><i class="fas fa-link"></i> Cód. Identificador</label><input id="cadPostoCodigo" class="form-control text-uppercase border-primary fw-bold" placeholder="Ex: 01 ou JARDINS"></div>
+
+              <div class="col-12 mt-3 pt-3 border-top">
+                <h6 class="fw-bold text-secondary mb-2"><i class="fas fa-history"></i> Lançar Novo Preço / Vigência</h6>
+              </div>
+
+              <div class="col-md-3"><label class="small fw-bold text-info"><i class="fas fa-calendar-alt"></i> Data de Vigência</label><input type="date" id="cadPostoVigencia" class="form-control border-info fw-bold" required></div>
+
+              <div class="col-md-3"><label class="small fw-bold text-danger">R$ Gasolina</label><input type="text" id="cadPostoGas" class="form-control fw-bold border-danger" placeholder="0,00" oninput="window.maskMoeda(event)"></div>
+              <div class="col-md-3"><label class="small fw-bold text-dark">R$ Diesel</label><input type="text" id="cadPostoDie" class="form-control fw-bold border-dark" placeholder="0,00" oninput="window.maskMoeda(event)"></div>
+              <div class="col-md-3"><label class="small fw-bold text-success">R$ Etanol</label><input type="text" id="cadPostoEta" class="form-control fw-bold border-success" placeholder="0,00" oninput="window.maskMoeda(event)"></div>
+
+              <div class="col-12 d-flex justify-content-end gap-2 mt-3">
+                <button onclick="window.cancelarEdicaoPosto()" id="btnCancelPosto" class="btn btn-secondary fw-bold hidden">Cancelar / Limpar</button>
+                <button onclick="window.salvarPosto()" id="btnSavePosto" class="btn btn-primary fw-bold px-4"><i class="fas fa-save"></i> SALVAR NOVO PREÇO</button>
+              </div>
+
+              <div id="boxHistoricoPrecos" class="col-12 mt-4 hidden">
+                <h6 class="fw-bold text-secondary mb-2"><i class="fas fa-list"></i> Histórico de Preços deste Posto</h6>
+                <div class="table-responsive bg-white rounded border shadow-sm">
+                  <table class="table table-sm table-hover text-center mb-0 align-middle">
+                    <thead class="table-dark">
+                      <tr>
+                        <th>Data de Vigência</th>
+                        <th>Gasolina (R$)</th>
+                        <th>Diesel (R$)</th>
+                        <th>Etanol (R$)</th>
+                        <th>Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbHistoricoPrecos"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="table-responsive shadow-sm bg-white rounded border mt-3">
+              <table class="table table-hover mb-0 align-middle text-center">
+                <thead class="table-dark">
+                  <tr>
+                    <th>Cód. Vínculo</th>
+                    <th>Nome do Posto</th>
+                    <th>Gasolina Atual (R$)</th>
+                    <th>Diesel Atual (R$)</th>
+                    <th>Etanol Atual (R$)</th>
+                    <th class="text-end">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="listaPostosTabela"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- CONTRATOS -->
           <div class="tab-pane fade" id="admContratos">
             <div class="row g-2 mb-4 bg-light p-3 rounded border shadow-sm">
               <input type="hidden" id="hdnIdContrato">
-
               <div class="col-12">
                 <h6 class="fw-bold text-primary border-bottom pb-2"><i class="fas fa-file-signature"></i> Dados Gerais do Contrato</h6>
               </div>
-
               <div class="col-md-3">
                 <label class="small fw-bold">Secretaria Macro</label>
                 <input id="cadContratoSec" class="form-control text-uppercase border-dark fw-bold" list="listaSecretarias" placeholder="Ex: SAUDE">
@@ -485,7 +608,7 @@
                   <div class="row g-2 align-items-end bg-light p-2 rounded border">
                     <div class="col-md-3">
                       <label class="small fw-bold text-primary">Nome da Destinação</label>
-                      <input id="cadContratoDest" class="form-control text-uppercase border-primary fw-bold" list="listaDestinacoesGerais" placeholder="Ex: PSF, FUNDEB ou GERAL">
+                      <input id="cadContratoDest" class="form-control text-uppercase border-primary fw-bold" list="listaDestinacoesGerais" placeholder="Ex: PSF ou GERAL">
                     </div>
                     <div class="col-md-2">
                       <label class="small fw-bold text-danger text-center w-100">Gasolina (L | R$)</label>
@@ -547,10 +670,6 @@
               </div>
             </div>
 
-            <div class="d-flex justify-content-between align-items-center mb-3 mt-4 border-bottom pb-2">
-              <h6 class="fw-bold text-secondary m-0"><i class="fas fa-chart-pie"></i> Painel de Execução (Saldos por Divisão)</h6>
-            </div>
-
             <div class="row g-2 mb-4 bg-white p-3 rounded border shadow-sm align-items-end">
               <div class="col-md-3">
                 <label class="small fw-bold text-muted">Filtrar por Secretaria</label>
@@ -574,160 +693,7 @@
             <div id="listaContratosCards" class="row g-3"></div>
           </div>
 
-          <div class="tab-pane fade" id="admVeic">
-            <div class="row g-2 mb-4 bg-light p-3 rounded border shadow-sm">
-              <input type="hidden" id="hdnOldPlaca">
-              <div class="col-md-2"><label class="small fw-bold">Tipo</label><select id="vTipo" class="form-select fw-bold">
-                  <option value="Veículo">Veículo</option>
-                  <option value="Máquina">Máquina</option>
-                </select></div>
-              <div class="col-md-2"><label class="small fw-bold">Origem</label><select id="vOrigem" class="form-select fw-bold">
-                  <option value="Próprio">Próprio</option>
-                  <option value="Locado">Locado</option>
-                </select></div>
-              <div class="col-md-2"><label class="small fw-bold">Placa / ID</label><input id="vPlaca" class="form-control text-uppercase fw-bold" placeholder="ABC1D23"></div>
-              <div class="col-md-2"><label class="small fw-bold">Modelo</label><input id="vModelo" class="form-control" placeholder="Ex: Gol"></div>
-
-              <div class="col-md-2"><label class="small fw-bold text-dark">Secretaria</label><input id="vSec" class="form-control text-uppercase border-dark" placeholder="Ex: SAUDE" list="listaSecretarias" onchange="window.atualizarDestinacoesVeiculo()"></div>
-              <div class="col-md-2"><label class="small fw-bold text-primary">Destinação (Centro de Custo)</label><select id="vDest" class="form-select border-primary fw-bold">
-                  <option value="GERAL">GERAL</option>
-                </select></div>
-
-              <div class="col-md-2"><label class="small fw-bold">Combustível Fixo</label><select id="vComb" class="form-select fw-bold">
-                  <option value="Gasolina">Gasolina</option>
-                  <option value="Diesel">Diesel</option>
-                  <option value="Etanol">Etanol</option>
-                </select></div>
-              <div class="col-md-2"><label class="small fw-bold">Média Estimada</label><input id="vMedia" type="text" class="form-control fw-bold" placeholder="Ex: 10,5"></div>
-
-              <div class="col-md-4"><label class="small fw-bold text-dark">Odo/Hor Inicial Base</label><input id="vOdoInicial" type="text" class="form-control fw-bold border-dark" placeholder="Deixe em branco p/ usar o 1º Frentista" inputmode="numeric"></div>
-              <div class="col-md-4"><label class="small fw-bold text-success">Atual Projetado</label><input id="vOdoAtual" type="text" class="form-control fw-bold border-success text-success" readonly title="Soma automática com base no uso"></div>
-
-              <div class="col-12 d-flex gap-2 mt-3">
-                <button onclick="window.salvarVeic()" id="btnSaveVeic" class="btn btn-success w-100 fw-bold"><i class="fas fa-save"></i> GRAVAR</button>
-                <button onclick="window.cancelarEdicaoVeic()" id="btnCancelVeic" class="btn btn-secondary hidden">Cancelar</button>
-              </div>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
-              <div class="d-flex align-items-center gap-2 w-50">
-                <h6 class="fw-bold text-secondary m-0 text-nowrap"><i class="fas fa-list"></i> Lista de Equipamentos</h6>
-                <input type="text" id="fBuscaVeic" class="form-control form-control-sm border-dark w-100" placeholder="Filtrar por Placa, Modelo ou Secretaria..." onkeyup="window.renderTabVeiculos()">
-              </div>
-              <div>
-                <button onclick="window.abrirModalPrintVeic()" class="btn btn-dark btn-sm fw-bold shadow-sm"><i class="fas fa-print"></i> Imprimir Frota</button>
-              </div>
-            </div>
-            <div class="table-responsive shadow-sm bg-white rounded border" id="listaVeiculosBox">
-              <table class="table table-hover mb-0 align-middle text-center">
-                <thead class="table-dark">
-                  <tr>
-                    <th>ID / Placa</th>
-                    <th>Origem</th>
-                    <th>Tipo / Modelo</th>
-                    <th>Secretaria / Destinação</th>
-                    <th>Odo/Hor Atual</th>
-                    <th class="text-end">Ações</th>
-                  </tr>
-                </thead>
-                <tbody id="listaVeic"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="tab-pane fade" id="admMotoristas">
-            <div class="row g-2 mb-4 bg-light p-3 rounded border shadow-sm">
-              <input type="hidden" id="hdnIdMotorista">
-              <div class="col-md-3"><label class="small fw-bold">Nome do Colaborador</label><input id="cadMotNome" class="form-control text-uppercase" placeholder="Ex: JOÃO DA SILVA"></div>
-              <div class="col-md-2"><label class="small fw-bold">CPF</label><input id="cadMotCPF" class="form-control" placeholder="Apenas números"></div>
-              <div class="col-md-2"><label class="small fw-bold">Nº CNH / Reg.</label><input id="cadMotCNH" class="form-control" placeholder="Opcional"></div>
-              <div class="col-md-1"><label class="small fw-bold">Cat.</label><input id="cadMotCat" class="form-control text-uppercase" placeholder="AB"></div>
-              <div class="col-md-2"><label class="small fw-bold">Cargo/Papel</label><select id="cadMotCargo" class="form-select">
-                  <option value="MOTORISTA">Motorista</option>
-                  <option value="GESTOR">Gestor de Frota</option>
-                </select></div>
-              <div class="col-md-2 d-flex align-items-end gap-1"><button onclick="window.salvarMotorista()" id="btnSaveMot" class="btn btn-success w-100 fw-bold"><i class="fas fa-save"></i> SALVAR</button><button onclick="window.cancelarEdicaoMot()" id="btnCancelMot" class="btn btn-secondary hidden" title="Cancelar Edição"><i class="fas fa-times"></i></button></div>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
-              <h6 class="fw-bold text-secondary m-0">Lista de Motoristas e Gestores</h6>
-              <button onclick="window.imprimirLista('listaMotoristasBox', 'RELAÇÃO DE MOTORISTAS E OPERADORES')" class="btn btn-dark btn-sm fw-bold shadow-sm"><i class="fas fa-print"></i> Imprimir Lista</button>
-            </div>
-            <div class="table-responsive shadow-sm bg-white rounded border" id="listaMotoristasBox">
-              <table class="table table-hover mb-0 align-middle text-center">
-                <thead class="table-dark">
-                  <tr>
-                    <th>Nome do Colaborador</th>
-                    <th>CPF</th>
-                    <th>CNH</th>
-                    <th>Categoria</th>
-                    <th>Cargo</th>
-                    <th class="text-end">Ações</th>
-                  </tr>
-                </thead>
-                <tbody id="listaMotoristasTabela"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="tab-pane fade" id="admPostos">
-            <div class="row g-2 mb-4 bg-light p-3 rounded border shadow-sm">
-              <input type="hidden" id="hdnIdPosto">
-              <div class="col-md-6"><label class="small fw-bold">Nome do Posto</label><input id="cadPostoNome" class="form-control text-uppercase" placeholder="Ex: POSTO CENTRAL"></div>
-              <div class="col-md-6"><label class="small fw-bold text-primary"><i class="fas fa-link"></i> Cód. Identificador</label><input id="cadPostoCodigo" class="form-control text-uppercase border-primary fw-bold" placeholder="Ex: 01 ou JARDINS"></div>
-
-              <div class="col-12 mt-3 pt-3 border-top">
-                <h6 class="fw-bold text-secondary mb-2"><i class="fas fa-history"></i> Lançar Novo Preço / Vigência</h6>
-              </div>
-
-              <div class="col-md-3"><label class="small fw-bold text-info"><i class="fas fa-calendar-alt"></i> Data de Vigência</label><input type="date" id="cadPostoVigencia" class="form-control border-info fw-bold" required></div>
-
-              <div class="col-md-3"><label class="small fw-bold text-danger">R$ Gasolina</label><input type="text" id="cadPostoGas" class="form-control fw-bold border-danger" placeholder="0,00" oninput="window.maskMoeda(event)"></div>
-              <div class="col-md-3"><label class="small fw-bold text-dark">R$ Diesel</label><input type="text" id="cadPostoDie" class="form-control fw-bold border-dark" placeholder="0,00" oninput="window.maskMoeda(event)"></div>
-              <div class="col-md-3"><label class="small fw-bold text-success">R$ Etanol</label><input type="text" id="cadPostoEta" class="form-control fw-bold border-success" placeholder="0,00" oninput="window.maskMoeda(event)"></div>
-
-              <div class="col-12 d-flex justify-content-end gap-2 mt-3">
-                <button onclick="window.cancelarEdicaoPosto()" id="btnCancelPosto" class="btn btn-secondary fw-bold hidden">Cancelar / Limpar</button>
-                <button onclick="window.salvarPosto()" id="btnSavePosto" class="btn btn-primary fw-bold px-4"><i class="fas fa-save"></i> SALVAR NOVO PREÇO</button>
-              </div>
-
-              <div id="boxHistoricoPrecos" class="col-12 mt-4 hidden">
-                <h6 class="fw-bold text-secondary mb-2"><i class="fas fa-list"></i> Histórico de Preços deste Posto</h6>
-                <div class="table-responsive bg-white rounded border shadow-sm">
-                  <table class="table table-sm table-hover text-center mb-0 align-middle">
-                    <thead class="table-dark">
-                      <tr>
-                        <th>Data de Vigência</th>
-                        <th>Gasolina (R$)</th>
-                        <th>Diesel (R$)</th>
-                        <th>Etanol (R$)</th>
-                        <th>Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody id="tbHistoricoPrecos"></tbody>
-                  </table>
-                </div>
-              </div>
-
-            </div>
-            <div class="alert alert-info small border"><i class="fas fa-info-circle"></i> O <b>Cód. Identificador</b> é usado para conectar o posto ao frentista. A <b>Vigência</b> garante que preços antigos não sejam bagunçados ao registrar o novo valor de mercado.</div>
-            <div class="table-responsive shadow-sm bg-white rounded border mt-3">
-              <table class="table table-hover mb-0 align-middle text-center">
-                <thead class="table-dark">
-                  <tr>
-                    <th>Cód. Vínculo</th>
-                    <th>Nome do Posto</th>
-                    <th>Gasolina Atual (R$)</th>
-                    <th>Diesel Atual (R$)</th>
-                    <th>Etanol Atual (R$)</th>
-                    <th class="text-end">Ações</th>
-                  </tr>
-                </thead>
-                <tbody id="listaPostosTabela"></tbody>
-              </table>
-            </div>
-          </div>
-
+          <!-- CONFIGURAÇÕES -->
           <div class="tab-pane fade" id="admConfig">
             <h4 class="fw-bold text-dark mb-3"><i class="fas fa-sliders-h me-2 text-primary"></i>Configurações do Sistema</h4>
             <div class="row">
@@ -752,35 +718,26 @@
             </div>
           </div>
 
-        </div>
+        </div> 
       </div>
-    </div>
+    </div> 
 
+    <!-- GESTORES (Secundários) -->
     <div id="viewGestorTransp" class="hidden">
       <div class="card p-4 shadow-sm border-0 border-top border-5 border-primary">
-        <h5 class="fw-bold text-primary mb-4"><i class="fas fa-route"></i> Despacho de Frota</h5>
-        <div class="row g-3 mb-3 bg-light p-3 rounded border">
-          <div class="col-md-4"><label class="small fw-bold">Equipamento Disponível</label><select id="selVeiculoTransp" class="form-select"></select></div>
-          <div class="col-md-4"><label class="small fw-bold">Motorista / Operador</label><select id="selMotTransp" class="form-select"></select></div>
-          <div class="col-md-4"><label class="small fw-bold">Rota / Obra</label><input id="txtPercurso" class="form-control text-uppercase" list="listaRotas" placeholder="Ex: Sede -> Obra Centro"></div>
-          <div class="col-12"><button onclick="window.criarViagem()" class="btn btn-primary w-100 fw-bold py-2"><i class="fas fa-paper-plane"></i> Despachar</button></div>
-        </div>
-
-        <h6 class="fw-bold mt-4 text-secondary">Em Trânsito / Em Uso Atual:</h6>
-        <div class="table-responsive border rounded">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Placa/Modelo</th>
-                <th>Operador</th>
-                <th>Local/Rota</th>
-                <th>Início</th>
-                <th class="text-end">Ação</th>
-              </tr>
-            </thead>
-            <tbody id="listaAtivosTransp"></tbody>
-          </table>
-        </div>
+         <h5 class="fw-bold text-primary mb-4"><i class="fas fa-route"></i> Despacho de Frota</h5>
+         <div class="row g-3 mb-3 bg-light p-3 rounded border">
+            <div class="col-md-4"><label class="small fw-bold">Equipamento Disponível</label><select id="selVeiculoTransp" class="form-select"></select></div>
+            <div class="col-md-4"><label class="small fw-bold">Motorista / Operador</label><select id="selMotTransp" class="form-select"></select></div>
+            <div class="col-md-4"><label class="small fw-bold">Rota / Obra</label><input id="txtPercurso" class="form-control text-uppercase" list="listaRotas" placeholder="Ex: Sede -> Obra Centro"></div>
+            <div class="col-12"><button onclick="window.criarViagem()" class="btn btn-primary w-100 fw-bold py-2"><i class="fas fa-paper-plane"></i> Despachar</button></div>
+         </div>
+         <div class="table-responsive border rounded mt-4">
+            <table class="table table-hover align-middle mb-0 text-center">
+              <thead class="table-light"><tr><th>Placa/Modelo</th><th>Operador</th><th>Local/Rota</th><th>Início</th><th>Ação</th></tr></thead>
+              <tbody id="listaAtivosTransp"></tbody>
+            </table>
+         </div>
       </div>
     </div>
 
@@ -794,106 +751,58 @@
         <div class="tab-content">
           <div class="tab-pane fade show active" id="tabLiberarGestor">
             <div class="d-flex justify-content-between align-items-center mb-3">
-              <h6 class="fw-bold text-secondary m-0">Equipamentos da Frota em Uso</h6>
-              <button onclick="window.toggleAvulso()" class="btn btn-outline-primary btn-sm fw-bold shadow-sm"><i class="fas fa-plus"></i> Abastecimento em Rota</button>
+               <h6 class="fw-bold text-secondary m-0">Equipamentos da Frota em Uso</h6>
+               <button onclick="window.toggleAvulso()" class="btn btn-outline-primary btn-sm fw-bold shadow-sm"><i class="fas fa-plus"></i> Abastecimento em Rota</button>
             </div>
-
             <div id="painelAvulso" class="bg-light p-3 rounded border mb-4 hidden shadow-sm border-primary">
-              <h6 class="fw-bold text-primary mb-3"><i class="fas fa-road"></i> Lançar Abastecimento em Rota</h6>
-              <div class="row g-2">
-                <div class="col-md-3"><label class="small fw-bold text-danger">Placa na Bomba</label><input type="text" id="txtPlacaAvulsa" class="form-control text-uppercase fw-bold border-danger" placeholder="Ex: ABC-1234"></div>
-                <div class="col-md-4"><label class="small fw-bold text-success">Veículo Destino (Frota)</label><select id="selVeiculoRealAvulso" class="form-select border-success fw-bold"></select></div>
-                <div class="col-md-5"><label class="small fw-bold text-dark">Posto Destino <i class="fas fa-store"></i></label><select id="selPostoAvulso" class="form-select border-dark fw-bold"></select></div>
-                <div class="col-md-4"><label class="small fw-bold">Operador (Opcional)</label><input type="text" id="txtMotoristaAvulso" class="form-control" list="listaNomesMotoristas"></div>
-                <div class="col-md-8"><label class="small fw-bold">Obs (Ex: 50 Litros)</label><input type="text" id="txtObsAvulso" class="form-control text-uppercase"></div>
-                <div class="col-12 mt-3 text-end"><button onclick="window.autorizarPlacaAvulsa()" class="btn btn-primary fw-bold"><i class="fas fa-paper-plane"></i> ENVIAR PRA FILA DO POSTO</button></div>
-              </div>
+               <h6 class="fw-bold text-primary mb-3"><i class="fas fa-road"></i> Lançar Abastecimento em Rota</h6>
+               <div class="row g-2">
+                  <div class="col-md-3"><label class="small fw-bold text-danger">Placa na Bomba</label><input type="text" id="txtPlacaAvulsa" class="form-control text-uppercase fw-bold border-danger" placeholder="Ex: ABC-1234"></div>
+                  <div class="col-md-4"><label class="small fw-bold text-success">Veículo Destino (Frota)</label><select id="selVeiculoRealAvulso" class="form-select border-success fw-bold"></select></div>
+                  <div class="col-md-5"><label class="small fw-bold text-dark">Posto Destino <i class="fas fa-store"></i></label><select id="selPostoAvulso" class="form-select border-dark fw-bold"></select></div>
+                  <div class="col-md-4"><label class="small fw-bold">Operador (Opcional)</label><input type="text" id="txtMotoristaAvulso" class="form-control" list="listaNomesMotoristas"></div>
+                  <div class="col-md-8"><label class="small fw-bold">Obs (Ex: 50 Litros)</label><input type="text" id="txtObsAvulso" class="form-control text-uppercase"></div>
+                  <div class="col-12 mt-3 text-end"><button onclick="window.autorizarPlacaAvulsa()" class="btn btn-primary fw-bold"><i class="fas fa-paper-plane"></i> ENVIAR PRA FILA DO POSTO</button></div>
+               </div>
             </div>
-
             <div id="listaAbast" class="row g-3"></div>
           </div>
-
-          <div class="tab-pane fade" id="tabPistaGestor">
-            <div id="listaAguardandoPista" class="row g-3"></div>
-          </div>
-
+          <div class="tab-pane fade" id="tabPistaGestor"><div id="listaAguardandoPista" class="row g-3"></div></div>
           <div class="tab-pane fade" id="tabNotasGestor">
             <ul class="nav nav-tabs mb-3 border-0">
-              <li class="nav-item"><a class="nav-link active fw-bold text-danger" data-bs-toggle="tab" data-bs-target="#tabGestorPendentes">Pendentes de Emissão</a></li>
-              <li class="nav-item"><a class="nav-link fw-bold text-success" data-bs-toggle="tab" data-bs-target="#tabGestorEmitidas">Notas Emitidas</a></li>
+               <li class="nav-item"><a class="nav-link active fw-bold text-danger" data-bs-toggle="tab" data-bs-target="#tabGestorPendentes">Pendentes de Emissão</a></li>
+               <li class="nav-item"><a class="nav-link fw-bold text-success" data-bs-toggle="tab" data-bs-target="#tabGestorEmitidas">Notas Emitidas</a></li>
             </ul>
             <div class="tab-content">
-              <div class="tab-pane fade show active" id="tabGestorPendentes">
-                <div class="table-responsive shadow-sm bg-white rounded border">
-                  <table class="table table-hover align-middle mb-0 text-center">
-                    <thead class="table-light">
-                      <tr>
-                        <th>Data</th>
-                        <th>Posto</th>
-                        <th>Placa Real</th>
-                        <th>Litros</th>
-                        <th>Painel (Odo/Hor)</th>
-                        <th>Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody id="tbGestorPendentes"></tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="tab-pane fade" id="tabGestorEmitidas">
-                <div class="d-flex align-items-center mb-3">
-                  <label class="fw-bold me-2">Filtrar Data:</label>
-                  <input type="date" id="filtroDataNotasGestor" class="form-control form-control-sm w-auto border-success" onchange="window.renderGestaoNotas()">
-                </div>
-                <div class="table-responsive shadow-sm bg-white rounded border">
-                  <table class="table table-hover align-middle mb-0 text-center">
-                    <thead class="table-success">
-                      <tr>
-                        <th>Data Abast.</th>
-                        <th>Emissão NF-e</th>
-                        <th>Posto</th>
-                        <th>Placa</th>
-                        <th>Litros</th>
-                        <th>Emitido por</th>
-                      </tr>
-                    </thead>
-                    <tbody id="tbGestorEmitidas"></tbody>
-                  </table>
-                </div>
-              </div>
+               <div class="tab-pane fade show active" id="tabGestorPendentes">
+                  <div class="table-responsive shadow-sm bg-white rounded border"><table class="table table-hover align-middle mb-0 text-center"><thead class="table-light"><tr><th>Data</th><th>Posto</th><th>Placa Real</th><th>Litros</th><th>Painel (Odo/Hor)</th><th>Ação</th></tr></thead><tbody id="tbGestorPendentes"></tbody></table></div>
+               </div>
+               <div class="tab-pane fade" id="tabGestorEmitidas">
+                  <div class="d-flex align-items-center mb-3"><label class="fw-bold me-2">Filtrar Data:</label><input type="date" id="filtroDataNotasGestor" class="form-control form-control-sm w-auto border-success" onchange="window.renderGestaoNotas()"></div>
+                  <div class="table-responsive shadow-sm bg-white rounded border"><table class="table table-hover align-middle mb-0 text-center"><thead class="table-success"><tr><th>Data Abast.</th><th>Emissão NF-e</th><th>Posto</th><th>Placa</th><th>Litros</th><th>Emitido por</th></tr></thead><tbody id="tbGestorEmitidas"></tbody></table></div>
+               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>
 
+    <!-- RETROATIVO -->
     <div id="viewRetroativo" class="hidden">
       <div class="card p-4 shadow-sm border-0 border-top border-5 border-secondary mb-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
           <h5 class="fw-bold text-secondary m-0"><i class="fas fa-history"></i> Lançamentos Retroativos</h5>
           <button onclick="window.abrirModalLancamentoAdm()" class="btn btn-primary fw-bold shadow-sm px-4"><i class="fas fa-plus"></i> Novo Lançamento</button>
         </div>
-        <div class="alert alert-info small border"><i class="fas fa-info-circle"></i> Aqui você pode registrar abastecimentos que ocorreram fora do sistema. Eles serão auditados automaticamente.</div>
-
+        <div class="alert alert-info small border"><i class="fas fa-info-circle"></i> Registre abastecimentos manuais ocorridos fora do aplicativo.</div>
         <h6 class="fw-bold mt-4 text-dark border-bottom pb-2">Seu Histórico de Lançamentos</h6>
         <div class="table-responsive shadow-sm bg-white rounded border">
-          <table class="table table-hover align-middle mb-0 text-center">
-            <thead class="table-light">
-              <tr>
-                <th>Data do Abastecimento</th>
-                <th>Placa</th>
-                <th>Combustível</th>
-                <th>Litros</th>
-                <th>Posto</th>
-              </tr>
-            </thead>
-            <tbody id="tbMeusRetroativos"></tbody>
-          </table>
+          <table class="table table-hover align-middle mb-0 text-center"><thead class="table-light"><tr><th>Data do Abastecimento</th><th>Placa</th><th>Combustível</th><th>Litros</th><th>Posto</th></tr></thead><tbody id="tbMeusRetroativos"></tbody></table>
         </div>
       </div>
     </div>
 
+    <!-- FRENTISTA -->
     <div id="viewFrentista" class="hidden">
       <div class="card p-4 shadow-sm border-0 border-top border-5 border-success mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -915,350 +824,37 @@
         </ul>
         <div class="tab-content">
           <div class="tab-pane fade show active" id="tabFrentPendentes">
-            <div class="table-responsive shadow-sm bg-white rounded border">
-              <table class="table table-hover align-middle mb-0 text-center">
-                <thead class="table-light">
-                  <tr>
-                    <th>Data</th>
-                    <th>Posto</th>
-                    <th>Placa</th>
-                    <th>Litros</th>
-                    <th>Painel (Odo/Hor)</th>
-                    <th>Ação</th>
-                  </tr>
-                </thead>
-                <tbody id="tbFrentPendentes"></tbody>
-              </table>
-            </div>
+            <div class="table-responsive shadow-sm bg-white rounded border"><table class="table table-hover align-middle mb-0 text-center"><thead class="table-light"><tr><th>Data</th><th>Posto</th><th>Placa</th><th>Litros</th><th>Painel (Odo/Hor)</th><th>Ação</th></tr></thead><tbody id="tbFrentPendentes"></tbody></table></div>
           </div>
-
           <div class="tab-pane fade" id="tabFrentEmitidas">
-            <div class="d-flex align-items-center mb-3">
-              <label class="fw-bold me-2">Data:</label>
-              <input type="date" id="filtroDataNotasFrentista" class="form-control form-control-sm w-auto border-success" onchange="window.renderGestaoNotas()">
-            </div>
-            <div class="table-responsive shadow-sm bg-white rounded border">
-              <table class="table table-hover align-middle mb-0 text-center">
-                <thead class="table-success">
-                  <tr>
-                    <th>Data Abast.</th>
-                    <th>Emissão NF-e</th>
-                    <th>Posto</th>
-                    <th>Placa</th>
-                    <th>Litros</th>
-                    <th>Emitido por</th>
-                  </tr>
-                </thead>
-                <tbody id="tbFrentEmitidas"></tbody>
-              </table>
-            </div>
+             <div class="d-flex align-items-center mb-3"><label class="fw-bold me-2">Data:</label><input type="date" id="filtroDataNotasFrentista" class="form-control form-control-sm w-auto border-success" onchange="window.renderGestaoNotas()"></div>
+             <div class="table-responsive shadow-sm bg-white rounded border"><table class="table table-hover align-middle mb-0 text-center"><thead class="table-success"><tr><th>Data Abast.</th><th>Emissão NF-e</th><th>Posto</th><th>Placa</th><th>Litros</th><th>Emitido por</th></tr></thead><tbody id="tbFrentEmitidas"></tbody></table></div>
           </div>
-
           <div class="tab-pane fade" id="tabFrentExtras">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <span class="text-muted small">Lançamentos realizados fora da fila oficial.</span>
-              <button onclick="window.imprimirLista('listaExtrasGerenteBox', 'RELATÓRIO DE ABASTECIMENTOS EXTRAS')" class="btn btn-dark btn-sm fw-bold"><i class="fas fa-print"></i> Imprimir</button>
-            </div>
-            <div class="table-responsive shadow-sm bg-white rounded border" id="listaExtrasGerenteBox">
-              <table class="table table-hover align-middle mb-0 text-center">
-                <thead class="table-warning">
-                  <tr>
-                    <th>Data / Hora</th>
-                    <th>Placa</th>
-                    <th>Combustível</th>
-                    <th>Litros</th>
-                    <th>Motorista</th>
-                  </tr>
-                </thead>
-                <tbody id="tbFrentExtrasLista"></tbody>
-              </table>
-            </div>
+             <div class="d-flex justify-content-between align-items-center mb-3">
+               <span class="text-muted small">Lançamentos realizados fora da fila oficial.</span>
+               <button onclick="window.imprimirLista('listaExtrasGerenteBox', 'RELATÓRIO DE ABASTECIMENTOS EXTRAS')" class="btn btn-dark btn-sm fw-bold"><i class="fas fa-print"></i> Imprimir</button>
+             </div>
+             <div class="table-responsive shadow-sm bg-white rounded border" id="listaExtrasGerenteBox"><table class="table table-hover align-middle mb-0 text-center"><thead class="table-warning"><tr><th>Data / Hora</th><th>Placa</th><th>Combustível</th><th>Litros</th><th>Motorista</th></tr></thead><tbody id="tbFrentExtrasLista"></tbody></table></div>
           </div>
         </div>
       </div>
     </div>
 
-  </div>
-  <div class="modal fade" id="modalAutorizarGestor" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header bg-primary text-white">
-          <h5 class="modal-title fw-bold"><i class="fas fa-check"></i> Autorizar Abastecimento</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body bg-light">
-          <input type="hidden" id="authGestorIdViagem">
-          <input type="hidden" id="authGestorPlaca">
-          <h4 id="authGestorPlacaLabel" class="text-center text-primary fw-bold mb-3">---</h4>
-          <div class="mb-3">
-            <label class="fw-bold small text-dark"><i class="fas fa-store"></i> Para qual Posto?</label>
-            <select id="authGestorPosto" class="form-select border-dark fw-bold"></select>
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold small">Operador / Motorista Atual</label>
-            <input type="text" id="authGestorMotorista" class="form-control" list="listaNomesMotoristas" placeholder="Opcional (Deixe em branco se for plantão)">
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold small text-danger">Observação para o Frentista (Opcional)</label>
-            <input type="text" id="authGestorObs" class="form-control border-danger fw-bold" placeholder="Ex: Abastecer apenas 50 Litros">
-          </div>
-        </div>
-        <div class="modal-footer border-0 bg-light">
-          <button onclick="window.confirmarAutorizacao()" class="btn btn-primary w-100 fw-bold py-2 shadow">ENVIAR PARA A FILA DO POSTO</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  </div> <!-- FIM DA DIV APP -->
 
-  <div class="modal fade" id="modalFrentista" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header bg-success text-white">
-          <h5 class="modal-title fw-bold"><i class="fas fa-tint"></i> Lançar Bomba</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body bg-light">
-          <div class="text-center mb-4 bg-white p-3 rounded border shadow-sm">
-            <h2 id="lblPlacaFrentista" class="fw-bold text-dark m-0">---</h2>
-            <h6 id="lblModeloFrentista" class="text-muted m-0">---</h6>
-            <span id="badgeTipoFrota" class="badge bg-secondary mt-1">Veículo</span>
-          </div>
-          <div id="boxObsFrentista" class="alert alert-warning fw-bold text-center border border-warning shadow-sm hidden"></div>
+  <!-- ======================= MODAIS ======================= -->
+  <div class="modal fade" id="modalAutorizarGestor" tabindex="-1"><div class="modal-dialog"><div class="modal-content border-0 shadow"><div class="modal-header bg-primary text-white"><h5 class="modal-title fw-bold">Autorizar Abastecimento</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body bg-light"><input type="hidden" id="authGestorIdViagem"><input type="hidden" id="authGestorPlaca"><h4 id="authGestorPlacaLabel" class="text-center text-primary fw-bold mb-3">---</h4><div class="mb-3"><label class="fw-bold small text-dark">Para qual Posto?</label><select id="authGestorPosto" class="form-select border-dark fw-bold"></select></div><div class="mb-3"><label class="fw-bold small">Operador / Motorista Atual</label><input type="text" id="authGestorMotorista" class="form-control" list="listaNomesMotoristas" placeholder="Opcional"></div><div class="mb-3"><label class="fw-bold small text-danger">Observação para o Frentista</label><input type="text" id="authGestorObs" class="form-control border-danger fw-bold"></div></div><div class="modal-footer border-0 bg-light"><button onclick="window.confirmarAutorizacao()" class="btn btn-primary w-100 fw-bold py-2 shadow">ENVIAR PARA A FILA</button></div></div></div></div>
+  <div class="modal fade" id="modalFrentista" tabindex="-1"><div class="modal-dialog"><div class="modal-content border-0 shadow"><div class="modal-header bg-success text-white"><h5 class="modal-title fw-bold">Lançar Bomba</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body bg-light"><div class="text-center mb-4 bg-white p-3 rounded border shadow-sm"><h2 id="lblPlacaFrentista" class="fw-bold text-dark m-0">---</h2><h6 id="lblModeloFrentista" class="text-muted m-0">---</h6><span id="badgeTipoFrota" class="badge bg-secondary mt-1">Veículo</span></div><div id="boxObsFrentista" class="alert alert-warning fw-bold text-center border border-warning shadow-sm hidden"></div><input type="hidden" id="hdnIdAbast"><div class="mb-3"><label class="fw-bold text-muted small">Combustível</label><select id="inpCombFrentista" class="form-select form-select-lg bg-light fw-bold text-center text-secondary"><option value="Gasolina">Gasolina</option><option value="Diesel">Diesel</option><option value="Etanol">Etanol</option></select></div><div class="mb-3"><label class="fw-bold text-dark small">Posto Selecionado</label><select id="inpPostoFrentista" class="form-select form-select-lg fw-bold border-dark bg-light"></select></div><div class="mb-3"><label class="fw-bold text-danger small">Odo. / Horímetro Atual (REAL)</label><input type="text" id="inpOdoFrentista" class="form-control form-control-lg fw-bold border-danger text-center" inputmode="numeric"></div><div class="mb-3"><label class="fw-bold text-primary small">Quantidade de Litros</label><input type="text" id="inpLitrosFrentista" class="form-control form-control-lg fw-bold border-primary text-center" required oninput="window.maskLitros(event)" inputmode="numeric"></div></div><div class="modal-footer border-0 bg-light"><button onclick="window.salvarAbastecimento()" class="btn btn-success w-100 fw-bold py-3 fs-5 shadow">GRAVAR DADOS</button></div></div></div></div>
+  <div class="modal fade" id="modalLancaAdm" tabindex="-1"><div class="modal-dialog"><div class="modal-content border-0 shadow"><div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">Lançamento Retroativo / Manual</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body bg-light"><input type="hidden" id="admIdAbast"><div class="mb-3"><label class="fw-bold small">Placa</label><select id="admPlaca" class="form-select fw-bold border-dark"></select></div><div class="mb-3"><label class="fw-bold small">Data e Hora</label><input type="datetime-local" id="admData" class="form-control border-dark" required></div><div class="row g-2 mb-3"><div class="col-6"><label class="fw-bold text-danger small">Odo/Hor. (Real)</label><input type="text" id="admOdo" class="form-control fw-bold border-danger" inputmode="numeric"></div><div class="col-6"><label class="fw-bold text-primary small">Litros</label><input type="text" id="admLitros" class="form-control fw-bold border-primary" required oninput="window.maskLitros(event)" inputmode="numeric"></div></div><div class="mb-3"><label class="fw-bold small">Operador</label><input type="text" id="admMotorista" class="form-control" list="listaNomesMotoristas"></div><div class="mb-3"><label class="fw-bold small">Posto</label><select id="admPostoNome" class="form-select border-dark fw-bold"></select></div></div><div class="modal-footer border-0 bg-light"><button onclick="window.salvarLancamentoAdm()" class="btn btn-dark w-100 fw-bold py-2 shadow">SALVAR</button></div></div></div></div>
+  <div class="modal fade" id="modalPrintVeic" tabindex="-1"><div class="modal-dialog"><div class="modal-content border-0 shadow"><div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold"><i class="fas fa-print"></i> Filtro para Impressão de Frota</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body bg-light"><div class="mb-3"><label class="fw-bold small">Filtrar por Tipo</label><select id="pTipo" class="form-select border-dark"><option value="">Todos</option><option value="Veículo">Apenas Veículos</option><option value="Máquina">Apenas Máquinas</option></select></div><div class="mb-3"><label class="fw-bold small">Filtrar por Origem</label><select id="pOrigem" class="form-select border-dark"><option value="">Todas</option><option value="Próprio">Apenas Próprios</option><option value="Locado">Apenas Locados</option></select></div><div class="mb-3"><label class="fw-bold small text-info">Filtrar por Status</label><select id="pStatus" class="form-select border-info fw-bold"><option value="">Todos os Status</option><option value="Disponível">Apenas Disponíveis</option><option value="Oficina">Apenas Oficina</option><option value="Inservível">Apenas Inservíveis</option></select></div><div class="mb-3"><label class="fw-bold small">Filtrar por Secretaria</label><select id="pSec" class="form-select border-dark"></select></div></div><div class="modal-footer border-0 bg-light"><button onclick="window.gerarImpressaoVeic()" class="btn btn-primary w-100 fw-bold py-2 shadow">GERAR RELATÓRIO</button></div></div></div></div>
+  <div class="modal fade" id="modalAditivoContrato" tabindex="-1"><div class="modal-dialog"><div class="modal-content border-0 shadow"><div class="modal-header bg-primary text-white"><h5 class="modal-title fw-bold">Aditivo Contrato</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body bg-light"><input type="hidden" id="aditContratoId"><h5 id="lblSecAditivo" class="text-center text-primary fw-bold mb-3">---</h5><div class="mb-3"><label class="fw-bold small">Tipo</label><select id="aditTipo" class="form-select border-primary fw-bold"><option value="Aditivo Padrão (Volume/Prazo)">Aditivo Padrão</option><option value="Realinhamento de Preço">Realinhamento de Preço</option></select></div><div class="mb-3"><label class="fw-bold small">Combustível</label><select id="aditComb" class="form-select border-dark fw-bold"><option value="Gasolina">Gasolina</option><option value="Diesel">Diesel</option><option value="Etanol">Etanol</option><option value="Geral">Ajuste Geral</option></select></div><div class="mb-3"><label class="fw-bold small">Data</label><input type="date" id="aditData" class="form-control border-dark" required></div><div class="row g-2 mb-3"><div class="col-6"><label class="fw-bold text-primary small">Litros a Adicionar</label><input type="text" id="aditLitros" class="form-control fw-bold border-primary" oninput="window.maskLitros(event)" inputmode="numeric"></div><div class="col-6"><label class="fw-bold text-success small">Valor R$ a Adicionar</label><input type="text" id="aditValor" class="form-control fw-bold border-success" oninput="window.maskMoeda(event)"></div></div><div class="mb-2"><label class="fw-bold small text-muted">Justificativa</label><input type="text" id="aditObs" class="form-control"></div></div><div class="modal-footer border-0 bg-light"><button onclick="window.salvarAditivo()" class="btn btn-primary w-100 fw-bold py-2 shadow">GRAVAR OPERAÇÃO</button></div></div></div></div>
+  <div class="modal fade" id="modalLiquidarContrato" tabindex="-1"><div class="modal-dialog"><div class="modal-content border-0 shadow"><div class="modal-header bg-success text-white"><h5 class="modal-title fw-bold">Liquidar Pagamento</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body bg-light"><input type="hidden" id="liqContratoId"><h5 id="lblSecLiq" class="text-center text-success fw-bold mb-3">---</h5><div class="alert alert-light border small text-muted">Lançando os valores efetivamente **pagos**.</div><div class="mb-3"><label class="fw-bold small">Mês / Ano</label><input type="month" id="liqMesAno" class="form-control border-dark" required></div><div class="mb-3"><label class="fw-bold text-success small">Valor Pago (R$)</label><input type="text" id="liqValor" class="form-control fw-bold border-success" oninput="window.maskMoeda(event)"></div></div><div class="modal-footer border-0 bg-light"><button onclick="window.salvarLiquidacao()" class="btn btn-success w-100 fw-bold py-2 shadow">REGISTRAR PAGAMENTO</button></div></div></div></div>
+  <div class="modal fade" id="modalExtrato" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content border-0 shadow"><div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">Extrato Contrato</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body bg-light p-4"><h4 id="lblSecExtrato" class="text-center text-dark fw-bold mb-4">---</h4><h6 class="fw-bold text-primary border-bottom border-primary pb-1">Aditivos</h6><div class="table-responsive bg-white border rounded shadow-sm mb-4"><table class="table table-hover table-sm align-middle text-center mb-0"><thead class="table-light"><tr><th>Data</th><th>Tipo</th><th>Combustível</th><th>Justificativa</th><th>L Adic.</th><th>R$ Adic.</th></tr></thead><tbody id="tbExtratoAditivos"></tbody></table></div><h6 class="fw-bold text-success border-bottom border-success pb-1">Pagamentos</h6><div class="table-responsive bg-white border rounded shadow-sm"><table class="table table-hover table-sm align-middle text-center mb-0"><thead class="table-light"><tr><th>Mês Ref.</th><th>Valor Pago (R$)</th></tr></thead><tbody id="tbExtratoPagamentos"></tbody></table></div></div><div class="modal-footer border-0 bg-light d-flex justify-content-between"><button type="button" class="btn btn-dark fw-bold" onclick="window.imprimirExtrato()">Imprimir Extrato</button><button type="button" class="btn btn-secondary fw-bold px-4" data-bs-dismiss="modal">FECHAR</button></div></div></div></div>
+  <div class="modal fade" id="modalMembroEquipe" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow-lg"><div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">Cadastro Condutor</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><div class="mb-3"><label class="form-label fw-bold">Nome Completo</label><input type="text" id="cadMotNome" class="form-control text-uppercase"></div><div class="row g-3"><div class="col-md-6"><label class="form-label fw-bold">Cargo</label><input type="text" id="cadMotCargo" class="form-control bg-light fw-bold" value="MOTORISTA" readonly></div><div class="col-md-6"><label class="form-label fw-bold">CPF</label><input type="text" id="cadMotCpf" class="form-control" oninput="this.value = this.value.replace(/[^0-9]/g, '')"></div></div></div><div class="modal-footer bg-light"><button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-success fw-bold px-4" onclick="window.SalvarMotoristaRapido()">Salvar</button></div></div></div></div>
+  <div class="modal fade" id="modalRelatorioMotorista" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg"><div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">Dossiê Condutor</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4 bg-light"><div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3"><div><h4 class="fw-bold text-primary mb-0" id="lblRelatorioMotoristaNome">NOME DO MOTORISTA</h4><small class="text-muted fw-bold">Análise Histórica</small></div><div class="d-flex gap-2"><input type="month" id="filtroMesMotorista" class="form-control border-dark" onchange="window.gerarDadosRelatorioMotorista()"><button onclick="window.imprimirLista('areaPrintDossieMot', 'DOSSIÊ DE PRODUTIVIDADE DO CONDUTOR')" class="btn btn-secondary fw-bold shadow-sm"><i class="fas fa-print"></i></button></div></div><div id="areaPrintDossieMot"><div class="row g-3 mb-4 text-center"><div class="col-md-4"><div class="card border-0 shadow-sm border-start border-4 border-primary py-2 h-100"><div class="text-muted small fw-bold text-uppercase">Volumetria Rodada</div><h3 class="fw-bold text-primary m-0" id="relMotKMs">0</h3></div></div><div class="col-md-4"><div class="card border-0 shadow-sm border-start border-4 border-success py-2 h-100"><div class="text-muted small fw-bold text-uppercase">Dias Ativos</div><h3 class="fw-bold text-success m-0" id="relMotDias">0</h3></div></div><div class="col-md-4"><div class="card border-0 shadow-sm border-start border-4 border-warning py-2 h-100"><div class="text-muted small fw-bold text-uppercase">Equipamentos Utilizados</div><h3 class="fw-bold text-warning m-0" id="relMotVeiculos">0</h3></div></div></div><div class="table-responsive bg-white rounded border shadow-sm"><table class="table table-sm table-hover align-middle text-center mb-0"><thead class="table-dark"><tr><th>Data</th><th>Placa</th><th>Rota</th><th>M. Inicial</th><th>M. Final</th><th>Totalizado</th></tr></thead><tbody id="tbRelatorioMotorista"></tbody></table></div></div></div><div class="modal-footer bg-light border-0"><button type="button" class="btn btn-secondary fw-bold px-4" data-bs-dismiss="modal">Fechar</button></div></div></div></div>
 
-          <input type="hidden" id="hdnIdAbast">
-
-          <div class="mb-3">
-            <label class="fw-bold text-muted small">Combustível</label>
-            <select id="inpCombFrentista" class="form-select form-select-lg bg-light fw-bold text-center text-secondary">
-              <option value="Gasolina">Gasolina</option>
-              <option value="Diesel">Diesel</option>
-              <option value="Etanol">Etanol</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold text-dark small"><i class="fas fa-store"></i> Posto Selecionado pelo Gestor</label>
-            <select id="inpPostoFrentista" class="form-select form-select-lg fw-bold border-dark bg-light"></select>
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold text-danger small"><i class="fas fa-tachometer-alt"></i> Odo. / Horímetro Atual (REAL)</label>
-            <input type="text" id="inpOdoFrentista" class="form-control form-control-lg fw-bold border-danger text-center" placeholder="Deixar em branco projeta pela média" inputmode="numeric">
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold text-primary small"><i class="fas fa-tint"></i> Quantidade de Litros</label>
-            <input type="text" id="inpLitrosFrentista" class="form-control form-control-lg fw-bold border-primary text-center" required placeholder="0,000" oninput="window.maskLitros(event)" inputmode="numeric">
-          </div>
-        </div>
-        <div class="modal-footer border-0 bg-light">
-          <button onclick="window.salvarAbastecimento()" class="btn btn-success w-100 fw-bold py-3 fs-5 shadow">GRAVAR DADOS</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal fade" id="modalLancaAdm" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header bg-dark text-white">
-          <h5 class="modal-title fw-bold"><i class="fas fa-history"></i> Lançamento Retroativo / Manual</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body bg-light">
-          <input type="hidden" id="admIdAbast">
-          <div class="mb-3">
-            <label class="fw-bold small">Placa / ID do Equipamento da Frota</label>
-            <select id="admPlaca" class="form-select fw-bold border-dark"></select>
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold small">Data e Hora do Abastecimento</label>
-            <input type="datetime-local" id="admData" class="form-control border-dark" required>
-          </div>
-          <div class="row g-2 mb-3">
-            <div class="col-6">
-              <label class="fw-bold text-danger small">Odo/Hor. (Real)</label>
-              <input type="text" id="admOdo" class="form-control fw-bold border-danger" placeholder="Deixe branco p/ autocalcular" inputmode="numeric">
-            </div>
-            <div class="col-6">
-              <label class="fw-bold text-primary small">Litros</label>
-              <input type="text" id="admLitros" class="form-control fw-bold border-primary" required placeholder="0,000" oninput="window.maskLitros(event)" inputmode="numeric">
-            </div>
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold small">Operador (Opcional)</label>
-            <input type="text" id="admMotorista" class="form-control" list="listaNomesMotoristas">
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold small">Posto</label>
-            <select id="admPostoNome" class="form-select border-dark fw-bold"></select>
-          </div>
-          <div class="alert alert-warning small py-2 mb-0 border">
-            <i class="fas fa-exclamation-triangle"></i> Lançamentos com Odo/Hor real preenchido irão reprocessar e corrigir as médias projetadas automaticamente.
-          </div>
-        </div>
-        <div class="modal-footer border-0 bg-light">
-          <button onclick="window.salvarLancamentoAdm()" class="btn btn-dark w-100 fw-bold py-2 shadow">SALVAR</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal fade" id="modalPrintVeic" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header bg-dark text-white">
-          <h5 class="modal-title fw-bold"><i class="fas fa-print"></i> Filtro para Impressão de Frota</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body bg-light">
-          <div class="mb-3">
-            <label class="fw-bold small">Filtrar por Tipo</label>
-            <select id="pTipo" class="form-select border-dark">
-              <option value="">Todos</option>
-              <option value="Veículo">Apenas Veículos</option>
-              <option value="Máquina">Apenas Máquinas</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold small">Filtrar por Origem</label>
-            <select id="pOrigem" class="form-select border-dark">
-              <option value="">Todas</option>
-              <option value="Próprio">Apenas Próprios</option>
-              <option value="Locado">Apenas Locados</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold small">Filtrar por Secretaria</label>
-            <select id="pSec" class="form-select border-dark"></select>
-          </div>
-        </div>
-        <div class="modal-footer border-0 bg-light">
-          <button onclick="window.gerarImpressaoVeic()" class="btn btn-primary w-100 fw-bold py-2 shadow"><i class="fas fa-file-pdf"></i> GERAR RELATÓRIO</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal fade" id="modalAditivoContrato" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header bg-primary text-white">
-          <h5 class="modal-title fw-bold"><i class="fas fa-plus-circle"></i> Aditivo / Realinhamento</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body bg-light">
-          <input type="hidden" id="aditContratoId">
-          <h5 id="lblSecAditivo" class="text-center text-primary fw-bold mb-3">---</h5>
-
-          <div class="mb-3">
-            <label class="fw-bold small">Tipo de Movimentação</label>
-            <select id="aditTipo" class="form-select border-primary fw-bold">
-              <option value="Aditivo Padrão (Volume/Prazo)">Aditivo Padrão (Volume/Prazo)</option>
-              <option value="Realinhamento de Preço">Realinhamento de Preço (Ajuste R$)</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold small">Combustível Afetado</label>
-            <select id="aditComb" class="form-select border-dark fw-bold">
-              <option value="Gasolina">Gasolina</option>
-              <option value="Diesel">Diesel</option>
-              <option value="Etanol">Etanol</option>
-              <option value="Geral">Ajuste Geral (Somente Valor R$)</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="fw-bold small">Data</label>
-            <input type="date" id="aditData" class="form-control border-dark" required>
-          </div>
-          <div class="row g-2 mb-3">
-            <div class="col-6">
-              <label class="fw-bold text-primary small">Litros a Adicionar</label>
-              <input type="text" id="aditLitros" class="form-control fw-bold border-primary" placeholder="0,000" oninput="window.maskLitros(event)" inputmode="numeric">
-            </div>
-            <div class="col-6">
-              <label class="fw-bold text-success small">Valor R$ a Adicionar</label>
-              <input type="text" id="aditValor" class="form-control fw-bold border-success" placeholder="0,00" oninput="window.maskMoeda(event)">
-            </div>
-          </div>
-          <div class="mb-2">
-            <label class="fw-bold small text-muted">Justificativa / Observação</label>
-            <input type="text" id="aditObs" class="form-control" placeholder="Ex: Aumento da gasolina repassado pelo posto">
-          </div>
-        </div>
-        <div class="modal-footer border-0 bg-light">
-          <button onclick="window.salvarAditivo()" class="btn btn-primary w-100 fw-bold py-2 shadow">GRAVAR OPERAÇÃO</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal fade" id="modalLiquidarContrato" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header bg-success text-white">
-          <h5 class="modal-title fw-bold"><i class="fas fa-money-check-alt"></i> Liquidar Pagamento Mensal</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body bg-light">
-          <input type="hidden" id="liqContratoId">
-          <h5 id="lblSecLiq" class="text-center text-success fw-bold mb-3">---</h5>
-          <div class="alert alert-light border small text-muted">Lançando os valores que foram efetivamente **pagos** para controle de saldo devedor.</div>
-          <div class="mb-3"><label class="fw-bold small">Mês / Ano de Referência</label><input type="month" id="liqMesAno" class="form-control border-dark" required></div>
-          <div class="mb-3"><label class="fw-bold text-success small">Valor Pago (R$)</label><input type="text" id="liqValor" class="form-control fw-bold border-success" placeholder="0,00" oninput="window.maskMoeda(event)"></div>
-        </div>
-        <div class="modal-footer border-0 bg-light">
-          <button onclick="window.salvarLiquidacao()" class="btn btn-success w-100 fw-bold py-2 shadow">REGISTRAR PAGAMENTO</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal fade" id="modalExtrato" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header bg-dark text-white">
-          <h5 class="modal-title fw-bold"><i class="fas fa-list-alt"></i> Extrato de Movimentações do Contrato</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body bg-light p-4">
-          <h4 id="lblSecExtrato" class="text-center text-dark fw-bold mb-4">---</h4>
-
-          <h6 class="fw-bold text-primary border-bottom border-primary pb-1"><i class="fas fa-plus-circle"></i> Aditivos e Realinhamentos de Preço</h6>
-          <div class="table-responsive bg-white border rounded shadow-sm mb-4">
-            <table class="table table-hover table-sm align-middle text-center mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Data</th>
-                  <th>Tipo</th>
-                  <th>Combustível</th>
-                  <th>Justificativa</th>
-                  <th>L Adicionados</th>
-                  <th>R$ Adicionados</th>
-                </tr>
-              </thead>
-              <tbody id="tbExtratoAditivos"></tbody>
-            </table>
-          </div>
-
-          <h6 class="fw-bold text-success border-bottom border-success pb-1"><i class="fas fa-money-check-alt"></i> Histórico de Pagamentos (Liquidados)</h6>
-          <div class="table-responsive bg-white border rounded shadow-sm">
-            <table class="table table-hover table-sm align-middle text-center mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Mês Ref.</th>
-                  <th>Valor Pago (R$)</th>
-                </tr>
-              </thead>
-              <tbody id="tbExtratoPagamentos"></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="modal-footer border-0 bg-light d-flex justify-content-between">
-          <button type="button" class="btn btn-dark fw-bold" onclick="window.imprimirExtrato()"><i class="fas fa-print"></i> Imprimir Extrato</button>
-          <button type="button" class="btn btn-secondary fw-bold px-4" data-bs-dismiss="modal">FECHAR</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
+  <!-- AREA PRINT MAPAS E RDV -->
   <div id="print-section" class="d-none print-only bg-white p-2">
     <table class="w-100 border border-dark align-middle mb-3" style="border-collapse:collapse;">
       <tr>
@@ -1271,66 +867,15 @@
         <td class="p-2 border-start border-dark small" style="width:220px;"><strong>Data:</strong> <span id="print-pdf-data"></span><br><strong>Placa:</strong> <span id="print-pdf-placa"></span><br><strong>Rota:</strong> <span id="print-pdf-itinerario"></span></td>
       </tr>
     </table>
+    <table class="table table-bordered table-sm mb-3 border-dark text-center" style="font-size:9pt;"><thead class="table-light border-dark"><tr><th colspan="4" class="text-uppercase fw-bold text-start">1. Parâmetros de Rodagem</th></tr></thead><tbody><tr><td style="width:25%;"><strong>Odo. Inicial:</strong></td><td style="width:25%;" id="print-pdf-odo-ini"></td><td style="width:25%;"><strong>Odo. Final:</strong></td><td style="width:25%;" id="print-pdf-odo-fim"></td></tr></tbody></table>
+    <table class="table table-bordered table-sm mb-3 border-dark text-center" style="font-size:9pt;"><thead class="table-light border-dark"><tr><th class="text-uppercase fw-bold text-start">2. Condutores Homologados</th></tr></thead><tbody id="print-pdf-corpo-motoristas"></tbody></table>
     <table class="table table-bordered table-sm mb-3 border-dark text-center" style="font-size:9pt;">
-      <thead class="table-light border-dark">
-        <tr>
-          <th colspan="4" class="text-uppercase fw-bold text-start">1. Parâmetros de Rodagem</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td style="width:25%;"><strong>Odo. Inicial:</strong></td>
-          <td style="width:25%;" id="print-pdf-odo-ini"></td>
-          <td style="width:25%;"><strong>Odo. Final:</strong></td>
-          <td style="width:25%;" id="print-pdf-odo-fim"></td>
-        </tr>
-      </tbody>
-    </table>
-    <table class="table table-bordered table-sm mb-3 border-dark text-center" style="font-size:9pt;">
-      <thead class="table-light border-dark">
-        <tr>
-          <th class="text-uppercase fw-bold text-start">2. Condutores Homologados</th>
-        </tr>
-      </thead>
-      <tbody id="print-pdf-corpo-motoristas"></tbody>
-    </table>
-    <table class="table table-bordered table-sm mb-3 border-dark text-center" style="font-size:9pt;">
-      <thead class="table-light border-dark">
-        <tr>
-          <th colspan="5" class="text-uppercase fw-bold text-start">3. Movimentação de Abastecimento</th>
-        </tr>
-        <tr class="small fw-bold bg-light">
-          <td>Local / Posto</td>
-          <td>Combustível</td>
-          <td>Volume</td>
-          <td>Odômetro</td>
-          <td>Valor</td>
-        </tr>
-      </thead>
+      <thead class="table-light border-dark"><tr><th colspan="5" class="text-uppercase fw-bold text-start">3. Movimentação de Abastecimento</th></tr><tr class="small fw-bold bg-light"><td>Local / Posto</td><td>Combustível</td><td>Volume</td><td>Odômetro</td><td>Valor</td></tr></thead>
       <tbody id="print-pdf-corpo-abastecimentos"></tbody>
     </table>
-    <div class="mb-3">
-      <table class="table table-bordered table-sm border-dark" style="font-size:9pt;">
-        <thead class="table-light border-dark">
-          <tr>
-            <th class="text-uppercase fw-bold text-start">4. Ocorrências e Oficina</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td id="print-pdf-oficina-txt" class="p-2"></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="mb-3 border border-dark p-2" style="page-break-inside: avoid;">
-      <div class="fw-bold text-uppercase mb-2 text-decoration-underline" style="font-size:9pt;">5. Registo Fotográfico</div>
-      <div id="print-pdf-galeria-dinamica" class="d-flex flex-wrap gap-2 justify-content-center"></div>
-    </div>
-    <div style="margin-top:30px; page-break-inside: avoid;">
-      <div class="text-center fw-bold text-uppercase mb-4" style="font-size:9pt; border-bottom:1px solid black; padding-bottom:4px;">6. Assinaturas e Validações</div>
-      <div class="row text-center" id="print-pdf-container-assinaturas" style="font-size:8pt;"></div>
-    </div>
+    <div class="mb-3"><table class="table table-bordered table-sm border-dark" style="font-size:9pt;"><thead class="table-light border-dark"><tr><th class="text-uppercase fw-bold text-start">4. Ocorrências e Oficina</th></tr></thead><tbody><tr><td id="print-pdf-oficina-txt" class="p-2"></td></tr></tbody></table></div>
+    <div class="mb-3 border border-dark p-2" style="page-break-inside: avoid;"><div class="fw-bold text-uppercase mb-2 text-decoration-underline" style="font-size:9pt;">5. Registo Fotográfico</div><div id="print-pdf-galeria-dinamica" class="d-flex flex-wrap gap-2 justify-content-center"></div></div>
+    <div style="margin-top:30px; page-break-inside: avoid;"><div class="text-center fw-bold text-uppercase mb-4" style="font-size:9pt; border-bottom:1px solid black; padding-bottom:4px;">6. Assinaturas e Validações</div><div class="row text-center" id="print-pdf-container-assinaturas" style="font-size:8pt;"></div></div>
   </div>
 
   <div id="print-section-relatorio-frota" class="d-none print-only bg-white p-2">
@@ -1338,127 +883,26 @@
       <h3 class="fw-bold mb-1">RELATÓRIO GERENCIAL DE FROTA</h3>
       <div id="print-filtros-aplicados" class="small text-muted text-uppercase fw-bold"></div>
     </div>
-    <table class="table table-bordered table-sm border-dark w-100 text-center" style="font-size:9pt; border-collapse:collapse;">
-      <thead class="table-light align-middle border-dark">
-        <tr>
-          <th>Placa</th>
-          <th>Veículo / Modelo</th>
-          <th>Secretaria Alocada</th>
-          <th>Tipo de Frota</th>
-          <th>Propriedade</th>
-          <th>Combustível</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody id="print-corpo-relatorio-frota" class="align-middle"></tbody>
-    </table>
+    <table class="table table-bordered table-sm border-dark w-100 text-center" style="font-size:9pt; border-collapse:collapse;"><thead class="table-light align-middle border-dark"><tr><th>Placa</th><th>Veículo / Modelo</th><th>Secretaria Alocada</th><th>Tipo de Frota</th><th>Origem</th><th>Combustível</th><th>Status</th><th>Último Odo.</th></tr></thead><tbody id="print-corpo-relatorio-frota" class="align-middle"></tbody></table>
   </div>
 
-  <div class="modal fade" id="modalMembroEquipe" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 shadow-lg">
-        <div class="modal-header bg-dark text-white">
-          <h5 class="modal-title fw-bold"><i class="fas fa-user-plus me-2"></i>Cadastro Rápido de Condutor</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body p-4">
-          <div class="alert alert-warning py-2 small fw-bold">
-            <i class="fas fa-bolt me-2"></i>Criação rápida para uso imediato no RDV.
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-bold">Nome Completo</label>
-            <input type="text" id="cadMotNome" class="form-control text-uppercase" placeholder="Ex: JOÃO DA SILVA">
-          </div>
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label fw-bold">Cargo</label>
-              <input type="text" id="cadMotCargo" class="form-control bg-light fw-bold" value="MOTORISTA" readonly>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-bold">CPF (Opcional por agora)</label>
-              <input type="text" id="cadMotCpf" class="form-control" placeholder="Apenas números..." oninput="this.value = this.value.replace(/[^0-9]/g, '')">
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer bg-light">
-          <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-success fw-bold px-4" onclick="window.SalvarMotoristaRapido()"><i class="fas fa-save me-2"></i>Salvar Condutor</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal fade" id="modalRelatorioMotorista" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content border-0 shadow-lg">
-        <div class="modal-header bg-dark text-white">
-          <h5 class="modal-title fw-bold"><i class="fas fa-id-card me-2"></i>Dossiê de Produtividade do Condutor</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body p-4 bg-light">
-          <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
-            <div>
-              <h4 class="fw-bold text-primary mb-0" id="lblRelatorioMotoristaNome">NOME DO MOTORISTA</h4>
-              <small class="text-muted fw-bold">Análise Histórica de Desempenho, Km Rodados e Jornada</small>
-            </div>
-            <div class="d-flex gap-2">
-              <input type="month" id="filtroMesMotorista" class="form-control border-dark" onchange="window.gerarDadosRelatorioMotorista()">
-              <button onclick="window.imprimirLista('areaPrintDossieMot', 'DOSSIÊ DE PRODUTIVIDADE DO CONDUTOR')" class="btn btn-secondary fw-bold shadow-sm" title="Imprimir Relatório do Condutor"><i class="fas fa-print"></i></button>
-            </div>
-          </div>
-
-          <div id="areaPrintDossieMot">
-            <div class="row g-3 mb-4 text-center">
-              <div class="col-md-4">
-                <div class="card border-0 shadow-sm border-start border-4 border-primary py-2 h-100">
-                  <div class="text-muted small fw-bold text-uppercase">Volumetria Rodada (KM/H)</div>
-                  <h3 class="fw-bold text-primary m-0" id="relMotKMs">0</h3>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="card border-0 shadow-sm border-start border-4 border-success py-2 h-100">
-                  <div class="text-muted small fw-bold text-uppercase">Dias Ativos (RDVs)</div>
-                  <h3 class="fw-bold text-success m-0" id="relMotDias">0</h3>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="card border-0 shadow-sm border-start border-4 border-warning py-2 h-100">
-                  <div class="text-muted small fw-bold text-uppercase">Equipamentos Utilizados</div>
-                  <h3 class="fw-bold text-warning m-0" id="relMotVeiculos">0</h3>
-                </div>
-              </div>
-            </div>
-
-            <h6 class="fw-bold text-secondary mb-2"><i class="fas fa-list-alt"></i> Registros de Movimentação Localizados</h6>
-            <div class="table-responsive bg-white rounded border shadow-sm">
-              <table class="table table-sm table-hover align-middle text-center mb-0" style="font-size: 0.9rem;">
-                <thead class="table-dark">
-                  <tr>
-                    <th>Data</th>
-                    <th>Identificação / Placa</th>
-                    <th>Rota / Percurso Percorrido</th>
-                    <th>M. Inicial</th>
-                    <th>M. Final</th>
-                    <th>Totalizado</th>
-                  </tr>
-                </thead>
-                <tbody id="tbRelatorioMotorista">
-                  <tr>
-                    <td colspan="6" class="text-muted small py-3">Selecione um motorista para carregar as informações analíticas de rodagem.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer bg-light border-0">
-          <button type="button" class="btn btn-secondary fw-bold px-4" data-bs-dismiss="modal">Fechar Painel</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Script para Auto-Filtro do Mês no Mapa de Abastecimento -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(y, d.getMonth() + 1, 0).getDate();
+      
+      const fIni = document.getElementById('fIni');
+      const fFim = document.getElementById('fFim');
+      if(fIni) fIni.value = `${y}-${m}-01`;
+      if(fFim) fFim.value = `${y}-${m}-${lastDay}`;
+    });
+  </script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 

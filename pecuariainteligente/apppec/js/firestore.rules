@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuth() && request.auth.token.role == 'superadmin';
+    }
+
+    function isTenantOwner() {
+      return isAuth() && request.auth.token.tenantId == resource.data.empresa_id;
+    }
+
+    function isCreatingForOwnTenant() {
+      return isAuth() && request.auth.token.tenantId == request.resource.data.empresa_id;
+    }
+
+    match /tenants/{tenantId} {
+      allow read: if isSuperAdmin() || (isAuth() && request.auth.token.tenantId == tenantId);
+      allow write: if isSuperAdmin();
+    }
+
+    match /usuarios/{userId} {
+      allow read: if isSuperAdmin() || (isAuth() && request.auth.uid == userId);
+      allow write: if isSuperAdmin();
+    }
+
+    match /animais/{document} {
+      allow read, update, delete: if isSuperAdmin() || isTenantOwner();
+      allow create: if isSuperAdmin() || isCreatingForOwnTenant();
+    }
+
+    match /pesagens/{document} {
+      allow read, update, delete: if isSuperAdmin() || isTenantOwner();
+      allow create: if isSuperAdmin() || isCreatingForOwnTenant();
+    }
+
+    match /vacinas/{document} {
+      allow read, update, delete: if isSuperAdmin() || isTenantOwner();
+      allow create: if isSuperAdmin() || isCreatingForOwnTenant();
+    }
+
+    match /financeiro/{document} {
+      allow read, update, delete: if isSuperAdmin() || isTenantOwner();
+      allow create: if isSuperAdmin() || isCreatingForOwnTenant();
+    }
+
+    match /estoque/{document} {
+      allow read, update, delete: if isSuperAdmin() || isTenantOwner();
+      allow create: if isSuperAdmin() || isCreatingForOwnTenant();
+    }
+
+    match /pastos/{document} {
+      allow read, update, delete: if isSuperAdmin() || isTenantOwner();
+      allow create: if isSuperAdmin() || isCreatingForOwnTenant();
+    }
+
+    match /reproducao/{document} {
+      allow read, update, delete: if isSuperAdmin() || isTenantOwner();
+      allow create: if isSuperAdmin() || isCreatingForOwnTenant();
+    }
+  }
+}

@@ -2,9 +2,8 @@ import { db } from './firebase-env.js';
 import { collection, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 window.buscarTudo = async function() {
-    window.loading(true, "Lendo Banco de Dados...");
+    window.loading(true, "Sincronizando Banco de Dados...");
     try {
-        // PERFOMANCE: Busca todas as coleções do Firebase simultaneamente
         const [snapV, snapA, snapVi, snapMot, snapEq, snapPos, snapCont, snapRdv, snapCfg] = await Promise.all([
             getDocs(collection(db, `${window.tenant}_veiculos`)),
             getDocs(collection(db, `${window.tenant}_abastecimentos`)),
@@ -17,12 +16,11 @@ window.buscarTudo = async function() {
             getDoc(doc(db, `${window.tenant}_config`, "identidade_oficial"))
         ]);
 
-        // Processa Veículos e Frota
         window.DADOS_VEICULOS = []; window.ColecaoFrota = [];
         snapV.forEach(d => {
             let v = { id: d.id, ...d.data() };
             v.id_banco = d.id;
-            v.placa = (v.placa || v.id).toUpperCase(); // PROTEÇÃO RDV: Garante que a placa exista para a busca
+            v.placa = (v.placa || v.id).toUpperCase(); 
             v.tipo_padronizado = v.tipo_veiculo || v.tipo || ((v.maquina === true || v.maquina === "sim") ? "Máquina" : "Veículo");
             v.prop_padronizada = v.propriedade || v.locacao || "FROTA PRÓPRIA";
             v.sec_padronizada = v.secretaria || v.sec || v.orgao || "NÃO INFORMADA";
@@ -30,10 +28,9 @@ window.buscarTudo = async function() {
             window.ColecaoFrota.push(v);
         });
 
-        // Processa Coleções Diretas
         window.DADOS_ABASTECIMENTOS = []; 
         snapA.forEach(d => window.DADOS_ABASTECIMENTOS.push({ id: d.id, ...d.data() }));
-        window.DADOS_ABASTECIMENTOS.sort((a,b) => new Date(b.dataAbastecimento) - new Date(a.dataAbastecimento));
+        window.DADOS_ABASTECIMENTOS.sort((a,b) => new Date(b.dataAbastecimento || 0) - new Date(a.dataAbastecimento || 0));
 
         window.DADOS_VIAGENS = []; snapVi.forEach(d => window.DADOS_VIAGENS.push({ id: d.id, ...d.data() }));
         window.DADOS_MOTORISTAS = []; snapMot.forEach(d => window.DADOS_MOTORISTAS.push({ id: d.id, ...d.data() }));
@@ -42,9 +39,8 @@ window.buscarTudo = async function() {
         window.DADOS_CONTRATOS = []; snapCont.forEach(d => window.DADOS_CONTRATOS.push({ id: d.id, ...d.data() }));
         
         window.ColecaoRDVs = []; snapRdv.forEach(d => window.ColecaoRDVs.push({ id: d.id, ...d.data() }));
-        window.ColecaoRDVs.sort((a,b) => new Date(b.data) - new Date(a.data));
+        window.ColecaoRDVs.sort((a,b) => new Date(b.data || 0) - new Date(a.data || 0));
 
-        // Processa Configurações (Prefeitura/Logo)
         if(snapCfg.exists()) {
             const c = snapCfg.data();
             let elNome = document.getElementById("cfg-prefeitura-nome"); if(elNome) elNome.value = c.nome_prefeitura || "";
@@ -58,7 +54,6 @@ window.buscarTudo = async function() {
             }
         }
 
-        // --- Montagem Dinâmica de Combos e Filtros ---
         let secs = new Set(), rotas = new Set(), postosHistorico = new Set();
         window.DADOS_DESTINACOES.clear();
 
@@ -74,14 +69,12 @@ window.buscarTudo = async function() {
             if(c.destinacao) window.DADOS_DESTINACOES.add(c.destinacao.toUpperCase());
         });
         
-        // Renderiza listas html de secretarias
         let secHTML = '<option value="">TODAS AS SECRETARIAS</option>';
         [...secs].sort().forEach(s => secHTML += `<option value="${s}">${s}</option>`);
         
         let elFSec = document.getElementById('fSec'); if(elFSec) elFSec.innerHTML = secHTML;
         let elListaSec = document.getElementById('listaSecretarias'); if(elListaSec) elListaSec.innerHTML = [...secs].map(s=>`<option value="${s}">`).join('');
         
-        // Renderiza listas html de destinações
         let destHTML = '<option value="">TODAS AS DESTINAÇÕES</option>';
         [...window.DADOS_DESTINACOES].sort().forEach(d => destHTML += `<option value="${d}">${d}</option>`);
         
@@ -91,7 +84,6 @@ window.buscarTudo = async function() {
         let elRotas = document.getElementById('listaRotas'); if(elRotas) elRotas.innerHTML = [...rotas].map(r=>`<option value="${r}">`).join('');
         let elFPosto = document.getElementById('fPosto'); if(elFPosto) elFPosto.innerHTML = '<option value="">Todos</option>' + [...postosHistorico].sort().map(p=>`<option value="${p}">${p}</option>`).join('');
 
-        // Montagem combos de Postos
         let optPostosUnicos = '<option value="">-- Selecione o Posto --</option>';
         let optPostosComboContrato = '<option value="TODOS">Todos os Postos</option>';
         
@@ -105,22 +97,18 @@ window.buscarTudo = async function() {
         
         let elCadPosto = document.getElementById('cadContratoPosto'); if(elCadPosto) elCadPosto.innerHTML = optPostosComboContrato;
 
-        // Montagem combo Motoristas
         let listMots = '';
         window.DADOS_MOTORISTAS.forEach(m => listMots += `<option value="${m.nome}">`);
         let elNomesMot = document.getElementById('listaNomesMotoristas'); if(elNomesMot) elNomesMot.innerHTML = listMots;
 
-        // Montagem combo Veículos (Avulso / Painel Gestor)
         let optVAvulso = '<option value="">-- Escolha o Carro Oficial --</option>';
         window.DADOS_VEICULOS.forEach(v => {
-            // INTEGRADO COM A OFICINA: Impede lançamentos em veículos inservíveis ou em manutenção
             if(v.status_operacional !== 'Em Oficina' && v.status_operacional !== 'Inservível') {
                 optVAvulso += `<option value="${v.id}">${v.placa} - ${v.modelo || v.veiculo}</option>`;
             }
         });
         let elVeicReal = document.getElementById('selVeiculoRealAvulso'); if(elVeicReal) elVeicReal.innerHTML = optVAvulso;
 
-        // Filtros de Contratos
         let elFiltroContSec = document.getElementById('filtroContratoSec');
         if(elFiltroContSec) {
             elFiltroContSec.innerHTML = secHTML;
@@ -130,21 +118,24 @@ window.buscarTudo = async function() {
         let elFiltroContPosto = document.getElementById('filtroContratoPosto');
         if(elFiltroContPosto) elFiltroContPosto.innerHTML = '<option value="">TODOS OS POSTOS</option>' + [...postosHistorico].sort().map(p=>`<option value="${p}">${p}</option>`).join('');
 
-        // --- Disparo Seguro das Telas ---
+        // CHAMA FUNÇÕES ISOLADAMENTE COM PROTEÇÃO MÁXIMA
         let renderFunctions = [
             'renderTabVeiculos', 'renderAnaliseFrota', 'renderAuditoria', 
             'renderMotoristas', 'renderPostos', 'renderContratos', 
-            'SincronizarCombosETratamentos', 'CarregarHistoricoRDVsView', 'rotearTelas'
+            'SincronizarCombosETratamentos', 'CarregarHistoricoRDVsView',
+            'filtrarRelatorio', 'renderFilaPosto', 'renderGestaoNotas'
         ];
         
         renderFunctions.forEach(fn => {
-            if(typeof window[fn] === 'function') window[fn]();
+            if(typeof window[fn] === 'function') {
+                try { window[fn](); } catch(err) { console.warn(`Falha não fatal na renderização: ${fn}`, err); }
+            }
         });
 
     } catch(e) { 
-        console.error(e); 
-        alert("Erro ao carregar dados. Verifique a conexão com o banco."); 
+        console.error("Erro crítico na carga:", e); 
+        alert("Falha de conexão. Recarregue a página."); 
+    } finally {
+        window.loading(false);
     }
-    
-    window.loading(false);
 };

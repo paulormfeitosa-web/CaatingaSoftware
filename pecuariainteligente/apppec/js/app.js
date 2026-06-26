@@ -1,23 +1,21 @@
-import { collection, query, where, getDocs, doc, setDoc, addDoc, deleteDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { collection, query, where, getDocs, doc, setDoc, addDoc, deleteDoc, onSnapshot, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 import { db, auth, storage } from "./firebase-config.js";
 
 let usuarioAtual = null;
 let listenerUsuario = null; 
+let listenerLeiloes = null;
 let tenant = ""; 
 let modalInstancia = null;
 let modalPastoInstancia = null;
+let modalLeilaoInstancia = null;
 
-// --- Lógica de Instalação do PWA (SILENCIADA) ---
-window.addEventListener('beforeinstallprompt', (e) => {
-  // Isso impede que o navegador mostre a barra nativa chata na parte inferior
-  e.preventDefault();
-});
-// -----------------------------------------------
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); });
 
 window.BD_ANIMAIS = []; window.BD_PESOS = []; window.BD_VACINAS = []; 
 window.BD_FINANCEIRO = []; window.BD_ESTOQUE = []; window.BD_REPRODUCAO = []; window.BD_PASTOS = [];
+window.BD_LACTACOES = []; window.BD_LEILOES = [];
 
 let chartP, chartR, chartM, chartS, chartW;
 let chartFinCat, chartFinBal; 
@@ -51,6 +49,7 @@ function formatDateLocal(isoString) {
 window.onload = function() {
   modalInstancia = new bootstrap.Modal(document.getElementById('modalAnimal'));
   modalPastoInstancia = new bootstrap.Modal(document.getElementById('modalCadastroPasto'));
+  modalLeilaoInstancia = new bootstrap.Modal(document.getElementById('modalNovoLeilao'));
   
   onAuthStateChanged(auth, async (userAuth) => {
       const cracha = localStorage.getItem("caatinga_user");
@@ -59,6 +58,9 @@ window.onload = function() {
           try {
               const docVerifica = await getDoc(doc(db, "usuarios", usuarioAtual.cpf));
               if (!docVerifica.exists() || docVerifica.data().ativo === false) { window.sairSistema(true); return; }
+              usuarioAtual.plano = docVerifica.data().plano || 'bronze';
+              usuarioAtual.empresa_id = docVerifica.data().empresa_id;
+              localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual));
           } catch(e) {}
           iniciarSistema(); 
       } else { 
@@ -71,42 +73,96 @@ window.onload = function() {
 window.sairSistema = function(silencioso = false) { 
     localStorage.removeItem("caatinga_user"); 
     if(listenerUsuario) { listenerUsuario(); listenerUsuario = null; } 
+    if(listenerLeiloes) { listenerLeiloes(); listenerLeiloes = null; }
     signOut(auth).then(() => {
         if(!silencioso) window.location.reload(); 
-        else { document.getElementById('sistemaPrincipal').classList.add('oculto'); document.getElementById('telaLogin').classList.remove('oculto'); document.getElementById('msgLogin').innerText = "Acesso revogado."; document.getElementById('msgLogin').classList.remove('oculto'); }
+        else { document.getElementById('sistemaPrincipal').classList.add('oculto'); document.getElementById('telaLogin').classList.remove('oculto'); document.getElementById('msgLogin').innerText = "Acesso suspenso ou revogado."; document.getElementById('msgLogin').classList.remove('oculto'); }
     });
 };
 
 window.logar = async function() {
-  const cpf = document.getElementById('loginCpf').value.replace(/\D/g, ''); 
+  // Limpa tudo que não for número (Aceitando CPF de 11 dígitos ou Celular de 10-11 dígitos)
+  const identificador = document.getElementById('loginCpf').value.replace(/\D/g, ''); 
   const senha = document.getElementById('loginSenha').value;
   document.getElementById('msgLogin').classList.add('oculto');
   loading(true, "A Autenticar...");
   
   try {
-    const emailFicticio = cpf + "@feitosa.app";
+    // Força a sessão a ficar gravada no celular (persistência de longo prazo)
+    await setPersistence(auth, browserLocalPersistence);
+    
+    // Converte o número limpo num "email" debaixo dos panos
+    const emailFicticio = identificador + "@feitosa.app";
     await signInWithEmailAndPassword(auth, emailFicticio, senha);
     
-    const uSnap = await getDoc(doc(db, "usuarios", cpf));
+    const uSnap = await getDoc(doc(db, "usuarios", identificador));
     if (uSnap.exists() && uSnap.data().ativo !== false) { 
         usuarioAtual = uSnap.data(); 
-        usuarioAtual.cpf = cpf; 
+        usuarioAtual.cpf = identificador; 
         localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual)); 
         iniciarSistema();
     } else { throw new Error("Acesso negado."); }
   } catch(e) { 
-      document.getElementById('msgLogin').innerText = "Credenciais inválidas."; 
+      document.getElementById('msgLogin').innerText = "Credenciais inválidas. Verifique os números."; 
       document.getElementById('msgLogin').classList.remove('oculto'); 
   } finally { loading(false); }
 };
 
+window.aplicarRegrasPlano = function(plano) {
+  const navFinancas = document.getElementById('nav-simulador');
+  const navCaixa = document.getElementById('nav-caixa');
+  const navVitrine = document.getElementById('nav-vitrine');
+  const tabZootec = document.getElementById('nav-zootec');
+  
+  if(navFinancas) navFinancas.style.display = 'block';
+  if(navCaixa) navCaixa.style.display = 'block';
+  if(navVitrine) navVitrine.style.display = 'block';
+  if(tabZootec) tabZootec.style.display = 'block';
+  
+  if(plano === 'bronze') {
+      if(navFinancas) navFinancas.style.display = 'none';
+      if(navCaixa) navCaixa.style.display = 'none';
+      if(navVitrine) navVitrine.style.display = 'none';
+      if(tabZootec) tabZootec.style.display = 'none';
+  }
+  if(plano === 'prata') {
+      if(navVitrine) navVitrine.style.display = 'none';
+  }
+  
+  let badgeCor = plano === 'ouro' ? 'bg-warning text-dark' : (plano === 'prata' ? 'bg-secondary' : 'bg-dark');
+  document.getElementById('lbl-empresa').innerHTML = `${tenant.toUpperCase()} <span class="badge ${badgeCor} ms-1" style="font-size: 0.8em;">PLANO ${plano.toUpperCase()}</span>`;
+}
+
 function iniciarSistema() {
   document.getElementById('telaLogin').classList.add('oculto'); document.getElementById('sistemaPrincipal').classList.remove('oculto');
-  tenant = String(usuarioAtual.empresa_id || "pref_aiuaba").toLowerCase().trim(); if(tenant === "undefined" || tenant === "global") tenant = "pref_aiuaba";
-  document.getElementById('lbl-empresa').innerText = tenant.toUpperCase(); document.getElementById('usuarioLogado').innerText = `👤 ${usuarioAtual.nome}`;
+  tenant = String(usuarioAtual.empresa_id || "pref_aiuaba").toLowerCase().trim(); 
+  if(tenant === "undefined" || tenant === "global") tenant = "pref_aiuaba";
+  
+  document.getElementById('usuarioLogado').innerText = `👤 ${usuarioAtual.nome}`;
+  window.aplicarRegrasPlano(usuarioAtual.plano);
+
   if (!listenerUsuario) {
-      listenerUsuario = onSnapshot(doc(db, "usuarios", usuarioAtual.cpf), (docSnap) => { if (!docSnap.exists() || docSnap.data().ativo === false) { alert("⚠️ Acesso suspenso."); window.sairSistema(true); } });
+      listenerUsuario = onSnapshot(doc(db, "usuarios", usuarioAtual.cpf), (docSnap) => { 
+        if (!docSnap.exists() || docSnap.data().ativo === false) { 
+          alert("⚠️ Acesso suspenso pelo Administrador."); 
+          window.sairSistema(true); 
+        } else if (docSnap.data().plano !== usuarioAtual.plano) {
+          usuarioAtual.plano = docSnap.data().plano;
+          localStorage.setItem("caatinga_user", JSON.stringify(usuarioAtual));
+          window.aplicarRegrasPlano(usuarioAtual.plano);
+        }
+      });
   }
+
+  if (!listenerLeiloes && usuarioAtual.plano === 'ouro') {
+      listenerLeiloes = onSnapshot(collection(db, "leiloes"), (snap) => {
+          window.BD_LEILOES = snap.docs.map(d => ({id: d.id, ...d.data()}));
+          if(!document.getElementById('viewVitrine').classList.contains('oculto')){
+              window.renderizarLeiloes();
+          }
+      });
+  }
+
   window.sincronizarBancoDeDados();
 }
 
@@ -117,21 +173,17 @@ window.verificarTratosAutomaticos = async function() {
   for (let p of window.BD_PASTOS) {
       if (p.sistema && p.sistema.includes("Confinamento") && p.racaoVinculada && p.consumoCabeca) {
           let ultimoTrato = p.dataUltimoTrato;
-          
           if (!ultimoTrato) {
               await setDoc(doc(db, "pastos", p.id), { dataUltimoTrato: hojeIso }, { merge: true });
               p.dataUltimoTrato = hojeIso;
               continue;
           }
-
           if (ultimoTrato < hojeIso) {
               let diasPassados = Math.floor((new Date(hojeIso) - new Date(ultimoTrato)) / 864e5);
               const ativos = window.BD_ANIMAIS.filter(a => a.status === "Ativo" && a.pasto === p.nome);
-              
               if (ativos.length > 0) {
                   let consumoTotal = ativos.length * p.consumoCabeca * diasPassados;
                   const est = window.BD_ESTOQUE.find(e => e.id === p.racaoVinculada);
-                  
                   if (est) {
                       let novoSaldo = est.qtd - consumoTotal;
                       if(novoSaldo < 0) novoSaldo = 0; 
@@ -145,18 +197,19 @@ window.verificarTratosAutomaticos = async function() {
           }
       }
   }
-  if(atualizouEstoque) console.log("Tratos diários descontados automaticamente.");
+  if(atualizouEstoque) console.log("Tratos diários descontados.");
 }
 
 window.sincronizarBancoDeDados = async function(manterVistaPasto = false) {
   loading(true, "A sincronizar dados principais...");
   try {
-    const [snapAnimais, snapPesos, snapFin, snapEst, snapPastos] = await Promise.all([
+    const [snapAnimais, snapPesos, snapFin, snapEst, snapPastos, snapLac] = await Promise.all([
        getDocs(query(collection(db, "animais"), where("empresa_id", "==", tenant))),
        getDocs(query(collection(db, "pesagens"), where("empresa_id", "==", tenant))),
        getDocs(query(collection(db, "financeiro"), where("empresa_id", "==", tenant))),
        getDocs(query(collection(db, "estoque"), where("empresa_id", "==", tenant))),
-       getDocs(query(collection(db, "pastos"), where("empresa_id", "==", tenant)))
+       getDocs(query(collection(db, "pastos"), where("empresa_id", "==", tenant))),
+       getDocs(query(collection(db, "lactacoes"), where("empresa_id", "==", tenant)))
     ]);
     
     window.BD_ANIMAIS = snapAnimais.docs.map(d => ({id: d.id, ...d.data()}));
@@ -164,6 +217,7 @@ window.sincronizarBancoDeDados = async function(manterVistaPasto = false) {
     window.BD_FINANCEIRO = snapFin.docs.map(d => d.data());
     window.BD_ESTOQUE = snapEst.docs.map(d => ({id: d.id, ...d.data()}));
     window.BD_PASTOS = snapPastos.docs.map(d => ({id: d.id, ...d.data()}));
+    window.BD_LACTACOES = snapLac.docs.map(d => d.data());
     window.BD_VACINAS = []; window.BD_REPRODUCAO = [];
 
     await window.verificarTratosAutomaticos();
@@ -214,6 +268,15 @@ function processarDados() {
 }
 
 window.navegar = function(viewId, elAtivo) {
+  if(usuarioAtual && usuarioAtual.plano === 'bronze' && (viewId === 'viewCaixa' || viewId === 'viewSimulador' || viewId === 'viewVitrine')) {
+    alert("Funcionalidade exclusiva. Evolua seu plano para Prata ou Ouro.");
+    return;
+  }
+  if(usuarioAtual && usuarioAtual.plano === 'prata' && viewId === 'viewVitrine') {
+    alert("Leilões são exclusivos do Plano Ouro.");
+    return;
+  }
+
   document.querySelectorAll('.view-section').forEach(el => el.classList.add('oculto'));
   document.getElementById(viewId).classList.remove('oculto');
   document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
@@ -225,6 +288,7 @@ window.navegar = function(viewId, elAtivo) {
   if(viewId === 'viewCaixa') window.carregarFin();
   if(viewId === 'viewEstoque') window.renderizarEstoque();
   if(viewId === 'viewPastos') window.renderizarPastos();
+  if(viewId === 'viewVitrine') window.renderizarLeiloes();
 }
 
 function getCapacidadePorHa(tipo, sistema) {
@@ -313,7 +377,6 @@ window.salvarPasto = async function() {
     loading(false);
 }
 
-// CORREÇÃO: Função reconstruída para gerar os cards completos idênticos à imagem
 window.renderizarPastos = function() {
     let html = "";
     const ativos = window.BD_ANIMAIS.filter(a => a.status === "Ativo");
@@ -369,7 +432,6 @@ window.renderizarPastos = function() {
             </div>
         </div>`;
     });
-    
     document.getElementById('grid-pastos').innerHTML = html || "<div class='col-12 text-center text-muted'>Nenhuma área cadastrada.</div>";
 }
 
@@ -508,6 +570,11 @@ window.carregarDash = function() {
   document.getElementById('d-mortalidade').innerText = taxaMortalidade + "%"; document.getElementById('d-mortos-qtd').innerText = mortos + " baixas";
   document.getElementById('d-saldo').innerText = saldo.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
   
+  if(usuarioAtual && usuarioAtual.plano === 'bronze') {
+      document.getElementById('d-saldo').innerText = "BLOQUEADO";
+      document.getElementById('d-saldo').style.color = "#999";
+  }
+
   const corPrimaria = '#E06C3F'; const corSecundaria = '#1A374D';
   if(chartP) chartP.destroy(); chartP = new Chart(document.getElementById('chartProj'), { type: 'line', data: { labels: ['Hoje','1 Ano','2 Anos','3 Anos','4 Anos','5 Anos'], datasets: [{label:'Cabeças Estimadas', data: [ativos.length, ...projecao], borderColor: corPrimaria, backgroundColor:'rgba(224, 108, 63, 0.1)', fill:true, tension:0.3}] }, options: {maintainAspectRatio:false, plugins:{legend:{display:false}}} });
   if(chartR) chartR.destroy(); chartR = new Chart(document.getElementById('chartPasto'), { type: 'bar', data: { labels: Object.keys(lotacaoUA), datasets: [{label:'UA por Pasto', data: Object.values(lotacaoUA).map(v => v.toFixed(2)), backgroundColor: corSecundaria}] }, options: {maintainAspectRatio:false, indexAxis:'y', plugins:{legend:{display:false}}} });
@@ -570,8 +637,8 @@ window.renderizarLista = function(apenasRecria = false) {
   const pesosRecentes = {}; window.BD_PESOS.sort((a,b) => new Date(a.data) - new Date(b.data)).forEach(p => pesosRecentes[p.brinco] = p.valor);
 
   document.getElementById('lista-render').innerHTML = filtrados.sort((a,b)=> (a.pasto||"").localeCompare(b.pasto||"")).map(a => {
-    let extraClass = a.status === 'Morto' ? 'morto' : (a.status === 'Vendido' ? 'vendido' : '');
-    let badgeStatus = ''; if(a.status === 'Morto') badgeStatus = '<span class="badge bg-dark ms-1">Morto</span>'; if(a.status === 'Vendido') badgeStatus = '<span class="badge bg-success ms-1">Vendido</span>';
+    let extraClass = a.status === 'Morto' ? 'morto' : (a.status === 'Vendido' || a.status === 'Transferido' ? 'vendido' : '');
+    let badgeStatus = ''; if(a.status === 'Morto') badgeStatus = '<span class="badge bg-dark ms-1">Morto</span>'; if(a.status === 'Vendido') badgeStatus = '<span class="badge bg-success ms-1">Vendido</span>'; if(a.status === 'Transferido') badgeStatus = '<span class="badge bg-info ms-1">Transferido</span>';
     let pesoMostrado = pesosRecentes[a.brinco] ? `<span class="badge bg-light text-dark border ms-1">${pesosRecentes[a.brinco]}kg</span>` : `<span class="badge bg-light text-danger border ms-1">Peso Desc.</span>`;
 
     return `
@@ -631,7 +698,7 @@ window.salvarAnimal = async function() {
 
     await setDoc(doc(db, `animais`, docId), obj, {merge: true});
     
-    if(obj.origem === "Compra" && valCompraNum > 0 && lancarNoCaixa) {
+    if(obj.origem === "Compra" && valCompraNum > 0 && lancarNoCaixa && usuarioAtual.plano !== 'bronze') {
       await addDoc(collection(db, `financeiro`), { empresa_id: tenant, data: new Date().toISOString(), tipo: "Despesa", cat: "Compra Gado", desc: `Aquisição animal: ${obj.brinco}`, valor: valCompraNum });
     }
 
@@ -677,7 +744,7 @@ window.acaoMassa = async function(acao) {
           if(acao === 'Morto') { update.status = "Morto"; update.dataMorte = new Date().toISOString(); }
           await setDoc(doc(db, `animais`, id), update, {merge:true});
         }
-        if(acao === 'Vender' && Number(val.replace(',','.')) > 0) {
+        if(acao === 'Vender' && Number(val.replace(',','.')) > 0 && usuarioAtual.plano !== 'bronze') {
           let brincosSel = window.BD_ANIMAIS.filter(a => window.selecionados.includes(a.id)).map(a=>a.brinco).join(', ');
           await addDoc(collection(db, `financeiro`), { empresa_id: tenant, data: new Date().toISOString(), tipo: "Receita", cat: "Venda Animal", desc: `Lote de ${window.selecionados.length} cab. (${brincosSel})`, valor: Number(val.replace(',','.')) });
         }
@@ -694,7 +761,9 @@ window.vendaIndividual = async function() {
   loading(true, "A Registar Venda...");
   try {
     await setDoc(doc(db, `animais`, id), {status: "Vendido"}, {merge: true});
-    await addDoc(collection(db, `financeiro`), { empresa_id: tenant, data: new Date().toISOString(), tipo: "Receita", cat: "Venda Animal", desc: `Venda unitária: ${brinco}`, valor: Number(v.replace(',','.')) });
+    if(usuarioAtual.plano !== 'bronze') {
+      await addDoc(collection(db, `financeiro`), { empresa_id: tenant, data: new Date().toISOString(), tipo: "Receita", cat: "Venda Animal", desc: `Venda unitária: ${brinco}`, valor: Number(v.replace(',','.')) });
+    }
     modalInstancia.hide(); showToast("Venda Registada no Caixa!"); await window.sincronizarBancoDeDados(!!pastoSelecionadoAtual);
   } catch(e) { alert("Erro de rede."); }
   loading(false);
@@ -767,6 +836,89 @@ window.refreshRepro = function(b) {
     document.getElementById('render-repro').innerHTML = hist.map(r => `<div class="border-bottom py-1"><div class="d-flex justify-content-between"><b class="text-dark">${r.tipo}</b> <span class="badge bg-secondary">${new Date(r.data).toLocaleDateString('pt-BR')}</span></div><div class="text-muted small">Touro/Sêmen: ${r.touro||'Não informado'}</div><div class="text-primary small fw-bold mt-1">⏳ Prev. Parto: ${new Date(r.prevParto).toLocaleDateString('pt-BR')}</div></div>`).join('') || "<div class='text-muted p-2'>Nenhum procedimento registrado.</div>";
 }
 
+window.salvarLactacao = async function() {
+    const brinco = document.getElementById('m-brinco').value;
+    const kg = document.getElementById('zoo-lac-kg').value;
+    const dias = document.getElementById('zoo-lac-dias').value;
+    if(!kg || !dias) return alert("Preencha o total produzido e os dias.");
+    
+    loading(true, "Fechando Lactação...");
+    try {
+       const obj = { empresa_id: tenant, brinco: brinco, kgProduzidos: Number(kg), dias: Number(dias), dataFechamento: new Date().toISOString() };
+       await addDoc(collection(db, "lactacoes"), obj);
+       window.BD_LACTACOES.push(obj);
+       document.getElementById('zoo-lac-kg').value = ""; document.getElementById('zoo-lac-dias').value = "";
+       window.renderizarLactacoes(brinco);
+       showToast("Ciclo de lactação salvo!");
+    } catch(e) { alert("Erro ao salvar lactação."); }
+    loading(false);
+}
+
+window.renderizarLactacoes = function(brinco) {
+    const hist = window.BD_LACTACOES.filter(l => l.brinco === brinco).sort((a,b) => new Date(b.dataFechamento) - new Date(a.dataFechamento));
+    document.getElementById('render-lactacoes').innerHTML = hist.map(l => {
+       let media = (l.kgProduzidos / l.dias).toFixed(1);
+       return `<div class="d-flex justify-content-between border-bottom py-2">
+                 <div><b>${l.dias} dias</b><br><small class="text-muted">${new Date(l.dataFechamento).toLocaleDateString('pt-BR')}</small></div>
+                 <div class="text-end text-primary fw-bold">${l.kgProduzidos} kg<br><small class="text-muted">${media} kg/dia</small></div>
+               </div>`;
+    }).join('') || "<div class='text-muted p-2'>Nenhuma lactação encerrada.</div>";
+}
+
+window.salvarCarcaca = async function() {
+    const id = document.getElementById('m-id').value;
+    const vivo = document.getElementById('zoo-car-vivo').value;
+    const quente = document.getElementById('zoo-car-quente').value;
+    if(!vivo || !quente) return alert("Informe peso vivo e de carcaça.");
+
+    let rendimento = ((Number(quente) / Number(vivo)) * 100).toFixed(1);
+    
+    loading(true, "Calculando rendimento...");
+    try {
+       await updateDoc(doc(db, "animais", id), { pesoVivoAbate: Number(vivo), pesoCarcaca: Number(quente), rendimentoCarcaca: rendimento });
+       const an = window.BD_ANIMAIS.find(a => a.id === id);
+       if(an) { an.rendimentoCarcaca = rendimento; an.pesoCarcaca = Number(quente); }
+       document.getElementById('render-carcaca').innerHTML = `RENDIMENTO: <span class="text-success fs-4">${rendimento}%</span>`;
+       showToast("Rendimento de Carcaça Registado!");
+    } catch(e) { alert("Erro ao registar carcaça."); }
+    loading(false);
+}
+
+window.gerarLinkPartilha = function() {
+    const id = document.getElementById('m-id').value;
+    if(!id) return alert("Salve a ficha do animal primeiro.");
+    const link = window.location.origin + window.location.pathname + "?perfil=" + id + "&fazenda=" + tenant;
+    const inputLink = document.getElementById('link-partilha');
+    inputLink.value = link;
+    inputLink.classList.remove('oculto');
+    inputLink.select();
+    document.execCommand('copy');
+    showToast("Link gerado e copiado!");
+}
+
+window.transferirAnimalSaaS = async function() {
+    const id = document.getElementById('m-id').value;
+    const destino = document.getElementById('saas-destino').value.trim().toLowerCase();
+    if(!id || !destino) return alert("Informe o ID do Cliente de Destino.");
+    if(destino === tenant) return alert("O animal já pertence à sua fazenda.");
+
+    if(!confirm(`ATENÇÃO: O animal e todo o seu histórico serão transferidos para "${destino}".\nTem certeza absoluta?`)) return;
+
+    loading(true, "Transferindo propriedade...");
+    try {
+        await updateDoc(doc(db, "animais", id), { empresa_id: destino, pasto: "", status: "Transferido" });
+        const pesos = await getDocs(query(collection(db, "pesagens"), where("brinco", "==", document.getElementById('m-brinco').value), where("empresa_id", "==", tenant)));
+        pesos.forEach(async (p) => await updateDoc(doc(db, "pesagens", p.id), { empresa_id: destino }));
+        const vacinas = await getDocs(query(collection(db, "vacinas"), where("brinco", "==", document.getElementById('m-brinco').value), where("empresa_id", "==", tenant)));
+        vacinas.forEach(async (v) => await updateDoc(doc(db, "vacinas", v.id), { empresa_id: destino }));
+
+        modalInstancia.hide();
+        showToast("Animal transferido com sucesso para " + destino);
+        await window.sincronizarBancoDeDados();
+    } catch(e) { alert("Erro ao transferir. Verifique as permissões."); }
+    loading(false);
+}
+
 window.salvarEstoque = async function() {
     loading(true, "Adicionando ao Estoque...");
     try {
@@ -831,13 +983,9 @@ window.salvarFin = async function() {
 
 window.carregarFin = function() {
   const selFiltro = document.getElementById('fin-mes-filtro');
-  
   if (selFiltro.options.length <= 1 && window.BD_FINANCEIRO.length > 0) {
       let meses = new Set();
-      window.BD_FINANCEIRO.forEach(f => {
-          if (f.data) meses.add(f.data.substring(0, 7));
-      });
-      
+      window.BD_FINANCEIRO.forEach(f => { if (f.data) meses.add(f.data.substring(0, 7)); });
       Array.from(meses).sort().reverse().forEach(m => {
           let partes = m.split('-');
           let text = new Date(partes[0], partes[1] - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -848,27 +996,15 @@ window.carregarFin = function() {
 
   const filtroAtivo = selFiltro.value;
   let filtrados = window.BD_FINANCEIRO;
+  if (filtroAtivo !== 'todos') { filtrados = window.BD_FINANCEIRO.filter(f => f.data && f.data.startsWith(filtroAtivo)); }
 
-  if (filtroAtivo !== 'todos') {
-      filtrados = window.BD_FINANCEIRO.filter(f => f.data && f.data.startsWith(filtroAtivo));
-  }
-
-  let entradas = 0; 
-  let saidas = 0;
-  let catDespesas = {}; 
+  let entradas = 0; let saidas = 0; let catDespesas = {}; 
   
   const div = document.getElementById('fin-extrato');
   div.innerHTML = filtrados.sort((a,b) => new Date(b.data) - new Date(a.data)).map(r => {
     let valorNum = Number(r.valor);
-    if(r.tipo === 'Receita') {
-        entradas += valorNum;
-    } else {
-        saidas += valorNum;
-        catDespesas[r.cat] = (catDespesas[r.cat] || 0) + valorNum;
-    }
-    
+    if(r.tipo === 'Receita') { entradas += valorNum; } else { saidas += valorNum; catDespesas[r.cat] = (catDespesas[r.cat] || 0) + valorNum; }
     let dataFormatada = r.data ? new Date(r.data).toLocaleDateString('pt-BR') : '--';
-    
     return `
     <div class="d-flex justify-content-between align-items-center border-bottom py-2 px-3">
       <div><b class="text-dark">${r.cat}</b><br><small class="text-muted">${r.desc||'Sem descrição'} • ${dataFormatada}</small></div>
@@ -884,13 +1020,7 @@ window.carregarFin = function() {
   if(chartFinCat) chartFinCat.destroy();
   chartFinCat = new Chart(ctxCat, {
       type: 'doughnut',
-      data: {
-          labels: Object.keys(catDespesas).length ? Object.keys(catDespesas) : ['Sem Despesas'],
-          datasets: [{
-              data: Object.values(catDespesas).length ? Object.values(catDespesas) : [1],
-              backgroundColor: Object.values(catDespesas).length ? ['#dc3545', '#E06C3F', '#f6c23e', '#1A374D', '#6c757d', '#17a2b8', '#858796'] : ['#e3e6f0']
-          }]
-      },
+      data: { labels: Object.keys(catDespesas).length ? Object.keys(catDespesas) : ['Sem Despesas'], datasets: [{ data: Object.values(catDespesas).length ? Object.values(catDespesas) : [1], backgroundColor: Object.values(catDespesas).length ? ['#dc3545', '#E06C3F', '#f6c23e', '#1A374D', '#6c757d', '#17a2b8', '#858796'] : ['#e3e6f0'] }] },
       options: { maintainAspectRatio: false, plugins: { legend: { position: 'right' }, tooltip: { enabled: Object.values(catDespesas).length > 0 } }, cutout: '60%' }
   });
 
@@ -898,15 +1028,7 @@ window.carregarFin = function() {
   if(chartFinBal) chartFinBal.destroy();
   chartFinBal = new Chart(ctxBal, {
       type: 'bar',
-      data: {
-          labels: ['Receitas', 'Despesas'],
-          datasets: [{
-              label: 'Total R$',
-              data: [entradas, saidas],
-              backgroundColor: ['#198754', '#dc3545'],
-              borderRadius: 4
-          }]
-      },
+      data: { labels: ['Receitas', 'Despesas'], datasets: [{ label: 'Total R$', data: [entradas, saidas], backgroundColor: ['#198754', '#dc3545'], borderRadius: 4 }] },
       options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
   });
 }
@@ -915,11 +1037,7 @@ window.exportarCaixaCSV = function() {
     let csv = "Data;Tipo;Categoria;Descricao;Valor(R$)\n";
     const filtroAtivo = document.getElementById('fin-mes-filtro').value;
     let filtrados = window.BD_FINANCEIRO;
-    
-    if (filtroAtivo !== 'todos') {
-        filtrados = window.BD_FINANCEIRO.filter(f => f.data && f.data.startsWith(filtroAtivo));
-    }
-    
+    if (filtroAtivo !== 'todos') { filtrados = window.BD_FINANCEIRO.filter(f => f.data && f.data.startsWith(filtroAtivo)); }
     if (filtrados.length === 0) return alert("Não há dados para exportar neste período.");
     
     filtrados.sort((a,b) => new Date(a.data) - new Date(b.data)).forEach(f => {
@@ -944,8 +1062,11 @@ function updateSelect(id, arr) { const s = document.getElementById(id); if(!s) r
 function updateDatalist(id, arr) { const dl = document.getElementById(id); if(!dl) return; dl.innerHTML=''; arr.forEach(i => { let o = document.createElement('option'); o.value=i; dl.appendChild(o); }); }
  
 window.toggleRepro = function() {
-    const sexo = document.getElementById('m-sexo').value; const navRepro = document.getElementById('nav-repro');
-    if(sexo === 'Fêmea') navRepro.classList.remove('oculto'); else navRepro.classList.add('oculto');
+    const sexo = document.getElementById('m-sexo').value; 
+    const navRepro = document.getElementById('nav-repro');
+    const navZoo = document.getElementById('zootec-femea');
+    if(sexo === 'Fêmea') { navRepro.classList.remove('oculto'); if(navZoo) navZoo.classList.remove('oculto'); } 
+    else { navRepro.classList.add('oculto'); if(navZoo) navZoo.classList.add('oculto'); }
 }
 
 window.abrirEdicao = async function(id) {
@@ -974,6 +1095,9 @@ window.abrirEdicao = async function(id) {
   const isAtivo = a.status === 'Ativo';
   document.getElementById('btn-vender-indiv').classList.toggle('oculto', !isAtivo); document.getElementById('btn-morte-indiv').classList.toggle('oculto', !isAtivo);
   
+  if(a.rendimentoCarcaca) { document.getElementById('render-carcaca').innerHTML = `RENDIMENTO: <span class="text-success fs-4">${a.rendimentoCarcaca}%</span>`; } 
+  else { document.getElementById('render-carcaca').innerHTML = `<small class="text-muted">Nenhum abate registado</small>`; }
+  
   loading(true, "A carregar histórico do animal...");
   try {
      const [snapVac, snapRep] = await Promise.all([
@@ -982,11 +1106,22 @@ window.abrirEdicao = async function(id) {
      ]);
      window.BD_VACINAS = snapVac.docs.map(d => d.data());
      window.BD_REPRODUCAO = snapRep.docs.map(d => d.data());
-  } catch(e) { console.log("Erro ao buscar histórico ou operando offline."); }
+  } catch(e) { console.log("Erro ao buscar histórico."); }
   loading(false);
 
-  window.toggleRepro(); window.refreshHist(a.brinco, a.nasc); window.refreshArvore(a.brinco); window.refreshRepro(a.brinco);
-  document.querySelector('#tab-ficha').classList.add('show', 'active'); document.querySelector('#tab-peso').classList.remove('show', 'active'); document.querySelector('#tab-arvore').classList.remove('show', 'active'); document.querySelector('#tab-repro').classList.remove('show', 'active');
+  window.toggleRepro(); 
+  window.refreshHist(a.brinco, a.nasc); 
+  window.refreshArvore(a.brinco); 
+  window.refreshRepro(a.brinco);
+  window.renderizarLactacoes(a.brinco);
+
+  document.querySelector('#tab-ficha').classList.add('show', 'active'); 
+  document.querySelector('#tab-peso').classList.remove('show', 'active'); 
+  document.querySelector('#tab-arvore').classList.remove('show', 'active'); 
+  document.querySelector('#tab-repro').classList.remove('show', 'active');
+  document.querySelector('#tab-zootec').classList.remove('show', 'active');
+  document.querySelector('#tab-saas').classList.remove('show', 'active');
+
   document.querySelectorAll('.nav-pills .nav-link').forEach((el, idx) => { if(idx===0) el.classList.add('active'); else el.classList.remove('active'); });
   modalInstancia.show();
 }
@@ -1000,14 +1135,103 @@ window.abrirModalAnimal = function() {
   document.getElementById('m-pasto').value = ""; document.getElementById('m-link-arquivo').classList.add('oculto');
   document.getElementById('btn-vender-indiv').classList.add('oculto'); document.getElementById('btn-morte-indiv').classList.add('oculto');
   document.getElementById('cb-ano').checked=false; window.toggleNasc(); document.getElementById('m-status').value = "Ativo";
+  document.getElementById('render-carcaca').innerHTML = "";
   
   window.BD_VACINAS = []; window.BD_REPRODUCAO = [];
 
   window.toggleRepro();
-  document.querySelector('#tab-ficha').classList.add('show', 'active'); document.querySelector('#tab-peso').classList.remove('show', 'active'); document.querySelector('#tab-arvore').classList.remove('show', 'active'); document.querySelector('#tab-repro').classList.remove('show', 'active');
+  document.querySelector('#tab-ficha').classList.add('show', 'active'); 
+  document.querySelector('#tab-peso').classList.remove('show', 'active'); 
+  document.querySelector('#tab-arvore').classList.remove('show', 'active'); 
+  document.querySelector('#tab-repro').classList.remove('show', 'active');
+  document.querySelector('#tab-zootec').classList.remove('show', 'active');
+  document.querySelector('#tab-saas').classList.remove('show', 'active');
+
   document.querySelectorAll('.nav-pills .nav-link').forEach((el, idx) => { if(idx===0) el.classList.add('active'); else el.classList.remove('active'); });
   modalInstancia.show(); 
 }
 
-window.toggleOrigem = function() { const o = document.getElementById('m-origem').value; if(o === 'Compra') document.getElementById('div-valor-compra').classList.remove('oculto'); else document.getElementById('div-valor-compra').classList.add('oculto'); }
-window.toggleNasc = function() { const c = document.getElementById('cb-ano').checked; if(c) { document.getElementById('m-nasc').classList.add('oculto'); document.getElementById('m-nasc-ano').classList.remove('oculto'); } else { document.getElementById('m-nasc').classList.remove('oculto'); document.getElementById('m-nasc-ano').classList.add('oculto'); } }
+window.abrirModalNovoLeilao = function() {
+    const sel = document.getElementById('leilao-animal');
+    sel.innerHTML = '<option value="">Escolha um Animal...</option>';
+    const ativos = window.BD_ANIMAIS.filter(a => a.status === "Ativo");
+    ativos.forEach(a => { sel.add(new Option(`${a.brinco} - ${a.cat} (${a.raca || 'Sem raça'})`, a.id)); });
+    document.getElementById('leilao-lance-min').value = "";
+    document.getElementById('leilao-fim').value = "";
+    modalLeilaoInstancia.show();
+}
+
+window.lancarLeilao = async function() {
+    const id = document.getElementById('leilao-animal').value;
+    const lanceMinStr = document.getElementById('leilao-lance-min').value;
+    const fim = document.getElementById('leilao-fim').value;
+
+    if(!id || !lanceMinStr || !fim) return alert("Preencha todos os campos.");
+    const lanceMin = unmaskMoeda(lanceMinStr);
+    
+    const animal = window.BD_ANIMAIS.find(a => a.id === id);
+    
+    loading(true, "A Publicar Leilão...");
+    try {
+        const objLeilao = { animal_id: animal.id, brinco: animal.brinco, raca: animal.raca || 'S/ Raça Definida', cat: animal.cat, sexo: animal.sexo, urlRegistro: animal.urlRegistro || null, vendedor_id: tenant, vendedor_nome: usuarioAtual.nome, lance_inicial: lanceMin, lance_atual: lanceMin, comprador_atual: null, fim_leilao: new Date(fim).toISOString(), status: 'ativo' };
+        await addDoc(collection(db, "leiloes"), objLeilao);
+        modalLeilaoInstancia.hide();
+        showToast("Animal publicado na vitrine!");
+    } catch(e) { alert("Erro ao publicar leilão."); }
+    loading(false);
+}
+
+window.darLance = async function(leilaoId, lanceAtual, vendedor_id) {
+    if(vendedor_id === tenant) return alert("Você não pode dar lance no seu próprio animal.");
+    const minimoAceite = lanceAtual * 1.02;
+    
+    const strVal = prompt(`O lance mínimo exigido (2% acima) é R$ ${minimoAceite.toFixed(2).replace('.',',')}.\nQual o seu lance?`);
+    if(!strVal) return;
+    
+    const novoLance = Number(strVal.replace(',', '.'));
+    if(novoLance < minimoAceite) return alert("O lance foi rejeitado. Valor abaixo da margem mínima de 2%.");
+
+    loading(true, "Processando lance...");
+    try {
+        await updateDoc(doc(db, "leiloes", leilaoId), { lance_atual: novoLance, comprador_atual: tenant, comprador_nome: usuarioAtual.nome });
+        showToast("Lance registrado! Você está na frente.");
+    } catch(e) { alert("Erro ao registrar lance."); }
+    loading(false);
+}
+
+window.renderizarLeiloes = function() {
+    const ativos = window.BD_LEILOES.filter(l => l.status === 'ativo' && new Date(l.fim_leilao) > new Date());
+    const meus = window.BD_LEILOES.filter(l => l.comprador_atual === tenant);
+
+    const gerarCard = (l, isMeus = false) => {
+        let fotoHtml = l.urlRegistro ? `<div style="height:120px; overflow:hidden;"><img src="${l.urlRegistro}" class="w-100" style="object-fit: cover;"></div>` : `<div style="height:120px; background:#e5e7eb; display:flex; align-items:center; justify-content:center;"><i class="bi bi-camera text-muted fs-1"></i></div>`;
+        let tempoRestante = Math.floor((new Date(l.fim_leilao) - new Date()) / 3600000); 
+        
+        let botaoLance = l.vendedor_id === tenant 
+            ? `<button class="btn btn-sm btn-outline-secondary w-100 fw-bold mt-2" disabled>Meu Animal</button>`
+            : `<button class="btn btn-sm btn-success w-100 fw-bold mt-2 shadow-sm" onclick="window.darLance('${l.id}', ${l.lance_atual}, '${l.vendedor_id}')"><i class="bi bi-hammer"></i> DAR LANCE</button>`;
+
+        if(isMeus) botaoLance = `<button class="btn btn-sm btn-warning w-100 fw-bold mt-2 shadow-sm" disabled><i class="bi bi-star"></i> Seu lance está ganhando</button>`;
+
+        return `
+        <div class="col-12 col-md-6 col-lg-3">
+            <div class="vitrine-card">
+                ${fotoHtml}
+                <div class="badge-tenant"><i class="bi bi-geo-alt"></i> ${l.vendedor_id}</div>
+                <div class="vitrine-body">
+                    <h5 class="fw-bold mb-0 text-dark">${l.brinco}</h5>
+                    <small class="text-muted d-block mb-2">${l.cat} • ${l.raca} • ${l.sexo.charAt(0)}</small>
+                    <div class="bid-box">
+                        <small class="text-muted fw-bold d-block">LANCE VENCEDOR</small>
+                        <h4 class="fw-bold m-0" style="color: #1A374D;">R$ ${l.lance_atual.toFixed(2).replace('.',',')}</h4>
+                        <small class="d-block mt-1 ${tempoRestante < 24 ? 'timer-pulse' : 'text-muted'}"><i class="bi bi-clock-history"></i> Encerra em ${tempoRestante}h</small>
+                    </div>
+                    ${botaoLance}
+                </div>
+            </div>
+        </div>`;
+    };
+
+    document.getElementById('grid-leiloes').innerHTML = ativos.map(l => gerarCard(l)).join('') || "<div class='text-muted text-center w-100 mt-4'>Nenhum leilão ativo na vitrine no momento.</div>";
+    document.getElementById('grid-meus-lances').innerHTML = meus.map(l => gerarCard(l, true)).join('') || "<div class='text-muted text-center w-100 mt-4'>Você ainda não deu lances em nenhum leilão.</div>";
+}

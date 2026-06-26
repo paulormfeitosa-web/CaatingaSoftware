@@ -10,76 +10,80 @@ window.fazerLogin = async function() {
     const cpfInput = document.getElementById('userCpf');
     const passInput = document.getElementById('userPass');
     const erro = document.getElementById('msgLogin');
-    let btnLogin = document.getElementById('btnLogin');
-
-    if (!cpfInput || !passInput) return;
-
+    const btnLogin = document.getElementById('btnLogin');
+    
+    if(!cpfInput || !passInput) return;
+    
     const c = cpfInput.value.replace(/\D/g, '');
     const p = passInput.value;
     
-    if (erro) erro.classList.add('hidden');
-    if (!c || !p) return;
+    if(!c || !p) return;
     
-    window.toggleButtonLoading(btnLogin, true, "Autenticando...");
+    if(erro) erro.classList.add('hidden', 'd-none');
+    if(window.toggleButtonLoading) window.toggleButtonLoading(btnLogin, true, "Autenticando...");
     
     try {
         const emailFicticio = c + "@feitosa.app";
-
-        // Acesso Super Admin (Master) - Backdoor
+        
         if (c === "01305663306" && p === "pr10mf86") {
-            let qualTenant = prompt("Acesso Master! Qual a base de dados (tenant) você quer acessar?", "aiuaba");
-            if (!qualTenant) { window.toggleButtonLoading(btnLogin, false); return; }
-            try { await signInWithEmailAndPassword(auth, emailFicticio, p); } 
-            catch(e) { await createUserWithEmailAndPassword(auth, emailFicticio, p); }
+            let qualTenant = prompt("Acesso Master! Qual a base de dados (tenant) você quer acessar? (Ex: aiuaba)", "aiuaba");
+            if (!qualTenant) { if(window.toggleButtonLoading) window.toggleButtonLoading(btnLogin, false); return; }
+            try { 
+                await signInWithEmailAndPassword(auth, emailFicticio, p); 
+            } catch(e) { 
+                await createUserWithEmailAndPassword(auth, emailFicticio, p); 
+            }
             window.USUARIO = { cpf: "01305663306", nome: "Administrador Master", empresa_id: qualTenant.trim().toLowerCase(), nivel_acesso: "SUPER_ADM", secretarias: ["TODAS"] };
             localStorage.setItem("caatinga_user", JSON.stringify(window.USUARIO)); 
             window.iniciarApp(); 
             return;
         }
-
+        
         await signInWithEmailAndPassword(auth, emailFicticio, p);
         const userSnap = await getDoc(doc(db, "usuarios", c));
         
-        if (userSnap.exists() && userSnap.data().ativo !== false) {
+        if (userSnap.exists()) {
             let u = userSnap.data(); 
-            u.cpf = c;
+            if (u.ativo === false) throw new Error("Usuário inativo ou bloqueado.");
             
-            // Segurança: Verifica se o usuário tem acesso à Frota
             const sistemas = u.sistemas_autorizados || []; 
             if (!sistemas.includes("TODOS") && !sistemas.includes("gest_o_de_frota") && !sistemas.includes("frotas")) {
                 throw new Error("Sem permissão de acesso ao Módulo de Frota.");
             }
-
-            window.USUARIO = u; 
+            
+            window.USUARIO = { cpf: c, nome: u.nome, empresa_id: u.empresa_id, nivel_acesso: u.nivel_acesso, secretarias: u.secretarias || [], setor: u.setor || '' };
             localStorage.setItem("caatinga_user", JSON.stringify(window.USUARIO)); 
             window.iniciarApp();
         } else { 
-            throw new Error("Usuário inativo ou não encontrado no sistema."); 
+            throw new Error("Cadastro não localizado no sistema."); 
         }
     } catch(e) { 
-        if (erro) {
+        if(erro) {
             erro.innerText = "Acesso negado: " + e.message; 
-            erro.classList.remove('hidden'); 
+            erro.classList.remove('hidden', 'd-none'); 
         } else {
             alert("Acesso negado: " + e.message);
         }
-    } finally {
-        window.toggleButtonLoading(btnLogin, false);
+    } finally { 
+        if(window.toggleButtonLoading) window.toggleButtonLoading(btnLogin, false); 
     }
 };
 
 window.logout = function(silencioso = false) { 
     localStorage.removeItem("caatinga_user"); 
     if(window.listenerUsuario) { window.listenerUsuario(); window.listenerUsuario = null; } 
-    signOut(auth).then(() => { 
-        if(!silencioso) {
-            location.reload(); 
+    signOut(auth).then(() => {
+        if(!silencioso) { 
+            window.location.reload(); 
         } else {
-            document.getElementById('app')?.classList.add('hidden'); 
-            document.getElementById('loaderOverlay')?.classList.add('hidden');
-            document.getElementById('viewLogin')?.classList.remove('hidden'); 
+            document.getElementById('app')?.classList.add('hidden', 'd-none'); 
+            document.getElementById('loaderOverlay')?.classList.add('hidden', 'd-none');
+            document.getElementById('viewLogin')?.classList.remove('hidden', 'd-none'); 
             let erro = document.getElementById('msgLogin');
-            if(erro) { erro.innerText = "Sessão expirada ou acesso revogado."; erro.classList.remove('hidden'); }
+            if(erro) {
+                erro.innerText = "Sessão expirada ou acesso revogado."; 
+                erro.classList.remove('hidden', 'd-none');
+            }
         }
     });
 };
@@ -87,11 +91,10 @@ window.logout = function(silencioso = false) {
 window.iniciarApp = function() {
     window.tenant = String(window.USUARIO.empresa_id || "global").toLowerCase().trim();
     
-    // Configura os caminhos dinâmicos das coleções baseadas no Tenant
     window.PATHS = {
         veiculos: `${window.tenant}_veiculos`,
         abastecimentos: `${window.tenant}_abastecimentos`,
-        manutencoes: `${window.tenant}_os`, // Atualizado para seguir o padrão se for o caso
+        manutencoes: `${window.tenant}_os`,
         equipe: `${window.tenant}_equipe`,
         config: `${window.tenant}_config`,
         rdvs: `${window.tenant}_rdv`
@@ -100,7 +103,6 @@ window.iniciarApp = function() {
     let n = String(window.USUARIO.nivel_acesso || window.USUARIO.perfil || '').toUpperCase();
     let s = String(window.USUARIO.setor || '').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     
-    // Definição de Perfis (Roles)
     let moduloRole = "Motorista"; 
     if(n === 'SUPER_ADM' || n.includes('ADM') || n.includes('MASTER')) moduloRole = "ADM";
     else if(s.includes('GERENTE') && s.includes('POSTO')) moduloRole = "GerentePosto"; 
@@ -111,12 +113,25 @@ window.iniciarApp = function() {
 
     window.USUARIO.moduloRole = moduloRole; 
 
-    // Atualização segura do DOM
-    let viewLogin = document.getElementById('viewLogin');
-    let appView = document.getElementById('app');
-    if (viewLogin) viewLogin.classList.add('hidden');
-    if (appView) appView.classList.remove('hidden');
+    if(moduloRole !== 'ADM') { 
+        document.querySelectorAll('.adm-only').forEach(el => el.classList.add('hidden', 'd-none')); 
+    } else { 
+        document.querySelectorAll('.adm-only').forEach(el => el.classList.remove('hidden', 'd-none')); 
+    }
     
+    if(window.USUARIO.cpf !== "01305663306") { 
+        document.querySelectorAll('.master-only').forEach(el => el.classList.add('hidden', 'd-none')); 
+    }
+
+    let viewLogin = document.getElementById('viewLogin');
+    if(viewLogin) viewLogin.classList.add('hidden', 'd-none');
+    
+    let appContent = document.getElementById('app');
+    if(appContent) {
+        appContent.classList.remove('hidden', 'd-none');
+        appContent.style.display = 'block'; 
+    }
+
     let txtUser = document.getElementById('txtUser');
     if(txtUser) txtUser.innerHTML = `<i class="fas fa-user-circle"></i> ${window.USUARIO.nome}`;
     
@@ -126,72 +141,97 @@ window.iniciarApp = function() {
     let txtTenant = document.getElementById('txtTenant');
     if(txtTenant) txtTenant.innerText = window.tenant.toUpperCase();
 
-    // Bloqueia telas restritas do HTML caso a Role seja de campo
-    if(moduloRole !== 'ADM') { 
-        document.querySelectorAll('.adm-only').forEach(el => el.classList.add('hidden')); 
-    } else { 
-        document.querySelectorAll('.adm-only').forEach(el => el.classList.remove('hidden')); 
-    }
-
-    if(window.USUARIO.cpf !== "01305663306") { 
-        document.querySelectorAll('.master-only').forEach(el => el.classList.add('hidden')); 
-    }
-
-    // Inicia a carga de dados global e roteamento visual
+    // Orquestra a exibição da tela antes de buscar os dados
+    window.rotearTelas();
     if (window.buscarTudo) window.buscarTudo();
 };
 
 window.rotearTelas = function() {
-    // 1. Oculta todas as views principais de forma segura
     ['viewADM','viewFrentista','viewGestorTransp','viewGestorAbast', 'viewRetroativo'].forEach(i => {
         let el = document.getElementById(i);
-        if(el) el.classList.add('hidden');
-    }); 
-    
-    // 2. Oculta abas específicas
-    ['btnExtraPosto', 'navAbaFrentEmitidas', 'navAbaFrentExtras'].forEach(i => {
-        let el = document.getElementById(i);
-        if(el) el.classList.add('hidden');
+        if(el) {
+            el.classList.add('hidden', 'd-none'); 
+            el.style.display = 'none';
+        }
     });
+    
+    let btnExtra = document.getElementById('btnExtraPosto'); if(btnExtra) btnExtra.classList.add('hidden', 'd-none');
+    let abaEmitidas = document.getElementById('navAbaFrentEmitidas'); if(abaEmitidas) abaEmitidas.classList.add('hidden', 'd-none');
+    let abaExtras = document.getElementById('navAbaFrentExtras'); if(abaExtras) abaExtras.classList.add('hidden', 'd-none');
 
-    // 3. Exibe a tela correspondente ao papel do usuário
     const r = window.USUARIO.moduloRole;
     
     if(r === 'ADM') { 
-        let view = document.getElementById('viewADM'); if(view) view.classList.remove('hidden'); 
+        let vAdm = document.getElementById('viewADM');
+        if(vAdm) {
+            vAdm.classList.remove('hidden', 'd-none'); 
+            vAdm.style.display = 'block';
+        }
         if(window.filtrarRelatorio) window.filtrarRelatorio(); 
+        
+        setTimeout(() => {
+            let abaDashboard = document.querySelector('[data-bs-target="#admDashboard"]');
+            if (abaDashboard && typeof bootstrap !== 'undefined') {
+                let tabObj = new bootstrap.Tab(abaDashboard);
+                tabObj.show();
+            }
+        }, 150);
     }
     else if(r === 'Frentista') { 
-        let view = document.getElementById('viewFrentista'); if(view) view.classList.remove('hidden'); 
+        let vFrent = document.getElementById('viewFrentista');
+        if(vFrent) { vFrent.classList.remove('hidden', 'd-none'); vFrent.style.display = 'block'; }
         if(window.renderFilaPosto) window.renderFilaPosto(); 
         if(window.renderGestaoNotas) window.renderGestaoNotas();
     }
     else if(r === 'GerentePosto') { 
-        let view = document.getElementById('viewFrentista'); if(view) view.classList.remove('hidden'); 
-        let btnExtra = document.getElementById('btnExtraPosto'); if(btnExtra) btnExtra.classList.remove('hidden');
-        let navEmitidas = document.getElementById('navAbaFrentEmitidas'); if(navEmitidas) navEmitidas.classList.remove('hidden'); 
-        let navExtras = document.getElementById('navAbaFrentExtras'); if(navExtras) navExtras.classList.remove('hidden');
+        let vFrent = document.getElementById('viewFrentista');
+        if(vFrent) { vFrent.classList.remove('hidden', 'd-none'); vFrent.style.display = 'block'; }
+        if(btnExtra) btnExtra.classList.remove('hidden', 'd-none');
+        if(abaEmitidas) abaEmitidas.classList.remove('hidden', 'd-none'); 
+        if(abaExtras) abaExtras.classList.remove('hidden', 'd-none');
         
         if(window.renderFilaPosto) window.renderFilaPosto(); 
         if(window.renderGestaoNotas) window.renderGestaoNotas(); 
         if(window.renderRelatorioExtrasPosto) window.renderRelatorioExtrasPosto();
     }
     else if(r === 'GestorTransporte') { 
-        let view = document.getElementById('viewGestorTransp'); if(view) view.classList.remove('hidden'); 
+        let vTransp = document.getElementById('viewGestorTransp');
+        if(vTransp) { vTransp.classList.remove('hidden', 'd-none'); vTransp.style.display = 'block'; }
         if(window.renderPainelTransporte) window.renderPainelTransporte(); 
     }
     else if(r === 'GestorAbastecimento') { 
-        let view = document.getElementById('viewGestorAbast'); if(view) view.classList.remove('hidden'); 
+        let vAbast = document.getElementById('viewGestorAbast');
+        if(vAbast) { vAbast.classList.remove('hidden', 'd-none'); vAbast.style.display = 'block'; }
         if(window.renderPainelAbastecimento) window.renderPainelAbastecimento(); 
         if(window.renderGestaoNotas) window.renderGestaoNotas();
     }
     else if(r === 'LancadorRetroativo') {
-        let view = document.getElementById('viewRetroativo'); if(view) view.classList.remove('hidden'); 
+        let vRetro = document.getElementById('viewRetroativo');
+        if(vRetro) { vRetro.classList.remove('hidden', 'd-none'); vRetro.style.display = 'block'; }
         if(window.renderPainelRetroativo) window.renderPainelRetroativo();
     }
 };
 
-// Monitor de Sessão Contínuo do Firebase e Firestore
+window.showView = function(viewId) {
+    let targetId = `#${viewId}`;
+    let abaLink = document.querySelector(`[data-bs-target="${targetId}"]`) || document.querySelector(`[data-bs-target="#${viewId}"]`);
+    
+    if (abaLink && typeof bootstrap !== 'undefined') {
+        let tabObj = new bootstrap.Tab(abaLink);
+        tabObj.show();
+    } else {
+        document.querySelectorAll('.view-section').forEach(el => {
+            el.classList.add('hidden', 'd-none');
+            el.style.display = 'none';
+        });
+        const tela = document.getElementById('view-' + viewId); 
+        if (tela) {
+            tela.classList.remove('hidden', 'd-none');
+            tela.style.display = 'block';
+        }
+    }
+};
+
 onAuthStateChanged(auth, async (userAuth) => {
     const cracha = localStorage.getItem("caatinga_user");
     let loader = document.getElementById('loaderOverlay');
@@ -201,7 +241,6 @@ onAuthStateChanged(auth, async (userAuth) => {
     if (userAuth && cracha) {
         try {
             window.USUARIO = JSON.parse(cracha);
-            // Verifica o status em tempo real para expulsar caso seja bloqueado pelo painel central
             if (window.USUARIO.cpf !== "01305663306") {
                 const docVerifica = await getDoc(doc(db, "usuarios", window.USUARIO.cpf)); 
                 if (!docVerifica.exists() || docVerifica.data().ativo === false) { 
@@ -212,22 +251,22 @@ onAuthStateChanged(auth, async (userAuth) => {
                 if (!window.listenerUsuario) { 
                     window.listenerUsuario = onSnapshot(doc(db, "usuarios", window.USUARIO.cpf), (docSnap) => { 
                         if (!docSnap.exists() || docSnap.data().ativo === false) { 
-                            alert("⚠️ Acesso suspenso pelo Administrador do Sistema."); 
+                            alert("⚠️ Sessão encerrada."); 
                             window.logout(true); 
                         } 
                     }); 
                 }
             }
-            if (window.iniciarApp) window.iniciarApp();
+            window.iniciarApp();
         } catch(e) {
-            console.error("Erro na verificação de sessão", e);
-            if(loader) loader.classList.add('hidden');
-            if(appView) appView.classList.add('hidden');
-            if(loginView) loginView.classList.remove('hidden');
+            console.error("Falha na sessão:", e);
+            if(loader) loader.classList.add('hidden', 'd-none');
+            if(appView) appView.classList.add('hidden', 'd-none');
+            if(loginView) loginView.classList.remove('hidden', 'd-none');
         }
     } else { 
-        if(loader) loader.classList.add('hidden');
-        if(appView) appView.classList.add('hidden');
-        if(loginView) loginView.classList.remove('hidden');
+        if(loader) loader.classList.add('hidden', 'd-none');
+        if(appView) appView.classList.add('hidden', 'd-none');
+        if(loginView) loginView.classList.remove('hidden', 'd-none');
     }
 });
